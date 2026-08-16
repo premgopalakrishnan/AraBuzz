@@ -18,7 +18,7 @@
    Everything else — every game, the garden, her whole history — is local.
    ========================================================================== */
 
-const VERSION = 'arabuzz-v3.3';
+const VERSION = 'arabuzz-v3.4';
 const CORE = 'core-' + VERSION;
 
 /* Everything the app needs to start from nothing. If you add a file to the

@@ -302,11 +302,13 @@
 
     $('#atab').innerHTML = `
       <div class="card" style="margin-top:14px">
-        <h3 style="margin-top:0">Invite a family</h3>
+        <h3 style="margin-top:0">Invite someone</h3>
         <p class="muted small">This makes a code. Send them the link — it signs them in,
            walks them through agreeing, a PIN and adding their child, and nothing else.</p>
-        <div class="field"><label for="ivFam">Family name</label>
-          <input id="ivFam" placeholder="The Rao family"></div>
+        <div class="field"><label for="ivFam">Their first name</label>
+          <input id="ivFam" placeholder="Meera"></div>
+        <p class="hint" style="margin:-6px 0 14px">Just what you call them. It greets them by
+           name on the invitation, and it is how they appear on this screen.</p>
         <div class="field"><label for="ivMail">Their email <span class="faint">(optional — just for your own notes)</span></label>
           <input id="ivMail" type="email" placeholder="meera@example.com"></div>
         <div class="field"><label for="ivKid">Child's first name <span class="faint">(optional)</span></label>
@@ -349,7 +351,7 @@
 
   async function makeInvite() {
     const fam = $('#ivFam').value.trim();
-    if (fam.length < 2) return toast('Give the family a name first.', 'bad');
+    if (fam.length < 2) return toast('Type their first name first.', 'bad');
     const btn = $('#ivGo'); btn.disabled = true;
     try {
       const row = await Cloud.createInvite(fam, $('#ivMail').value.trim(), $('#ivKid').value.trim());
@@ -371,11 +373,12 @@
     } finally { btn.disabled = false; }
   }
 
-  /** Prem's own words, so he can send it without rewriting it. */
-  function inviteMessage(family, link) {
-    return `Hi! I built a small spelling app for the kids in the class — it takes the weekly ` +
-      `Spell Buzz sheet and turns it into games, and once a week it sends you a short note on ` +
-      `what your child is finding tricky.\n\n` +
+  /** Prem's own words, so he can send it without rewriting it. These are
+   *  people he knows, so it opens with their name rather than "Dear family". */
+  function inviteMessage(name, link) {
+    return `Hi ${name}! I built a small spelling app for the kids in the class — it takes the ` +
+      `weekly Spell Buzz sheet and turns it into games, and once a week it sends you a short ` +
+      `note on what your child is finding tricky.\n\n` +
       `It's just for our five families. It's not a business and there's nothing to pay.\n\n` +
       `Your link: ${link}\n\n` +
       `It takes about three minutes to set up. Any trouble, message me.\n\n— Prem`;

@@ -198,9 +198,8 @@
 
     panel(`
       <div class="ob-kicker">${esc(inv.invited_by)} invited you</div>
-      <h1>AraBuzz</h1>
-      <p class="lead">A gamified version of the weekly Spell Buzz sheets, for
-         ${esc(inv.family_name)}.</p>
+      <h1>Hi ${esc(inv.family_name)}</h1>
+      <p class="lead">AraBuzz is a gamified version of the weekly Spell Buzz sheets.</p>
       <ul class="ob-list">
         <li>It starts with a quick five-minute check to see where your child is.</li>
         <li>Then it works out which words and letters they find hard, and practises
