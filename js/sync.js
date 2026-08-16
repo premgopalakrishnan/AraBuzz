@@ -303,17 +303,21 @@
     S().stashActive();          // make sure the parked children are up to date
 
     try {
-      /* ---- 1 · sessions, then attempts, in the order they were queued ---- */
+      /* ---- 1 · sessions, then attempts, in the order they were queued ----
+         Note what is being removed: the exact items we sent, not everything of
+         that kind. She may well be answering another question while this is in
+         flight, and anything queued during the send has not been sent yet. */
       for (const kind of ['session', 'attempt']) {
-        const rows = outbox.filter(o => o.t === kind).map(o => o.r);
-        if (!rows.length) continue;
-        for (const part of chunk(rows, BATCH)) {
+        const sending = outbox.filter(o => o.t === kind);
+        if (!sending.length) continue;
+        for (const part of chunk(sending.map(o => o.r), BATCH)) {
           const { error } = await Cloud.from(kind === 'session' ? 'sessions' : 'attempts')
             .upsert(part, { onConflict: 'id' });
           if (error) throw error;
         }
         // Only now is it safe to forget them.
-        outbox = outbox.filter(o => o.t !== kind);
+        const sent = new Set(sending);
+        outbox = outbox.filter(o => !sent.has(o));
         saveOutbox();
       }
 
@@ -702,7 +706,6 @@
   async function start() {
     if (started) return;
     started = true;
-    loadOutbox();
 
     await pull({ deep: true });
     flush(true);
@@ -723,6 +726,12 @@
     }
     announce();
   }
+
+  /* Read the outbox the moment this file loads, not when syncing starts.
+     A parent can be signed out — or simply offline at the wrong moment — while
+     a child carries on playing, and the first thing queued after that would
+     otherwise be written over the top of everything already waiting to be sent. */
+  loadOutbox();
 
   w.Sync = {
     start, pull, flush, status, onChange,
