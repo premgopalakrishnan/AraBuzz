@@ -148,10 +148,8 @@
             <span class="pill plum">${Icon.icon('lock',{size:15})} Just for us</span>
           </div>
           <button class="btn-go btn-xl btn-block" id="go2">I'm ready</button>
-          <button class="btn-quiet" id="skip" style="margin-top:8px">Skip for now</button>
         </div>`;
       $('#go2').onclick = () => { setupState.step = 2; setupState.i = 0; setupState.rows = []; paintSetup(); };
-      $('#skip').onclick = () => finishSetup(null);
       return;
     }
 

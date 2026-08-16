@@ -1032,3 +1032,28 @@ body.onboarding > .nav { display: none !important; }
 .ob-avatars button { padding: 10px 4px 9px; min-height: 92px; justify-content: flex-end; }
 .ob-avatars button svg { height: 46px; }
 @media (max-width: 460px) { .ob-avatars { grid-template-columns: repeat(3, 1fr); } }
+
+/* --- onboarding: choices, steps, and the one warning that matters -------- */
+.ob-choice {
+  display: block; width: 100%; text-align: left; cursor: pointer;
+  padding: 16px 18px; margin-bottom: 10px;
+  border: 1px solid var(--line); border-radius: var(--r); background: var(--card-2);
+  transition: border-color .16s var(--ease), transform .16s var(--ease);
+}
+.ob-choice:hover { border-color: var(--gold); transform: translateY(-1px); }
+.ob-choice b { display: block; margin-bottom: 2px; }
+.ob-choice span { font-size: .87rem; color: var(--ink-soft); }
+
+.ob-steps { margin: 16px 0; padding-left: 20px; line-height: 1.7; }
+.ob-steps li { margin-bottom: 11px; color: var(--ink-soft); }
+.ob-steps li b { color: var(--ink); }
+.ob-addr { font-family: var(--font-body); background: var(--gold-soft); color: var(--gold-deep);
+  padding: 2px 8px; border-radius: 6px; letter-spacing: .01em; }
+
+.ob-warn {
+  margin: 22px 0; padding: 18px 20px; border-radius: var(--r);
+  background: var(--clay-soft); border: 1px solid rgba(176,92,66,.28);
+}
+.ob-warn b { display: block; margin-bottom: 8px; color: var(--clay); font-size: 1.02rem; }
+.ob-warn p { margin: 0 0 10px; font-size: .9rem; line-height: 1.6; }
+.ob-warn p:last-child { margin-bottom: 0; }

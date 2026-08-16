@@ -38,9 +38,16 @@
     ],
     what: {
       h: 'What it does',
-      p: `It takes the Spell Buzz sheet the school sends each week, turns it into games
-          your child will actually play, quietly notices which letters they keep getting
-          wrong, and writes you a plain-English note about it once a week.`
+      p: [
+        `It takes the Spell Buzz sheet the school sends each week and turns it into games
+         your child will actually play. While they play, it quietly notices which letters
+         they keep getting wrong.`,
+        `Once a week, it writes that up for you as a short note in plain English — what
+         they have got hold of, what is still slippery, and the one or two things worth
+         helping with. That note is the main thing AraBuzz gives <b>you</b>; the games are
+         what it gives <b>them</b>. There is more about the note further down, because it
+         is the part most worth understanding before you agree to any of this.`
+      ]
     },
     points: [
       { h: 'The words come from the school’s sheet.',
@@ -79,7 +86,9 @@
             it is designed to keep your child on a screen for longer.` }
     ],
     using: {
-      h: 'How the weekly note is meant to be used',
+      h: 'More about that weekly note',
+      lead: `This is the part we most want you to read, because a note about your child is
+             easy to read as more than it is.`,
       p: [
         `It is written for you, to help you help them — a nudge about what to practise
          next, not a verdict on your child.`,
@@ -284,7 +293,7 @@
       ${C.intro.map(p => `<p class="lead">${esc(p)}</p>`).join('')}
 
       <h3 class="ob-h">${esc(C.what.h)}</h3>
-      <p>${esc(C.what.p)}</p>
+      ${C.what.p.map(p => `<p>${p}</p>`).join('')}
 
       <div class="ob-points">
         ${C.points.map((x, i) => `
@@ -295,6 +304,7 @@
       </div>
 
       <h3 class="ob-h">${esc(C.using.h)}</h3>
+      <p class="lead">${esc(C.using.lead)}</p>
       ${C.using.p.map(p => `<p>${p}</p>`).join('')}
 
       <h3 class="ob-h">${esc(C.first.h)}</h3>
@@ -417,8 +427,100 @@
     };
   }
 
+
   /* ==========================================================================
-     6 · Signing in when you are already a member
+     6 · Her device, and handing it over
+     Two screens most setup flows skip, and both matter more than they look.
+     ========================================================================== */
+
+  /** Where will the child actually play? Almost never on the phone the parent
+      opened the invitation with. */
+  function askDevice() {
+    const me = Cloud.whoAmI() || {};
+    const kid = (me.children && me.children[0] && me.children[0].name) || 'your child';
+    const here = location.origin.replace(/^https?:\/\//, '');
+    panel(`
+      <h1>Where will ${esc(kid)} be playing?</h1>
+      <p class="lead">You are probably reading this on your phone. If ${esc(kid)} will use
+         a different device — an iPad, a laptop — set that one up now; it takes a minute.</p>
+
+      <div class="ob-choice" id="obSame">
+        <b>On this device</b>
+        <span>${esc(kid)} will use this phone or tablet. Nothing more to do.</span>
+      </div>
+      <div class="ob-choice" id="obOther">
+        <b>On another device</b>
+        <span>Show me how to set up her iPad or laptop.</span>
+      </div>`,
+      { tag: 'Nearly there' });
+
+    $('#obSame').onclick = () => handOver();
+    $('#obOther').onclick = () => otherDevice(kid, here);
+  }
+
+  function otherDevice(kid, here) {
+    panel(`
+      <h1>Setting up ${esc(kid)}’s device</h1>
+      <p class="lead">On the iPad or laptop she will use:</p>
+      <ol class="ob-steps">
+        <li>Open a browser and go to <b class="ob-addr">${esc(here)}</b></li>
+        <li>Enter <b>the same email you just used</b> — that is what links the device to
+            your family. A link arrives in your inbox; open it on that device.</li>
+        <li>You will land straight in, with ${esc(kid)} already set up. No PIN to redo,
+            no details to enter again.</li>
+        <li><b>On an iPad, add it to the Home Screen</b> — tap Share, then
+            <b>Add to Home Screen</b>. Safari deletes saved data for sites that only ever
+            live in a tab, so this step is not optional.</li>
+      </ol>
+      <p class="hint">You can use as many devices as you like. Her progress follows her,
+         because it lives in the account rather than the device.</p>
+      <button class="btn-primary btn-wide" id="obGo" data-label="Done — carry on">Done — carry on</button>`,
+      { tag: 'Her device' });
+    $('#obGo').onclick = () => handOver();
+  }
+
+  /** The last screen a grown-up sees. Its whole job is the sentence about not
+      helping — a first check that a parent has quietly corrected tells us
+      nothing, and then every week after it is aimed at the wrong thing. */
+  function handOver() {
+    const me = Cloud.whoAmI() || {};
+    const kid = (me.children && me.children[0] && me.children[0].name) || 'your child';
+    panel(`
+      <div class="ob-tick">${window.Icon ? Icon.icon('sparkle', { size: 40, stroke: 1.4 }) : '★'}</div>
+      <h1>Now hand it to ${esc(kid)}</h1>
+      <p class="lead">She starts with a short spelling check — about twenty words, five
+         minutes. It is not marked, and she cannot fail it.</p>
+
+      <div class="ob-warn">
+        <b>Please don’t help her with this one.</b>
+        <p>Not a hint, not a nudge, not “are you sure?”. It feels unkind for five minutes
+           and it is the single most useful thing you can do.</p>
+        <p>Everything AraBuzz does afterwards is built on what she can spell
+           <em>unaided today</em>. If the first check is a little better than the truth,
+           every week that follows practises the wrong words — and she ends up working
+           harder for less. Let her get things wrong. That is the point of it.</p>
+      </div>
+
+      <p class="muted small">She will never see a score, a red mark, or a comparison with
+         anyone else. If she asks how she did, "you showed me exactly what to help you
+         with" is both kind and completely true.</p>
+
+      <button class="btn-primary btn-wide" id="obGo" data-label="I’ve handed it over">
+        I’ve handed it over</button>`,
+      { tag: 'Over to her' });
+
+    $('#obGo').onclick = () => finish();
+  }
+
+  function finish() {
+    if (location.search) history.replaceState({}, '', location.pathname);
+    sessionStorage.removeItem('arabuzz.joining');
+    close();
+    if (w.UI && UI.afterOnboard) UI.afterOnboard(Cloud.whoAmI());
+  }
+
+  /* ==========================================================================
+     7 · Signing in when you are already a member
      ========================================================================== */
   function askSignIn() {
     panel(`
@@ -464,13 +566,17 @@
     if (!me || !me.parent)   return askName(code);      // signed in, not yet joined
     if (!me.hasConsented)    return askConsent();
     if (!Cloud.pinIsSet())   return askPin();
-    if (!me.isAdmin && !me.children.length) return askChild();
 
-    // Everything is in place — hand over to the app itself.
-    if (location.search) history.replaceState({}, '', location.pathname);
-    sessionStorage.removeItem('arabuzz.joining');
-    close();
-    if (w.UI && UI.afterOnboard) UI.afterOnboard(me);
+    if (!me.isAdmin) {
+      if (!me.children.length) return askChild();
+      // Only the first time: which device, then the hand-over.
+      if (!localStorage.getItem('arabuzz.handedOver')) {
+        localStorage.setItem('arabuzz.handedOver', '1');
+        return askDevice();
+      }
+    }
+
+    finish();
   }
 
   /** True when the app should stay out of the way until setup is finished. */
@@ -485,5 +591,6 @@
     return false;
   }
 
-  w.Onboard = { route, needed, close, CONSENT, askSignIn, askConsent, askPin, askChild };
+  w.Onboard = { route, needed, close, CONSENT, askSignIn, askConsent, askPin, askChild,
+                askDevice, handOver };
 })(window);

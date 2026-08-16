@@ -61,8 +61,6 @@
         go: null },
       { done: !!db.settings.pin, t: 'Set a PIN', d: 'Keeps this area yours.', go: 'settings' },
       { done: weeks > 0, t: 'Add the first Spell Buzz sheet', d: 'Drop in the PDF the school sends.', go: 'upload' },
-      { done: st.hasSecondary || !Vault.supported, t: 'Choose a backup folder',
-        d: 'So a year of her records can never vanish.', go: 'storage' },
       { done: db.attempts.length >= 12, t: 'Let her play a few rounds',
         d: 'The reports need something to read.', go: null },
       { done: (db.reports || []).length > 0, t: 'Read your first Coach Report',
@@ -1573,53 +1571,17 @@ th,td{padding:10px 12px;border:1px solid #E5DDD1;text-align:left}th{background:#
 
   function tabStorage() {
     const box = $('#ptab');
-    const st = window.Vault ? Vault.status() : { supported: false };
     const db = Store.db;
     const size = Math.round(JSON.stringify(db).length / 1024);
 
     box.innerHTML = `
       <div class="card">
         <h2>Where everything is kept</h2>
-        <p class="muted">AraBuzz never sends her data anywhere. It lives in this browser, and — if you
-           choose folders below — as plain files on your own disk that you can back up, copy or move.</p>
-
-        ${!st.supported ? `
-          <div class="feedback bad" style="margin-top:14px">
-            <b>This browser can't write to folders.</b>
-            <p class="small" style="margin:6px 0 0">Folder storage needs Chrome or Edge on a computer.
-               On Safari or an iPad, everything still works and is saved on the device — use
-               <b>Download a backup</b> below and keep the file somewhere safe.</p>
-          </div>` : `
-
-          <div class="grid grid-2" style="margin-top:18px">
-            <div class="card flat" style="background:var(--paper-2);border:none">
-              <div class="kicker">Main folder</div>
-              <h3 style="margin:4px 0">${st.hasPrimary ? '' + esc(st.primary) : 'Not chosen yet'}</h3>
-              <p class="small muted">Holds <b>arabuzz-data.json</b>, every deck you upload, a dated snapshot
-                 each day, and saved reports.</p>
-              <div class="row wrap" style="gap:8px">
-                <button class="btn-${st.hasPrimary ? 'ghost' : 'primary'} btn-s" id="pickP">${st.hasPrimary ? 'Change' : 'Choose folder'}</button>
-                ${st.hasPrimary ? `<button class="btn-ghost btn-s" id="openP">Save now</button>
-                  <button class="btn-quiet btn-s" id="dropP">Forget</button>` : ''}
-              </div>
-            </div>
-
-            <div class="card flat" style="background:var(--paper-2);border:none">
-              <div class="kicker">Backup folder</div>
-              <h3 style="margin:4px 0">${st.hasSecondary ? '' + esc(st.secondary) : 'Not chosen yet'}</h3>
-              <p class="small muted">A second, independent copy — written after every quiz and every upload.
-                 Put it on a different drive or a cloud-synced folder.</p>
-              <div class="row wrap" style="gap:8px">
-                <button class="btn-${st.hasSecondary ? 'ghost' : 'primary'} btn-s" id="pickS">${st.hasSecondary ? 'Change' : 'Choose folder'}</button>
-                ${st.hasSecondary ? `<button class="btn-quiet btn-s" id="dropS">Forget</button>` : ''}
-              </div>
-            </div>
-          </div>
-
-          ${st.hasPrimary ? `<p class="hint" style="margin-top:12px">Browsers forget folder permission when you close the
-            app. When you reopen AraBuzz you'll be asked to reconnect with one click — until then it keeps
-            saving safely inside the browser, then catches the folder up.</p>` : ''}
-        `}
+        <p class="muted">Her record lives in AraBuzz's own database, saved as she plays and
+           reachable from any device she signs in on. There is nothing for you to back up
+           by hand and nothing that can be lost by losing a laptop.</p>
+        <p class="hint">It is never sold, never shared, and never used to train anything.
+           You can take a copy or delete the lot at any time, below.</p>
       </div>
 
       <div class="card" id="sendHome" style="margin-top:14px;display:none">

@@ -14,8 +14,6 @@
   w.CONFIG = {
 
     /* The key AraBuzz uses if nobody has entered their own. */
-    /* No key ships in this repository. It lives only as an environment variable
-       on the server, inside the functions in /api. */
     DEFAULT_API_KEY: '',
 
     DEFAULT_POLICY: 'balanced',
