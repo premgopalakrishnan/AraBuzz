@@ -25,7 +25,12 @@
           <h1 style="margin-bottom:2px">Grown-ups</h1>
           <p class="muted small" style="margin:0">${esc(Store.db.profile ? Store.db.profile.name : '')}'s AraBuzz · everything stays on this computer</p>
         </div>
-        <button class="btn-ghost btn-s" id="exitParent">← Back to ${esc(Store.db.profile ? Store.db.profile.name : 'app')}</button>
+        <div class="row" style="gap:8px">
+          ${(window.Cloud && Cloud.whoAmI() && Cloud.whoAmI().isAdmin)
+            ? `<button class="btn-quiet btn-s" id="goAdmin">${Icon.icon('keys', { size: 15 })} Admin console</button>`
+            : ''}
+          <button class="btn-ghost btn-s" id="exitParent">← Back to ${esc(Store.db.profile ? Store.db.profile.name : 'app')}</button>
+        </div>
       </div>
 
       <div class="tabs" id="ptabs" style="margin-top:16px">
@@ -38,6 +43,8 @@
       <div id="ptab"></div>`;
 
     $('#exitParent').onclick = () => UI.go('home');
+    const adminBtn = $('#goAdmin');
+    if (adminBtn) adminBtn.onclick = () => UI.go('admin');
     window.U.$$('#ptabs button').forEach(b => b.onclick = () => { tab = b.dataset.t; paint(); });
 
     ({ about: tabAbout, upload: tabUpload, words: tabWords, progress: tabProgress,

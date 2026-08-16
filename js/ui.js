@@ -21,7 +21,8 @@
       setup: paintSetup, home: paintHome, play: paintPlay, learn: paintLearn,
       garden: paintGarden, me: paintMe, howto: paintHowTo, journey: paintJourney,
       who: paintWho, scores: paintScores,
-      parent: () => window.Parent.paint(opts)
+      parent: () => window.Parent.paint(opts),
+      admin:  () => window.Admin.paint(opts)
     };
     if (painters[name]) painters[name](opts);
     if (window.Scene) Scene.update();
@@ -72,7 +73,7 @@
 
   function renderNav() {
     const nav = $('#nav');
-    const HIDE_NAV = ['quiz', 'setup', 'parent', 'puzzle', 'result', 'who'];
+    const HIDE_NAV = ['quiz', 'setup', 'parent', 'admin', 'puzzle', 'result', 'who'];
     if (!Store.db.profile || HIDE_NAV.includes(current)) {
       nav.style.display = 'none'; return;
     }

@@ -1033,6 +1033,12 @@ body.onboarding > .nav { display: none !important; }
 .ob-avatars button svg { height: 46px; }
 @media (max-width: 460px) { .ob-avatars { grid-template-columns: repeat(3, 1fr); } }
 
+/* A plain stack of rows — recent games, recent misspellings. No decoration,
+   because everything in it is somebody's child. */
+.list { margin-top: 6px; }
+.list > .row { padding: 6px 0; border-bottom: 1px solid var(--line-2); }
+.list > .row:last-child { border-bottom: none; }
+
 /* --- pronouns: three words, chosen once, used everywhere ----------------- */
 .ob-pronouns { display: flex; flex-wrap: wrap; gap: 8px; margin: 6px 0 2px; }
 .ob-pronouns button, .row .pn {
