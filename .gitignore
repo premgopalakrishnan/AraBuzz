@@ -1,0 +1,12 @@
+# never commit secrets
+.env
+.env.*
+!.env.example
+
+# local noise
+.DS_Store
+node_modules/
+.vercel/
+Backups/
+lan.js
+.arabuzz-last-address

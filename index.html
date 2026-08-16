@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1">
+<meta name="theme-color" content="#22333B">
+<title>AraBuzz — spelling practice</title>
+
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="AraBuzz">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="assets/icon-180.png">
+<link rel="icon" href="assets/icon-180.png">
+
+<link rel="stylesheet" href="vendor/fonts/fonts.css">
+<link rel="stylesheet" href="css/theme.css">
+</head>
+<body>
+
+<div class="app">
+
+  <!-- ============================ TOP BAR ============================ -->
+  <div class="topbar" id="topbar">
+    <div class="brand" id="brandBtn" title="Home">
+      <span id="brandLogo"></span>
+      <div>
+        <div class="brand-name"><span class="a">Ara</span><span class="b">Buzz</span></div>
+        <div class="brand-tag" id="brandTag">Spell it. Buzz it.</div>
+      </div>
+    </div>
+    <div class="hud" id="hud"></div>
+  </div>
+
+  <!-- ============================ SCREENS ============================ -->
+  <div class="screen" id="scr-setup"></div>
+  <div class="screen" id="scr-home"></div>
+  <div class="screen" id="scr-play"></div>
+  <div class="screen" id="scr-quiz"></div>
+  <div class="screen" id="scr-result"></div>
+  <div class="screen" id="scr-puzzle"></div>
+  <div class="screen" id="scr-learn"></div>
+  <div class="screen" id="scr-garden"></div>
+  <div class="screen" id="scr-me"></div>
+  <div class="screen" id="scr-who"></div>
+  <div class="screen" id="scr-scores"></div>
+  <div class="screen" id="scr-journey"></div>
+  <div class="screen" id="scr-howto"></div>
+  <div class="screen" id="scr-parent"></div>
+
+  <div style="height:40px"></div>
+  <div class="center-text no-print" id="madeBy" style="opacity:.55;padding:20px 0 8px">
+    <img src="assets/cokindle-labs.png" alt="CoKindle Labs" style="height:46px;display:block;margin:0 auto 6px">
+    <div class="tiny faint">AraBuzz — a CoKindle Labs initiative</div>
+  </div>
+</div>
+
+<!-- ============================ BOTTOM NAV ============================ -->
+<div class="nav" id="nav"></div>
+
+<div id="toast"></div>
+
+<script src="vendor/pdf.min.js"></script>
+<script>
+  if (window.pdfjsLib) pdfjsLib.GlobalWorkerOptions.workerSrc = 'vendor/pdf.worker.min.js';
+</script>
+
+<script src="vendor/supabase.js"></script>
+<script src="js/icons.js"></script>
+<script src="js/config.js"></script>
+<script src="js/store.js"></script>
+<script src="js/vault.js"></script>
+<script src="js/phonics.js"></script>
+<script src="js/puzzles.js"></script>
+<script src="js/engine.js"></script>
+<script src="js/game.js"></script>
+<script src="js/charts.js"></script>
+<script src="js/ara.js"></script>
+<script src="js/garden.js"></script>
+<script src="js/scene.js"></script>
+<script src="js/cloud.js"></script>
+<script src="js/util.js"></script>
+<script src="js/api.js"></script>
+<script src="js/quiz.js"></script>
+<script src="js/parent.js"></script>
+<script src="js/onboard.js"></script>
+<script src="js/ui.js"></script>
+
+<!-- Keeps a copy of the whole app on this device, so it opens with the
+     computer switched off and the wifi down. See sw.js. -->
+<script>
+  if ('serviceWorker' in navigator && location.protocol.startsWith('http')) {
+    window.addEventListener('load', () => {
+      navigator.serviceWorker.register('sw.js').then(reg => {
+        window.ARABUZZ_SW = reg;
+        reg.addEventListener('updatefound', () => {
+          const sw = reg.installing;
+          if (!sw) return;
+          sw.addEventListener('statechange', () => {
+            // A newer AraBuzz is ready. Never interrupt her mid-game — it will
+            // simply be there the next time she opens it.
+            if (sw.state === 'installed' && navigator.serviceWorker.controller) {
+              window.ARABUZZ_UPDATE = true;
+              if (window.U && U.toast) U.toast('An update is ready — it will be there next time.', 'good');
+            }
+          });
+        });
+      }).catch(e => console.warn('offline mode unavailable', e));
+    });
+  }
+</script>
+</body>
+</html>
