@@ -307,6 +307,85 @@
     return Math.floor((new Date(b) - new Date(a)) / 864e5);
   }
 
+  /* ============================================================== PRONOUNS
+     AraBuzz was built for one nine-year-old girl and said "she" everywhere.
+     Most of the class are not her, and four of the nine children are boys.
+
+     Every sentence the app writes about a child now comes through here. The
+     default is "they", because a default of "she" is a mistake made about a
+     real child, on their own screen, in front of them — and "they" is never
+     wrong, only occasionally less natural.
+
+     Use it like this:
+         P.they()        →  she | he | they
+         P.them()        →  her | him | them
+         P.their()       →  her | his | their
+         P.theirs()      →  hers | his | theirs
+         P.themself()    →  herself | himself | themselves
+         P.is('is')      →  is | is | are         (verb agreement for "they")
+         P.has()         →  has | has | have
+         P.does()        →  does | does | do
+         P.Cap.they()    →  She | He | They
+     ============================================================== */
+  const PRONOUNS = [
+    { key: 'she',  label: 'she / her' },
+    { key: 'he',   label: 'he / him' },
+    { key: 'they', label: 'they / them' }
+  ];
+
+  const PRON_TABLE = {
+    she:  { they: 'she',  them: 'her',  their: 'her',   theirs: 'hers',  themself: 'herself',    plural: false },
+    he:   { they: 'he',   them: 'him',  their: 'his',   theirs: 'his',   themself: 'himself',    plural: false },
+    they: { they: 'they', them: 'them', their: 'their', theirs: 'theirs', themself: 'themselves', plural: true  }
+  };
+
+  /* Only the verbs the app actually writes. Anything not listed is returned
+     unchanged, which is right for regular verbs after "they" (they spell,
+     they practise) and harmless everywhere else. */
+  const PLURAL_VERBS = {
+    is: 'are', was: 'were', has: 'have', does: 'do', "isn't": "aren't",
+    "hasn't": "haven't", "doesn't": "don't", "wasn't": "weren't", "'s": "'re"
+  };
+
+  const cap = s => s.charAt(0).toUpperCase() + s.slice(1);
+
+  /** `who` may be a pronoun key, a child profile, or nothing at all. */
+  function pronouns(who) {
+    const key = typeof who === 'string'
+      ? who
+      : (who && who.pronoun) || (w.Store && Store.db.profile && Store.db.profile.pronoun) || 'they';
+    const t = PRON_TABLE[key] || PRON_TABLE.they;
+
+    const verb = v => (t.plural ? (PLURAL_VERBS[v] || v) : v);
+    const api = {
+      key: PRON_TABLE[key] ? key : 'they',
+      plural: t.plural,
+      they: () => t.they, them: () => t.them, their: () => t.their,
+      theirs: () => t.theirs, themself: () => t.themself,
+      verb,
+      is: () => verb('is'), was: () => verb('was'), has: () => verb('has'),
+      does: () => verb('does'),
+      /** "Aradhana spells" vs "they spell" — the -s a plural subject drops. */
+      s: (stem) => (t.plural ? stem : stem + 's'),
+      Cap: {
+        they: () => cap(t.they), them: () => cap(t.them), their: () => cap(t.their),
+        theirs: () => cap(t.theirs), themself: () => cap(t.themself)
+      }
+    };
+    return api;
+  }
+
+  /** For the AI prompts: one line that tells the model how to write about
+   *  this child, so a report never has to be corrected afterwards. */
+  function pronounNote(name, who) {
+    const p = pronouns(who);
+    const n = name || 'the child';
+    return p.plural
+      ? `Refer to ${n} as "they/them" (singular they — "they spell", "they are"). ` +
+        `Never use "he" or "she" about ${n}.`
+      : `Refer to ${n} as "${p.they()}/${p.them()}". Never use any other pronoun about ${n}.`;
+  }
+
   /** Stops iOS/desktop autocorrect from silently fixing her spelling. */
   function noAutoCorrect(input) {
     input.setAttribute('autocorrect', 'off');
@@ -417,6 +496,7 @@
     $, $$, el, esc, toast, modal, closeAllModals, confirmBox, promptBox, confetti, floatPoints,
     beep, speak, speakWordThen, spellOut, loadVoices, bestVoice,
     fmtDate, fmtDay, pct, plural, daysBetween, noAutoCorrect,
+    PRONOUNS, pronouns, pronounNote,
     BASELINE, scoreBaseline
   };
 })(window);

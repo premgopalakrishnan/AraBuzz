@@ -1111,7 +1111,7 @@ Reflex = A quick automatic response"></textarea>
         topic: (Store.weekOfWord(wd.id) || {}).topic || '',
         tries: pr.seen, right: pr.right, accuracy: +(pr.right / pr.seen).toFixed(2),
         box: pr.box || 0,
-        herSpellings: (pr.misspellings || []).slice(-5)
+        spellings: (pr.misspellings || []).slice(-5)
       };
     }).filter(Boolean).sort((a, b) => a.accuracy - b.accuracy);
 
@@ -1125,7 +1125,16 @@ Reflex = A quick automatic response"></textarea>
     const rate = r => r.length ? +(r.filter(x => x.ok).length / r.length).toFixed(2) : null;
 
     return {
-      child: { name: db.profile.name, ageYears: 9, curriculum: 'IB PYP', background: 'Montessori phonics-first early years' },
+      // name and pronoun sit at the top level as well as inside `child`,
+      // because the system prompt reads them before it sees anything else.
+      name: db.profile.name,
+      pronoun: (db.profile.pronoun || 'they'),
+      child: {
+        name: db.profile.name,
+        pronoun: (db.profile.pronoun || 'they'),
+        ageYears: 9,
+        curriculum: 'IB PYP'
+      },
       periodDays: days,
       baseline: db.profile.baseline ? {
         takenAt: new Date(db.profile.baseline.takenAt).toISOString().slice(0, 10),
@@ -1295,7 +1304,7 @@ Reflex = A quick automatic response"></textarea>
     const previous = (Store.db.reports || []).slice().sort((a, b) => b.ts - a.ts)[0] || null;
 
     st.innerHTML = `<div class="loading-box"><span class="loader"></span>
-      <p class="muted small" style="margin:0">Reading every answer she's given, spotting the patterns, writing it up…</p></div>`;
+      <p class="muted small" style="margin:0">Reading every answer, spotting the patterns, writing it up…</p></div>`;
     try {
       const payload = buildReportPayload(days);
       if (previous && previous.metrics) {
@@ -1420,7 +1429,7 @@ Reflex = A quick automatic response"></textarea>
       ${paras(r.sinceLastReport)}
 
       <h2>Where ${esc(name)} is right now</h2>
-      ${paras(r.whereSheIs)}
+      ${paras(r.whereTheyAre || r.whereSheIs)}
 
       <div class="report-section" style="margin:22px 0">${accChart}</div>
 
@@ -1482,7 +1491,7 @@ Reflex = A quick automatic response"></textarea>
 
       <div style="margin-top:24px;padding:18px 22px;background:var(--sage-soft);border-radius:18px">
         <div class="kicker">Say this to her</div>
-        <p style="margin:6px 0 0;font-size:1.05rem">“${esc(r.sayToHer)}”</p>
+        <p style="margin:6px 0 0;font-size:1.05rem">“${esc(r.sayToThem || r.sayToHer)}”</p>
       </div>
 
       <p class="tiny faint" style="margin-top:22px;text-align:center">

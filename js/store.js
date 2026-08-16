@@ -128,17 +128,23 @@
     return db.profile;
   }
 
+  /** `opts.id` lets a child arriving from the database keep the id she already
+   *  has there, so the device and the account never disagree about who she is. */
   function addChild(name, opts) {
     stashActive();
-    const id = uid('c');
+    const o = opts || {};
+    const id = o.id || uid('c');
+    if (db.children.some(c => c.id === id)) { switchChild(id); return db.children.find(c => c.id === id); }
     const n = db.children.length;
     const fresh = emptyPersonal();
     fresh.profile = {
       name: String(name || 'Speller').trim() || 'Speller',
       createdAt: Date.now(),
       baseline: null,
-      emoji: (opts && opts.emoji) || AVATARS[n % AVATARS.length],
-      colour: (opts && opts.colour) || COLOURS[n % COLOURS.length]
+      pronoun: o.pronoun || 'they',
+      classLabel: o.classLabel || '',
+      emoji: o.emoji || AVATARS[n % AVATARS.length],
+      colour: o.colour || COLOURS[n % COLOURS.length]
     };
     db.children.push(Object.assign({ id }, fresh));
     PERSONAL.forEach(f => { db[f] = fresh[f]; });
@@ -317,8 +323,12 @@
 
   /* ------------------------------------------------------------- attempts */
   function logAttempt(a) {
-    a.id = uid('a'); a.ts = Date.now();
+    // A proper UUID, generated here, so that sending it to the database twice
+    // is harmless. That is what makes syncing over a bad connection safe.
+    a.id = (w.Sync ? Sync.uuid() : uid('a'));
+    a.ts = Date.now();
     db.attempts.push(a);
+    if (w.Sync) Sync.noteAttempt(a);
     return a;
   }
 

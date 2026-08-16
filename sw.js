@@ -18,7 +18,7 @@
    Everything else — every game, the garden, her whole history — is local.
    ========================================================================== */
 
-const VERSION = 'arabuzz-v3.0';
+const VERSION = 'arabuzz-v3.1';
 const CORE = 'core-' + VERSION;
 
 /* Everything the app needs to start from nothing. If you add a file to the
@@ -41,6 +41,7 @@ const SHELL = [
   './js/garden.js',
   './js/scene.js',
   './js/cloud.js',
+  './js/sync.js',
   './js/util.js',
   './js/api.js',
   './js/quiz.js',

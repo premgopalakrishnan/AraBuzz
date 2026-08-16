@@ -46,6 +46,19 @@
 
   function available() { return !!client(); }
 
+  /* The raw client, for sync.js and the admin console. Everything they do is
+     still decided by row-level security against the signed-in identity — this
+     hands out no authority that this file does not already have. */
+  function from(table) {
+    const c = client(); if (!c) throw new Error('offline');
+    return c.from(table);
+  }
+  function rpc(name, params) {
+    const c = client(); if (!c) throw new Error('offline');
+    return c.rpc(name, params);
+  }
+  function myFamilyId() { return me && me.parent ? me.parent.family_id : null; }
+
   async function start() {
     const c = client();
     if (!c) return null;
@@ -192,6 +205,7 @@
       name: fields.name,
       avatar: fields.avatar || null,
       colour: fields.colour || null,
+      pronoun: fields.pronoun || 'they',
       class_label: fields.classLabel || null
     }).select().single();
     if (error) throw error;
@@ -230,7 +244,7 @@
 
   w.Cloud = {
     CONSENT_VERSION, SUPABASE_URL: URL,
-    available, start, onChange,
+    available, start, onChange, from, rpc, myFamilyId,
     sendLink, signOut, signedIn, myEmail,
     load, whoAmI,
     peekInvite, acceptInvite, bootstrapAdmin,

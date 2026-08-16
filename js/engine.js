@@ -38,6 +38,7 @@
       pr.box = Math.max(0, Math.floor((pr.box || 0) / 2));   // slip back, don't reset to zero
     }
     pr.due = Date.now() + INTERVALS[Math.min(pr.box, INTERVALS.length - 1)] * 864e5;
+    if (window.Sync) Sync.noteProgress(wordId);
     return pr;
   }
 

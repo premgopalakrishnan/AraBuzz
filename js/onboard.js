@@ -391,6 +391,17 @@
         <input id="obKid" autocomplete="off" placeholder="Kabir"></div>
       <div class="field"><label for="obClass">Class <span class="faint">(optional)</span></label>
         <input id="obClass" placeholder="4B"></div>
+
+      <div class="field">
+        <label>How should AraBuzz talk about them?</label>
+        <div class="ob-pronouns" id="obPn">
+          ${window.U.PRONOUNS.map(p => `
+            <button type="button" data-pn="${p.key}" class="${p.key === 'they' ? 'on' : ''}">
+              ${esc(p.label)}</button>`).join('')}
+        </div>
+        <p class="hint">Used in the games and in your weekly note. You can change it later.</p>
+      </div>
+
       <label class="lbl">Pick a badge</label>
       <div class="ob-avatars" id="obAv">
         ${AVATARS.map((a, i) => `
@@ -405,9 +416,14 @@
       { tag: 'Nearly done' });
 
     let avatar = AVATARS[0];
+    let pronoun = 'they';
     window.U.$$('#obAv button').forEach(b => b.onclick = () => {
       window.U.$$('#obAv button').forEach(x => x.classList.remove('on'));
       b.classList.add('on'); avatar = b.dataset.av;
+    });
+    window.U.$$('#obPn button').forEach(b => b.onclick = () => {
+      window.U.$$('#obPn button').forEach(x => x.classList.remove('on'));
+      b.classList.add('on'); pronoun = b.dataset.pn;
     });
 
     const go = $('#obGo');
@@ -416,7 +432,11 @@
       if (name.length < 1) return oops('Please enter their first name.');
       busy(go, true);
       try {
-        await Cloud.addChild({ name, avatar, classLabel: $('#obClass').value.trim() });
+        // Through Sync, so the child exists in the account and on this device
+        // under one and the same id.
+        await window.Sync.createChild({
+          name, emoji: avatar, pronoun, classLabel: $('#obClass').value.trim()
+        });
         route();
       } catch (e) {
         busy(go, false);
@@ -435,9 +455,18 @@
 
   /** Where will the child actually play? Almost never on the phone the parent
       opened the invitation with. */
-  function askDevice() {
+  /** The child this whole flow has been about, and the words to describe them. */
+  function theChild() {
     const me = Cloud.whoAmI() || {};
-    const kid = (me.children && me.children[0] && me.children[0].name) || 'your child';
+    const kid = (me.children && me.children[0]) || null;
+    return {
+      name: (kid && kid.name) || 'your child',
+      p: window.U.pronouns(kid ? kid.pronoun : 'they')
+    };
+  }
+
+  function askDevice() {
+    const { name: kid, p } = theChild();
     const here = location.origin.replace(/^https?:\/\//, '');
     panel(`
       <h1>Where will ${esc(kid)} be playing?</h1>
@@ -450,18 +479,18 @@
       </div>
       <div class="ob-choice" id="obOther">
         <b>On another device</b>
-        <span>Show me how to set up her iPad or laptop.</span>
+        <span>Show me how to set up ${p.their()} iPad or laptop.</span>
       </div>`,
       { tag: 'Nearly there' });
 
     $('#obSame').onclick = () => handOver();
-    $('#obOther').onclick = () => otherDevice(kid, here);
+    $('#obOther').onclick = () => otherDevice(kid, here, p);
   }
 
-  function otherDevice(kid, here) {
+  function otherDevice(kid, here, p) {
     panel(`
       <h1>Setting up ${esc(kid)}’s device</h1>
-      <p class="lead">On the iPad or laptop she will use:</p>
+      <p class="lead">On the iPad or laptop ${p.they()} will use:</p>
       <ol class="ob-steps">
         <li>Open a browser and go to <b class="ob-addr">${esc(here)}</b></li>
         <li>Enter <b>the same email you just used</b> — that is what links the device to
@@ -472,8 +501,8 @@
             <b>Add to Home Screen</b>. Safari deletes saved data for sites that only ever
             live in a tab, so this step is not optional.</li>
       </ol>
-      <p class="hint">You can use as many devices as you like. Her progress follows her,
-         because it lives in the account rather than the device.</p>
+      <p class="hint">You can use as many devices as you like. ${p.Cap.their()} progress
+         follows ${p.them()}, because it lives in the account rather than the device.</p>
       <button class="btn-primary btn-wide" id="obGo" data-label="Done — carry on">Done — carry on</button>`,
       { tag: 'Her device' });
     $('#obGo').onclick = () => handOver();
@@ -483,27 +512,28 @@
       helping — a first check that a parent has quietly corrected tells us
       nothing, and then every week after it is aimed at the wrong thing. */
   function handOver() {
-    const me = Cloud.whoAmI() || {};
-    const kid = (me.children && me.children[0] && me.children[0].name) || 'your child';
+    const { name: kid, p } = theChild();
     panel(`
       <div class="ob-tick">${window.Icon ? Icon.icon('sparkle', { size: 40, stroke: 1.4 }) : '★'}</div>
       <h1>Now hand it to ${esc(kid)}</h1>
-      <p class="lead">She starts with a short spelling check — about twenty words, five
-         minutes. It is not marked, and she cannot fail it.</p>
+      <p class="lead">${p.Cap.they()} ${p.s('start')} with a short spelling check — about
+         twenty words, five minutes. It is not marked, and ${p.they()} cannot fail it.</p>
 
       <div class="ob-warn">
-        <b>Please don’t help her with this one.</b>
+        <b>Please don’t help ${p.them()} with this one.</b>
         <p>Not a hint, not a nudge, not “are you sure?”. It feels unkind for five minutes
            and it is the single most useful thing you can do.</p>
-        <p>Everything AraBuzz does afterwards is built on what she can spell
+        <p>Everything AraBuzz does afterwards is built on what ${p.they()} can spell
            <em>unaided today</em>. If the first check is a little better than the truth,
-           every week that follows practises the wrong words — and she ends up working
-           harder for less. Let her get things wrong. That is the point of it.</p>
+           every week that follows practises the wrong words — and ${p.they()}
+           ${p.s('end')} up working harder for less. Let ${p.them()} get things wrong.
+           That is the point of it.</p>
       </div>
 
-      <p class="muted small">She will never see a score, a red mark, or a comparison with
-         anyone else. If she asks how she did, "you showed me exactly what to help you
-         with" is both kind and completely true.</p>
+      <p class="muted small">${p.Cap.they()} will never see a score, a red mark, or a
+         comparison with anyone else. If ${p.they()} ${p.s('ask')} how ${p.they()}
+         did, "you showed me exactly what to help you with" is both kind and
+         completely true.</p>
 
       <button class="btn-primary btn-wide" id="obGo" data-label="I’ve handed it over">
         I’ve handed it over</button>`,

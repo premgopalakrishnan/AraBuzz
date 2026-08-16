@@ -111,14 +111,29 @@
                  style="--ava:${Store.COLOURS[i]}">${e}</button>`).join('')}
             </div>
           </div>
+          <div class="field" style="text-align:left">
+            <label>Ara will talk about you — which words should he use?</label>
+            <div class="row wrap" style="gap:8px" id="pnPick">
+              ${window.U.PRONOUNS.map((p, i) => `<button class="btn-quiet pn ${i === 2 ? 'on' : ''}"
+                 data-pn="${p.key}">${esc(p.label)}</button>`).join('')}
+            </div>
+          </div>
           <button class="btn-primary btn-xl btn-block" id="go1">Let's go →</button>
           <p class="hint" style="margin-top:14px">Grown-up setting things up? You can add words after this.</p>
         </div>`;
       const nm = $('#nm'); setTimeout(() => nm.focus(), 200);
       let ava = 0;
+      let pronoun = setupState.pronoun || 'they';
       window.U.$$('#avaPick .ava').forEach(b => b.onclick = () => {
         ava = +b.dataset.ava;
         window.U.$$('#avaPick .ava').forEach(x => x.classList.toggle('on', x === b));
+      });
+      window.U.$$('#pnPick .pn').forEach(b => {
+        b.classList.toggle('on', b.dataset.pn === pronoun);
+        b.onclick = () => {
+          pronoun = b.dataset.pn;
+          window.U.$$('#pnPick .pn').forEach(x => x.classList.toggle('on', x === b));
+        };
       });
       const start = () => {
         const v = nm.value.trim();
@@ -126,6 +141,7 @@
         setupState.name = v;
         setupState.emoji = Store.AVATARS[ava];
         setupState.colour = Store.COLOURS[ava];
+        setupState.pronoun = pronoun;
         setupState.step = 1; paintSetup();
       };
       $('#go1').onclick = start;
@@ -269,11 +285,17 @@
     go('setup');
   }
 
-  function finishSetup(baseline) {
+  async function finishSetup(baseline) {
     if (setupState.mode === 'new') {
-      Store.addChild(setupState.name, { emoji: setupState.emoji, colour: setupState.colour });
+      // Through Sync, so she exists in the account as well as on this device —
+      // and carries the same id in both, on every device she ever uses.
+      await window.Sync.createChild({
+        name: setupState.name, emoji: setupState.emoji,
+        colour: setupState.colour, pronoun: setupState.pronoun || 'they'
+      });
       Store.db.profile.baseline = baseline || null;
       Store.db.game.lastPlayDay = '';
+      if (baseline) window.Sync.saveChild(Store.db.activeChildId, { baseline });
     } else {
       const existing = Store.db.profile || {};
       Store.db.profile = Object.assign({ createdAt: Date.now() }, existing, {
@@ -1275,10 +1297,42 @@
   /*  BOOT                                                                  */
   /* ====================================================================== */
   let booted = false;
+
+  /* A quiet holding screen for the one moment the app genuinely has nothing
+     to show: a device that has just been signed in on and does not yet know
+     whose it is. */
+  function showBootWait() {
+    let el = document.getElementById('bootWait');
+    if (el) return;
+    el = window.U.el('div', { id: 'bootWait', class: 'boot-wait' },
+      `<span class="loader"></span><p class="muted">Fetching your details…</p>`);
+    document.body.appendChild(el);
+  }
+  function hideBootWait() {
+    const el = document.getElementById('bootWait');
+    if (el) el.remove();
+  }
+
+  /** Sync calls this when something arrived that changes what is on screen —
+   *  a new word list, or the children on the account. Never interrupt her
+   *  mid-question; a list she is not looking at can wait until she is. */
+  const REPAINTABLE = ['home', 'play', 'learn', 'garden', 'me', 'scores', 'who'];
+  function refreshAfterSync() {
+    try {
+      // Never redraw the screen she is answering a question on.
+      if (current === 'quiz' || current === 'puzzle' || current === 'result') return;
+      if (current === 'setup' && Store.db.profile) { go('home'); return; }
+      renderHud();
+      if (window.Scene) Scene.update(true);
+      if (REPAINTABLE.includes(current)) go(current);
+    } catch (e) { console.warn('refresh after sync', e); }
+  }
+
   /** Called by Onboard once the grown-up has joined, agreed and set a PIN. */
   async function afterOnboard() {
     try {
       document.body.classList.remove('onboarding');
+      if (window.Sync) await Sync.start();
       if (window.Scene) Scene.update(true);
       renderHud();
       go(Store.db.profile ? 'home' : 'setup');
@@ -1335,6 +1389,19 @@
       try {
         await Cloud.start();
         if (window.Onboard && Onboard.needed()) { await Onboard.route(); return; }
+
+        /* Signed in and set up. Bring the account down onto this device and
+           start pushing whatever this device has been holding.
+
+           On a device that already knows her, none of that is waited for: the
+           app opens instantly and the network catches up behind it. On a brand
+           new device there is nothing to show until her details arrive, so we
+           do wait — a moment here saves a "who are you?" screen that would ask
+           her to invent herself a second time. */
+        if (window.Sync) {
+          if (Store.db.profile) Sync.start();
+          else { showBootWait(); await Sync.start(); hideBootWait(); }
+        }
       } catch (e) {
         console.warn('cloud unavailable, carrying on locally', e);
       }
@@ -1397,7 +1464,7 @@
     setTimeout(() => bar.remove(), 20000);
   }
 
-  w.UI = { go, boot, afterOnboard, renderHud, renderNav, syncVault, checkpointVault, openParentGate,
+  w.UI = { go, boot, afterOnboard, refreshAfterSync, renderHud, renderNav, syncVault, checkpointVault, openParentGate,
            showWordCard, retakeBaseline, startFresh, addChildFlow, LOGO_SVG,
            get current() { return current; } };
 

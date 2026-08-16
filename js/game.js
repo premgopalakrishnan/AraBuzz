@@ -177,7 +177,7 @@
     const streak = touchStreak();
 
     db.sessions.unshift({
-      id: S().uid('s'), ts: Date.now(),
+      id: (window.Sync ? Sync.uuid() : S().uid('s')), ts: Date.now(),
       kind: ctx.kind || 'quiz', preset: ctx.preset || '', label: ctx.label || '',
       weekIds: ctx.weekIds || [], total: ctx.total || 0, correct: ctx.correct || 0,
       points: ctx.points || 0, stars: ctx.stars || 0, ms: ctx.ms || 0
@@ -186,6 +186,7 @@
 
     const badges = checkBadges(Object.assign({ gapDays }, ctx));
     S().save();
+    if (window.Sync) Sync.noteSession(db.sessions[0]);
     return { streak, badges, gapDays };
   }
 

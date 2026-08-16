@@ -239,11 +239,13 @@ assuming 20xx for two-digit years.`;
     }
   };
 
+  /* Word packs are shared by every child in the class, so nothing here is
+     written about a particular one — and therefore nothing here has a gender. */
   const ENRICH_SYSTEM =
 `You are an experienced primary-school literacy specialist building practice
-material for a 9-year-old in an IB PYP school. She learned to read through
-Montessori phonics, so she spells words the way they sound and needs to build
-the visual/orthographic memory of each word.
+material for nine-year-olds in an IB PYP school. Several of them learned to read
+through Montessori phonics, so they spell words the way they sound and need to
+build the visual/orthographic memory of each word.
 
 Write everything in British English spelling conventions, matching the school.
 Keep language warm, concrete and simple — no words harder than the target word
@@ -347,7 +349,7 @@ itself in the clues. Clues must be solvable, never vague.`;
             properties: {
               word: { type: 'string' },
               memoryTrick: { type: 'string', description: 'A vivid, silly, memorable trick for spelling this word — a mnemonic, a picture, a hidden little word inside it. Under 25 words. Address the child directly as "you". PLAIN TEXT ONLY — no asterisks, no markdown, no bold markers of any kind. Use CAPITALS if you need to stress part of a word.' },
-              whyTricky: { type: 'string', description: 'One short sentence naming exactly what she got wrong, in kind, plain language.' }
+              whyTricky: { type: 'string', description: 'One short sentence naming exactly what the child got wrong, in kind, plain language. Address the child as "you".' }
             },
             required: ['word', 'memoryTrick', 'whyTricky']
           }
@@ -358,11 +360,14 @@ itself in the clues. Clues must be solvable, never vague.`;
   };
 
   async function memoryTricks(items) {
-    // items: [{word, meaning, herSpellings:[]}]
-    const list = items.map(x => `- ${x.word} (she wrote: ${(x.herSpellings || []).join(', ') || 'blank'})`).join('\n');
+    // items: [{word, meaning, spellings:[]}]  — `herSpellings` is the old name,
+    // still accepted so that anything not yet updated keeps working.
+    const list = items.map(x =>
+      `- ${x.word} (they wrote: ${(x.spellings || x.herSpellings || []).join(', ') || 'blank'})`).join('\n');
     const content = [{
       type: 'text',
-      text: `A 9-year-old just misspelled these. Give each a memory trick that fixes the exact part she got wrong.\n\n${list}`
+      text: `A nine-year-old just misspelled these. Give each a memory trick that fixes ` +
+            `the exact part they got wrong. Speak to the child directly as "you".\n\n${list}`
     }];
     const out = await call('memory-tricks', {
       system: ENRICH_SYSTEM, content, tool: TRICK_TOOL,
@@ -391,7 +396,7 @@ itself in the clues. Clues must be solvable, never vague.`;
       properties: {
         headline: { type: 'string', description: 'One warm sentence a parent reads first, naming the single most important thing this fortnight. Under 28 words.' },
         confidence: { type: 'string', enum: ['high', 'medium', 'low'], description: 'How much data this is based on. low if under 40 attempts.' },
-        whereSheIs: { type: 'string', description: 'Two or three short paragraphs in plain English on where she stands. Quote her actual spellings in double quotes as evidence. No jargon. Address the parent as "you" and the child by name.' },
+        whereTheyAre: { type: 'string', description: 'Two or three short paragraphs in plain English on where the child stands. Quote their actual spellings in double quotes as evidence. No jargon. Address the parent as "you" and the child by name, using the pronouns given in the data.' },
         strengths: {
           type: 'array', minItems: 2, maxItems: 4, items: {
             type: 'object',
@@ -432,39 +437,58 @@ itself in the clues. Clues must be solvable, never vague.`;
         },
         wordsToDrill: { type: 'array', minItems: 3, maxItems: 12, items: { type: 'string' },
           description: 'The exact words needing attention before the next school test, hardest first.' },
-        motivation: { type: 'string', description: 'Two sentences on her engagement — streaks, session counts, whether she is choosing to come back — and one specific suggestion to keep it up.' },
+        motivation: { type: 'string', description: 'Two sentences on the child’s engagement — streaks, session counts, whether they are choosing to come back — and one specific suggestion to keep it up. Use the pronouns given in the data.' },
         sinceLastReport: { type: 'string', description: 'If previousReport is present in the data: two or three sentences on exactly what has changed since it, quoting the numbers, and — importantly — whether the advice given last time appears to have worked. Name any pattern that has shrunk or grown. If there is no previous report, write exactly: "This is the first report, so there is nothing to compare against yet. From the next one on, this section will tell you what has changed."' },
-        sayToHer: { type: 'string', description: 'One or two sentences the parent can say to the child, word for word, that praises effort and names one real improvement. Warm, not gushing.' }
+        sayToThem: { type: 'string', description: 'One or two sentences the parent can say to the child, word for word, that praises effort and names one real improvement. Warm, not gushing.' }
       },
-      required: ['headline', 'confidence', 'whereSheIs', 'strengths', 'patterns', 'thisWeek', 'wordsToDrill', 'motivation', 'sinceLastReport', 'sayToHer']
+      required: ['headline', 'confidence', 'whereTheyAre', 'strengths', 'patterns', 'thisWeek', 'wordsToDrill', 'motivation', 'sinceLastReport', 'sayToThem']
     }
   };
 
-  const REPORT_SYSTEM =
-`You are a warm, experienced primary literacy coach writing a private report to a
+  /**
+   * The report is the one thing AraBuzz writes ABOUT a named child, so it is
+   * the one place where getting a pronoun wrong is not a typo — it is a parent
+   * reading a stranger's description of their son. The instruction therefore
+   * goes at the top of the system prompt, not buried in a field description.
+   */
+  function reportSystem(payload) {
+    const p = payload || {};
+    const name = p.name || p.childName || 'the child';
+    const pronounLine = window.U
+      ? U.pronounNote(name, p.pronoun || 'they')
+      : `Refer to ${name} as "they/them".`;
+
+    return `You are a warm, experienced primary literacy coach writing a private report to a
 parent about their own child. You have their real practice data in front of you.
+
+The child is called ${name}. ${pronounLine}
+Getting this wrong is worse than saying nothing — a parent notices immediately.
 
 Rules:
 • Write the way a good teacher talks at a parents' evening — plain, specific, kind.
   No education jargon. If you must use a term, explain it in the same breath.
-• EVIDENCE IS EVERYTHING. Never make a claim without quoting a real spelling she
-  produced or a real number from the data. Vague encouragement is useless to a parent.
+• EVIDENCE IS EVERYTHING. Never make a claim without quoting a real spelling
+  ${name} produced or a real number from the data. Vague encouragement is useless
+  to a parent.
 • Be honest about weaknesses, but always pair a problem with what to do about it.
-• This child came from a Montessori phonics-first background, so writing words the
-  way they sound is the expected failure mode — look for it specifically, and if the
-  data shows it, explain clearly why it happens and that it is normal and fixable.
-• Never suggest the child is behind, deficient, or should be worried. Frame
-  everything as "here is the next thing to build".
-• Use the child's name naturally throughout.
+• Writing words the way they sound is a common and expected failure mode at this
+  age, especially for a child taught by phonics first. Look for it specifically,
+  and if the data shows it, explain clearly why it happens and that it is normal
+  and fixable. If the data does NOT show it, do not claim it.
+• Never suggest the child is behind, deficient, or should be worried. Never use
+  the words "weak", "poor", "behind" or "struggling" — say "not yet", "still
+  growing", "still tricky". Frame everything as "here is the next thing to build".
+• Use ${name}'s name naturally throughout.
 • If a previousReport is included, treat this as the next instalment of an ongoing
   record, not a standalone document: say plainly what has moved, and be honest
   about whether last time's advice worked. Parents lose trust in a report that
   claims progress every time.`;
+  }
 
   async function coachReport(payload) {
     const content = [{ type: 'text', text: JSON.stringify(payload, null, 2) }];
     return call('coach-report', {
-      system: REPORT_SYSTEM, content, tool: REPORT_TOOL, maxTokens: 12000
+      system: reportSystem(payload), content, tool: REPORT_TOOL, maxTokens: 12000
     });
   }
 
@@ -496,7 +520,7 @@ Rules:
     const content = [{
       type: 'text',
       text: `Build a spelling list of ${count} words on the topic "${topic}" for a 9-year-old.
-Difficulty: ${difficulty} (easy = words she likely half-knows; medium = school-level for her year; hard = a genuine stretch, longer and less common).
+Difficulty: ${difficulty} (easy = words they likely half-know; medium = school-level for their year; hard = a genuine stretch, longer and less common).
 Use British English. Mix single words and short terms. Avoid words that are trivially easy to spell at this difficulty.`
     }];
     return call('topic-list', { system: ENRICH_SYSTEM, content, tool: TOPIC_TOOL, maxTokens: 6000 });

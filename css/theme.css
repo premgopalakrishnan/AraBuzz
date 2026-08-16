@@ -1033,6 +1033,26 @@ body.onboarding > .nav { display: none !important; }
 .ob-avatars button svg { height: 46px; }
 @media (max-width: 460px) { .ob-avatars { grid-template-columns: repeat(3, 1fr); } }
 
+/* --- pronouns: three words, chosen once, used everywhere ----------------- */
+.ob-pronouns { display: flex; flex-wrap: wrap; gap: 8px; margin: 6px 0 2px; }
+.ob-pronouns button, .row .pn {
+  padding: 9px 16px; border-radius: 999px; cursor: pointer;
+  border: 1px solid var(--line); background: var(--card-2); color: var(--ink-soft);
+  font-size: .88rem; transition: all .16s var(--ease);
+}
+.ob-pronouns button:hover, .row .pn:hover { border-color: var(--gold); }
+.ob-pronouns button.on, .row .pn.on {
+  border-color: var(--gold); background: var(--gold-soft); color: var(--gold-deep);
+}
+
+/* The one moment the app has nothing to show: a device just signed in on,
+   waiting to be told whose it is. */
+.boot-wait {
+  position: fixed; inset: 0; z-index: 200; display: grid; place-items: center;
+  align-content: center; gap: 14px; background: var(--bg);
+}
+.boot-wait p { margin: 0; font-size: .9rem; }
+
 /* --- onboarding: choices, steps, and the one warning that matters -------- */
 .ob-choice {
   display: block; width: 100%; text-align: left; cursor: pointer;
