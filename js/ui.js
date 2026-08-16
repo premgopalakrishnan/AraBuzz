@@ -11,6 +11,11 @@
 
   /* ------------------------------------------------------------- routing  */
   function go(name, opts) {
+    /* A newer AraBuzz arrived while she was playing. She is back on the home
+       screen now, so this is the moment to take it — not mid-question. */
+    if (name === 'home' && window.ARABUZZ_UPDATE && window.arabuzzTakeUpdate) {
+      if (window.arabuzzTakeUpdate()) return;
+    }
     window.U.$$('.screen').forEach(s => s.classList.remove('active'));
     const scr = $('#scr-' + name);
     if (!scr) return;
@@ -1342,6 +1347,26 @@
 
   async function boot() {
     if (booted) return; booted = true;
+
+    /* ?update — throw away the offline copy and fetch the app again.
+       This is the one thing to tell a parent whose app looks out of date. It
+       touches NOTHING a child owns: her profile, words, progress, answers,
+       points and PIN all live in localStorage, which this does not go near.
+       Unlike ?reset, it is safe to give to anybody over the phone. */
+    if (/[?&]update\b/.test(location.search)) {
+      try {
+        if ('serviceWorker' in navigator) {
+          const regs = await navigator.serviceWorker.getRegistrations();
+          await Promise.all(regs.map(r => r.unregister()));
+        }
+        if (window.caches) {
+          const keys = await caches.keys();
+          await Promise.all(keys.map(k => caches.delete(k)));
+        }
+      } catch (e) { console.warn('update', e); }
+      location.replace(location.pathname);
+      return;
+    }
 
     // Open the app with ?reset on the end of the address to wipe it and start
     // completely fresh — no PIN needed. Handy while testing a new version.

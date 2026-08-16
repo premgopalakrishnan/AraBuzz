@@ -92,19 +92,46 @@
 <!-- Keeps a copy of the whole app on this device, so it opens with the
      computer switched off and the wifi down. See sw.js. -->
 <script>
+  /* AraBuzz keeps a whole copy of itself on the device, which is what lets it
+     open in the back of a car. The cost of that is real: without the code
+     below, a device happily runs a version from three weeks ago and nobody can
+     tell. It used to say "an update is ready, it will be there next time" and
+     then never take it, because "next time" is another visit to the same
+     cached copy.
+
+     So now it takes the update itself. The only thing that matters is WHEN:
+     never while a child is answering a question. If she is mid-game the new
+     version waits, quietly, until she is back on the home screen. */
   if ('serviceWorker' in navigator && location.protocol.startsWith('http')) {
+    let reloading = false;
+
+    window.arabuzzTakeUpdate = function () {
+      if (reloading || !window.ARABUZZ_UPDATE) return false;
+      reloading = true;
+      try { if (window.Store) Store.save(true); } catch (e) {}
+      location.reload();
+      return true;
+    };
+
+    /* The new service worker has taken over. Everything already loaded into
+       this page is the old version, so the page has to be read again. */
+    navigator.serviceWorker.addEventListener('controllerchange', () => {
+      window.ARABUZZ_UPDATE = true;
+      const busy = window.UI && (UI.current === 'quiz' || UI.current === 'puzzle' || UI.current === 'result');
+      if (!busy) window.arabuzzTakeUpdate();
+    });
+
     window.addEventListener('load', () => {
       navigator.serviceWorker.register('sw.js').then(reg => {
         window.ARABUZZ_SW = reg;
+        reg.update();                                        // ask on every launch
+        setInterval(() => { try { reg.update(); } catch (e) {} }, 3600000);
         reg.addEventListener('updatefound', () => {
           const sw = reg.installing;
           if (!sw) return;
           sw.addEventListener('statechange', () => {
-            // A newer AraBuzz is ready. Never interrupt her mid-game — it will
-            // simply be there the next time she opens it.
             if (sw.state === 'installed' && navigator.serviceWorker.controller) {
               window.ARABUZZ_UPDATE = true;
-              if (window.U && U.toast) U.toast('An update is ready — it will be there next time.', 'good');
             }
           });
         });
