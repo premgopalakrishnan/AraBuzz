@@ -14,16 +14,27 @@
   let tab = null;   // decided on first paint
   let draft = null;   // a deck being reviewed before it is published
 
+  /** Sheets come only from Prem now — a parent's grown-up area has no way to
+   *  add words. That is deliberate: one person uploads for everybody, once,
+   *  which is also what keeps the AI cost a few pence a week. */
+  function isAdmin() {
+    const me = window.Cloud && Cloud.whoAmI();
+    return !!(me && me.isAdmin);
+  }
+
   function paint(opts) {
     if (opts && opts.tab) tab = opts.tab;
+    const admin = isAdmin();
+    if (!admin && (tab === 'upload' || tab === 'words')) tab = 'about';
     // First visit — or nothing set up yet — opens on the explainer.
-    if (!tab) tab = (Store.db.weeks.length && Store.db.attempts.length) ? 'upload' : 'about';
+    if (!tab) tab = (Store.db.weeks.length && Store.db.attempts.length)
+      ? (admin ? 'upload' : 'progress') : 'about';
     const scr = $('#scr-parent');
     scr.innerHTML = `
       <div class="row between wrap" style="gap:10px">
         <div>
           <h1 style="margin-bottom:2px">Grown-ups</h1>
-          <p class="muted small" style="margin:0">${esc(Store.db.profile ? Store.db.profile.name : '')}'s AraBuzz · everything stays on this computer</p>
+          <p class="muted small" style="margin:0">${esc(Store.db.profile ? Store.db.profile.name : '')}'s AraBuzz · synced safely to your family account</p>
         </div>
         <div class="row" style="gap:8px">
           ${(window.Cloud && Cloud.whoAmI() && Cloud.whoAmI().isAdmin)
@@ -34,9 +45,13 @@
       </div>
 
       <div class="tabs" id="ptabs" style="margin-top:16px">
-        ${[['about', 'sparkle', 'Start here'], ['upload', 'upload', 'Add words'], ['words', 'book', 'Word lists'],
-           ['progress', 'chart', 'Progress'], ['report', 'doc', 'Coach Report'], ['storage', 'save', 'Storage'],
-           ['settings', 'gear', 'Settings']]
+        ${(admin
+          ? [['about', 'sparkle', 'Start here'], ['upload', 'upload', 'Add words'], ['words', 'book', 'Word lists'],
+             ['progress', 'chart', 'Progress'], ['report', 'doc', 'Coach Report'], ['storage', 'save', 'Storage'],
+             ['settings', 'gear', 'Settings']]
+          : [['about', 'sparkle', 'Start here'],
+             ['progress', 'chart', 'Progress'], ['report', 'doc', 'Coach Report'], ['storage', 'save', 'Storage'],
+             ['settings', 'gear', 'Settings']])
           .map(([k, i, t]) => `<button data-t="${k}" class="${tab === k ? 'on' : ''}">
              ${Icon.icon(i, { size: 16 })} ${t}</button>`).join('')}
       </div>
@@ -67,7 +82,9 @@
       { done: !!db.profile, t: 'Set up a profile', d: 'She types her name and does a short starting check.',
         go: null },
       { done: !!db.settings.pin, t: 'Set a PIN', d: 'Keeps this area yours.', go: 'settings' },
-      { done: weeks > 0, t: 'Add the first Spell Buzz sheet', d: 'Drop in the PDF the school sends.', go: 'upload' },
+      isAdmin()
+        ? { done: weeks > 0, t: 'Add the first Spell Buzz sheet', d: 'Drop in the PDF the school sends.', go: 'upload' }
+        : { done: weeks > 0, t: 'The words arrive by themselves', d: 'Prem adds each week\'s sheet once, for everybody. It appears here on its own.', go: null },
       { done: db.attempts.length >= 12, t: 'Let her play a few rounds',
         d: 'The reports need something to read.', go: null },
       { done: (db.reports || []).length > 0, t: 'Read your first Coach Report',
@@ -985,8 +1002,70 @@ Reflex = A quick automatic response"></textarea>
   /* ====================================================================== */
   /*  4. COACH REPORT                                                       */
   /* ====================================================================== */
+  /** Notes written elsewhere — the weekly cron, or another device — live in
+   *  the account. Fold them into the local archive so this tab shows one
+   *  truthful list wherever the parent happens to open it. */
+  async function mergeCloudReports() {
+    if (!window.Cloud || !Cloud.signedIn() || !window.Sync) return false;
+    const childId = Store.db.activeChildId;
+    if (!Sync.isDbId(childId)) return false;
+    try {
+      const { data, error } = await Cloud.from('reports')
+        .select('id, ts, payload, html, range_from, range_to')
+        .eq('child_id', childId).order('ts', { ascending: false }).limit(40);
+      if (error || !data) return false;
+      let added = 0;
+      data.forEach(row => {
+        if ((Store.db.reports || []).some(r => r.cloudId === row.id)) return;
+        const pay = row.payload || {};
+        const res = pay.result || null;
+        const html = row.html || (res ? renderCloudNote(res, pay, row) : null);
+        if (!html) return;
+        Store.db.reports.push({
+          id: Store.uid('r'), cloudId: row.id,
+          ts: Date.parse(row.ts) || Date.now(),
+          html,
+          range: pay.kind === 'onboarding' ? 'Starting point'
+               : (row.range_from ? row.range_from + ' → ' + row.range_to : 'Weekly note'),
+          kind: pay.kind || 'weekly',
+          headline: res ? res.headline : '',
+          metrics: pay.metrics || null
+        });
+        added++;
+      });
+      if (added) Store.save(true);
+      return added > 0;
+    } catch (e) { return false; }
+  }
+
+  /** A weekly note arriving as structured data, rendered here. */
+  function renderCloudNote(r, pay, row) {
+    const name = Store.db.profile ? Store.db.profile.name : '';
+    const inner = `
+      <div class="card report">
+        <div class="kicker">AraBuzz · Weekly note · ${esc(window.U.fmtDate(Date.parse(row.ts)))}</div>
+        <h1>${esc(name)}'s week</h1>
+        <blockquote><b>${esc(r.headline || '')}</b></blockquote>
+        ${String(r.whereTheyAre || '').split(/\n{2,}|\n/).filter(Boolean).map(t => `<p>${esc(t)}</p>`).join('')}
+        <h2>Going well</h2>
+        <ul>${(r.strengths || []).map(x => `<li><b>${esc(x.title)}</b> — ${esc(x.detail)}</li>`).join('')}</ul>
+        ${(r.patterns || []).length ? `<h2>Patterns worth knowing</h2>
+        <ul>${r.patterns.map(x => `<li><b>${esc(x.pattern)}</b> — ${esc(x.meaning)}${x.example ? ` <span class="muted small">(${esc(x.example)})</span>` : ''}</li>`).join('')}</ul>` : ''}
+        <h2>This week, if you have ten minutes</h2>
+        <ol>${(r.thisWeek || []).map(x => `<li><b>${esc(x.action)}</b> — ${esc(x.why)} <span class="pill tiny">${x.minutes} min</span></li>`).join('')}</ol>
+        ${(r.wordsToDrill || []).length ? `<h2>Words to practise before the next test</h2>
+        <p>${r.wordsToDrill.map(wd => `<span class="pill honey">${esc(wd)}</span>`).join(' ')}</p>` : ''}
+        <h2>Since the last note</h2><p>${esc(r.sinceLastReport || '')}</p>
+        <p>${esc(r.motivation || '')}</p>
+        ${r.sayToThem ? `<blockquote>Something worth saying:<br><b>“${esc(r.sayToThem)}”</b></blockquote>` : ''}
+      </div>`;
+    return wrapReportHTML(inner);
+  }
+
   function tabReport() {
     const box = $('#ptab');
+    // quietly pull anything new from the account, then repaint once
+    mergeCloudReports().then(changed => { if (changed && tab === 'report') tabReport(); });
     const saved = (Store.db.reports || []).slice().sort((a, b) => b.ts - a.ts);
     const att = Store.db.attempts;
     const name = Store.db.profile.name;
@@ -1302,6 +1381,84 @@ Reflex = A quick automatic response"></textarea>
       .map(a => ({ correct: a.correct, given: a.given, ok: a.ok, ts: a.ts }));
     if (!rows.length) return [];
     return Phonics.summarise(rows).patterns;
+  }
+
+  /* ======================================================================
+     THE ONBOARDING REPORT
+     Called by the setup flow the moment the twenty-question check finishes.
+     Runs quietly in the background; the child never sees it. By the time the
+     parent next opens the grown-ups' area, their starting-point note is
+     sitting at the top of the Coach Report archive.
+     ====================================================================== */
+  async function generateOnboardingReport(baseline) {
+    if (!API.hasKey() || !baseline) return null;
+    const db = Store.db;
+    const p = db.profile || {};
+
+    const payload = {
+      kind: 'onboarding',
+      name: p.name || 'the child',
+      pronoun: p.pronoun || 'they',
+      check: {
+        description: 'A 20-question first check: 6 listen-and-spell, 4 read-the-meaning-and-spell, 5 spot-the-correct-spelling, 5 word meanings. Each question probes a specific English spelling pattern.',
+        score: `${baseline.correct}/${baseline.total}`,
+        produceScore: baseline.produceScore,
+        recogniseScore: baseline.recogniseScore,
+        vocabScore: baseline.vocabScore,
+        gap: baseline.gap,
+        phoneticShareOfErrors: baseline.phoneticShare,
+        topPatterns: baseline.topPatterns,
+        answers: baseline.rows
+      }
+    };
+
+    const r = await API.onboardingReport(payload);
+    const html = renderOnboardReport(r, p.name || '');
+    const rec = {
+      id: Store.uid('r'), ts: Date.now(), html,
+      range: 'Starting point', kind: 'onboarding',
+      headline: r.headline,
+      metrics: { answers: baseline.total, accuracy: baseline.correct / baseline.total,
+                 phoneticShare: baseline.phoneticShare, wordsMastered: 0 }
+    };
+    db.reports.push(rec);
+    Store.save(true);
+
+    // …and into the account, so it is on whichever device the parent opens.
+    try {
+      if (window.Sync && Sync.isDbId(db.activeChildId) && window.Cloud && Cloud.signedIn()) {
+        await Cloud.from('reports').insert({
+          child_id: db.activeChildId,
+          payload: { kind: 'onboarding', result: r, metrics: rec.metrics },
+          html
+        });
+      }
+    } catch (e) { console.warn('onboarding report not synced', e); }
+    return rec;
+  }
+
+  function renderOnboardReport(r, name) {
+    const inner = `
+      <div class="card report">
+        <div class="kicker">AraBuzz · Starting point · ${esc(window.U.fmtDate(Date.now()))}</div>
+        <h1>Where ${esc(name)} is starting from</h1>
+        <blockquote><b>${esc(r.headline || '')}</b></blockquote>
+        ${String(r.startingPoint || '').split(/\n{2,}|\n/).filter(Boolean)
+          .map(t => `<p>${esc(t)}</p>`).join('')}
+        <h2>What ${esc(name)} already brings</h2>
+        <ul>${(r.strengths || []).map(x =>
+          `<li><b>${esc(x.title)}</b> — ${esc(x.detail)}</li>`).join('')}</ul>
+        <h2>What practice will focus on first</h2>
+        <ul>${(r.focus || []).map(x =>
+          `<li><b>${esc(x.pattern)}</b> — ${esc(x.why)}${x.example
+            ? ` <span class="muted small">(${esc(x.example)})</span>` : ''}</li>`).join('')}</ul>
+        <h2>The first fortnight</h2>
+        <p>${esc(r.firstFortnight || '')}</p>
+        ${r.sayToThem ? `<blockquote>Something worth saying tonight:<br><b>“${esc(r.sayToThem)}”</b></blockquote>` : ''}
+        <p class="small muted">Written from the twenty answers of the first check — a strong
+           starting sketch that daily practice now sharpens. The weekly notes take it from here.</p>
+      </div>`;
+    return wrapReportHTML(inner);
   }
 
   async function generateReport() {
@@ -1740,8 +1897,9 @@ th,td{padding:10px 12px;border:1px solid #E5DDD1;text-align:left}th{background:#
     const C = window.CONFIG;
     const policy = s.modelPolicy || C.DEFAULT_POLICY;
 
+    const admin = isAdmin();
     box.innerHTML = `
-      <div class="card">
+      ${!admin ? '' : `<div class="card">
         <h2>Anthropic API key</h2>
         ${own ? `
           <div class="feedback good" style="margin-bottom:14px">
@@ -1773,9 +1931,9 @@ th,td{padding:10px 12px;border:1px solid #E5DDD1;text-align:left}th{background:#
           </div>
         </details>
         <div id="keyStat"></div>
-      </div>
+      </div>`}
 
-      <div class="card" style="margin-top:14px">
+      ${!admin ? '' : `<div class="card" style="margin-top:14px">
         <h3>Quality and cost</h3>
         <p class="muted small">Different jobs need different models, and matching them properly is
            where the saving is. On your real Spell Buzz sheets the small fast model extracted exactly
@@ -1803,7 +1961,7 @@ th,td{padding:10px 12px;border:1px solid #E5DDD1;text-align:left}th{background:#
               </select></td></tr>`).join('')}
           </tbody></table>
         </details>
-      </div>
+      </div>`}
 
       <div class="card" style="margin-top:14px">
         <h3>What it has cost so far</h3>
@@ -1887,7 +2045,7 @@ th,td{padding:10px 12px;border:1px solid #E5DDD1;text-align:left}th{background:#
         <p class="tiny faint" style="margin:4px 0 0">Built for Aradhana. Version 1.1</p>
       </div>`;
 
-    $('#saveKey').onclick = () => {
+    if ($('#saveKey')) $('#saveKey').onclick = () => {
       s.apiKey = $('#apiKey').value.trim();
       s.apiBase = ($('#apiBase') && $('#apiBase').value.trim()) || '';
       s.warnCallsPerWeek = +$('#warnCalls').value || 40;
@@ -1900,7 +2058,7 @@ th,td{padding:10px 12px;border:1px solid #E5DDD1;text-align:left}th{background:#
       if (!yes) return;
       s.apiKey = ''; Store.save(true); toast('Back to the built-in key.', 'good'); paint();
     };
-    $('#testKey').onclick = async () => {
+    if ($('#testKey')) $('#testKey').onclick = async () => {
       s.apiKey = $('#apiKey').value.trim();
       s.apiBase = ($('#apiBase') && $('#apiBase').value.trim()) || '';
       Store.save(true);
@@ -1988,5 +2146,5 @@ th,td{padding:10px 12px;border:1px solid #E5DDD1;text-align:left}th{background:#
     UI.startFresh();
   }
 
-  w.Parent = { paint, buildReportPayload, renderReport, wrapReportHTML };
+  w.Parent = { paint, buildReportPayload, renderReport, wrapReportHTML, generateOnboardingReport };
 })(window);

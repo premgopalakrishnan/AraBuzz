@@ -13,7 +13,13 @@
 
   w.CONFIG = {
 
-    /* The key AraBuzz uses if nobody has entered their own. */
+    /* Where AraBuzz lives. Every link the app hands out — invitations, the
+       set-up-another-device instructions — uses this, never the vercel.app
+       address. */
+    APP_URL: 'https://arabuzz.cokindlelabs.com',
+
+    /* Empty on purpose: keys live on the server now (see /api). A key typed
+       into Settings still works as a debugging override for Prem. */
     DEFAULT_API_KEY: '',
 
     DEFAULT_POLICY: 'balanced',

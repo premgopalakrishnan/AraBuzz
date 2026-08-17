@@ -196,6 +196,9 @@
            Ask Prem to send you a new one — it takes him a moment.</p>`);
     }
 
+    // remember who this invitation greeted, for the "Do I call you…?" screen
+    sessionStorage.setItem('arabuzz.invname', inv.family_name || '');
+
     panel(`
       <div class="ob-kicker">${esc(inv.invited_by)} invited you</div>
       <h1>Hi ${esc(inv.family_name)}</h1>
@@ -208,8 +211,8 @@
         <li>It never makes them feel bad about a wrong answer.</li>
         <li>You get a short note each week on what’s worth helping with.</li>
       </ul>
-      <p class="muted small">Just for this class group, and not a commercial app.
-         Nobody can see anyone else’s child.</p>
+      <p class="muted small">It’s not a business — Prem made it for his own kids and is
+         sharing it only with close friends. Nobody can see anyone else’s child.</p>
 
       <div class="field" style="margin-top:20px">
         <label for="obEmail">Your email</label>
@@ -217,9 +220,10 @@
                placeholder="you@example.com">
       </div>
       <div id="obErr" class="feedback bad" style="display:none"></div>
-      <button class="btn-primary btn-wide" id="obGo" data-label="Send me a link">Send me a link</button>
-      <p class="hint center-text">No password to invent. We’ll email you a link that
-         signs you in.</p>`,
+      <button class="btn-primary btn-wide" id="obGo" data-label="Email me a sign-in code">
+        Email me a sign-in code</button>
+      <p class="hint center-text">No password to invent. A six-digit code arrives by
+         email; type it in and you’re in.</p>`,
       { tag: 'You’ve been invited' });
 
     const go = $('#obGo');
@@ -230,7 +234,7 @@
       try {
         await Cloud.sendLink(email, location.origin + '?join=' + encodeURIComponent(code));
         sessionStorage.setItem('arabuzz.joining', code);
-        checkEmail(email);
+        askCode(email);
       } catch (e) {
         busy(go, false);
         oops(e.message || 'That didn’t send. Try again in a moment.');
@@ -240,25 +244,104 @@
     $('#obEmail').onkeydown = e => { if (e.key === 'Enter') send(); };
   }
 
-  function checkEmail(email) {
+  /* ==========================================================================
+     The six-digit code
+     The email carries a code AND a link; both work. The code matters for the
+     everyday case — the email opens on the parent's phone, but AraBuzz is
+     sitting open on the child's iPad. Reading six digits across the room
+     beats forwarding a link.
+     ========================================================================== */
+  function askCode(email) {
     panel(`
       <div class="ob-tick">${window.Icon ? Icon.icon('mail', { size: 40, stroke: 1.4 }) : '✉'}</div>
       <h1>Check your email</h1>
-      <p class="lead">We’ve sent a link to <b>${esc(email)}</b>. Tap it and you’re in.</p>
-      <p class="muted small">It should arrive within a minute. If it doesn’t, look in
-         spam — and if it’s still not there, message Prem.</p>`,
+      <p class="lead">We’ve sent a six-digit code to <b>${esc(email)}</b>.</p>
+      <div class="field"><label for="obCode">Type the code here</label>
+        <input id="obCode" inputmode="numeric" autocomplete="one-time-code" maxlength="8"
+               placeholder="123456" class="ob-pin" style="letter-spacing:.35em;text-align:center;font-size:1.4rem">
+      </div>
+      <div id="obErr" class="feedback bad" style="display:none"></div>
+      <button class="btn-primary btn-wide" id="obGo" data-label="Sign me in">Sign me in</button>
+      <p class="hint center-text">The email also has a link — tapping that works too.
+         Nothing in a minute? Check spam, or <a href="#" id="obAgain">send another code</a>.</p>`,
       { tag: 'Almost there' });
+
+    const go = $('#obGo');
+    const verify = async () => {
+      const codeTyped = $('#obCode').value.trim();
+      if (!/^\d{6}$/.test(codeTyped.replace(/\s/g, ''))) return oops('The code is six digits.');
+      busy(go, true, 'Checking');
+      try {
+        await Cloud.verifyCode(email, codeTyped);
+        route();
+      } catch (e) {
+        busy(go, false);
+        oops(/expired|invalid/i.test(e.message || '') ?
+          'That code didn’t match. Codes only last a little while — send a fresh one if in doubt.'
+          : (e.message || 'That didn’t work. Try again.'));
+      }
+    };
+    go.onclick = verify;
+    $('#obCode').onkeydown = e => { if (e.key === 'Enter') verify(); };
+    $('#obAgain').onclick = async (e) => {
+      e.preventDefault();
+      try {
+        const codeStored = sessionStorage.getItem('arabuzz.joining');
+        await Cloud.sendLink(email, codeStored
+          ? location.origin + '?join=' + encodeURIComponent(codeStored) : location.origin);
+        window.U.toast('A fresh code is on its way.', 'good');
+      } catch (err) { oops(err.message || 'Could not resend.'); }
+    };
   }
 
   /* ==========================================================================
      2 · Your name
+     The invitation already knows what Prem calls this person, so the screen
+     confirms rather than asks. One tap for almost everyone; a box for the
+     person Prem knows as "Chikki" who would rather sign up as Lakshmi.
      ========================================================================== */
   function askName(code) {
+    const invited = (sessionStorage.getItem('arabuzz.invname') || '').trim();
+
+    if (invited) {
+      panel(`
+        <h1>Do I call you ${esc(invited)}?</h1>
+        <p class="muted">That’s the name on your invitation. It’s how you’ll appear to
+           Prem, and nowhere else.</p>
+        <button class="btn-primary btn-wide" id="obYes" data-label="Yes — I’m ${esc(invited)}">
+          Yes — I’m ${esc(invited)}</button>
+        <div class="field" style="margin-top:18px">
+          <label for="obName">Or something else</label>
+          <input id="obName" autocomplete="name" placeholder="What should I call you?"></div>
+        <div class="field"><label for="obMob">Mobile <span class="faint">(optional)</span></label>
+          <input id="obMob" type="tel" inputmode="tel" autocomplete="tel" placeholder="+91"></div>
+        <div id="obErr" class="feedback bad" style="display:none"></div>
+        <button class="btn-quiet btn-wide" id="obGo" data-label="Use that name instead">Use that name instead</button>`,
+        { tag: 'Nice to meet you' });
+
+      const join = async (name, btn) => {
+        busy(btn, true);
+        try {
+          await Cloud.acceptInvite(code, name, $('#obMob').value.trim());
+          sessionStorage.removeItem('arabuzz.joining');
+          sessionStorage.removeItem('arabuzz.invname');
+          route();
+        } catch (e) { busy(btn, false); oops(e.message || 'Something went wrong.'); }
+      };
+      $('#obYes').onclick = () => join(invited, $('#obYes'));
+      $('#obGo').onclick = () => {
+        const alt = $('#obName').value.trim();
+        if (alt.length < 2) return oops('Type the name you’d prefer first.');
+        join(alt, $('#obGo'));
+      };
+      return;
+    }
+
     panel(`
       <h1>What should we call you?</h1>
       <p class="muted">This is how you’ll appear to Prem, and nowhere else.</p>
       <div class="field"><label for="obName">Your name</label>
-        <input id="obName" autocomplete="name" placeholder="Meera Rao"></div>
+        <input id="obName" autocomplete="name" placeholder="Meera"></div>
       <div class="field"><label for="obMob">Mobile <span class="faint">(optional)</span></label>
         <input id="obMob" type="tel" inputmode="tel" autocomplete="tel" placeholder="+91"></div>
       <div id="obErr" class="feedback bad" style="display:none"></div>
@@ -375,76 +458,12 @@
   }
 
   /* ==========================================================================
-     5 · The child
+     5 · There is deliberately NO "add your child" screen here.
+     The parent finishes their part — agreeing, and a PIN — and hands the
+     device over. The child types their own name, to Ara, on the next screen.
+     A nine-year-old introducing themself to a macaw is a better first minute
+     than being registered by a grown-up.
      ========================================================================== */
-  /* Her badge is a plant, drawn by the same hand as the garden she is about to
-     grow — so the choice she makes on this screen is already part of the world
-     she is joining, rather than a sticker chosen from a sheet. */
-  const AVATARS = ['sunflower', 'tomato', 'tulip', 'strawberry', 'chilli', 'lavender', 'lettuce'];
-
-  function askChild() {
-    panel(`
-      <h1>Who’s going to be playing?</h1>
-      <p class="muted">Their first name only — that is all AraBuzz ever stores.</p>
-      <div class="field"><label for="obKid">First name</label>
-        <input id="obKid" autocomplete="off" placeholder="Kabir"></div>
-      <div class="field"><label for="obClass">Class <span class="faint">(optional)</span></label>
-        <input id="obClass" placeholder="4B"></div>
-
-      <div class="field">
-        <label>How should AraBuzz talk about them?</label>
-        <div class="ob-pronouns" id="obPn">
-          ${window.U.PRONOUNS.map(p => `
-            <button type="button" data-pn="${p.key}" class="${p.key === 'they' ? 'on' : ''}">
-              ${esc(p.label)}</button>`).join('')}
-        </div>
-        <p class="hint">Used in the games and in your weekly note. You can change it later.</p>
-      </div>
-
-      <label class="lbl">Pick a badge</label>
-      <div class="ob-avatars" id="obAv">
-        ${AVATARS.map((a, i) => `
-          <button type="button" data-av="${a}" class="${i === 0 ? 'on' : ''}">
-            ${window.Garden ? Garden.sprig({ species: a, box: 6, size: 46, seed: i }) : ''}
-            <span>${esc(a)}</span>
-          </button>`).join('')}
-      </div>
-      <div id="obErr" class="feedback bad" style="display:none"></div>
-      <button class="btn-primary btn-wide" id="obGo" data-label="That’s them">That’s them</button>
-      <p class="hint center-text">You can add another child later.</p>`,
-      { tag: 'Nearly done' });
-
-    let avatar = AVATARS[0];
-    let pronoun = 'they';
-    window.U.$$('#obAv button').forEach(b => b.onclick = () => {
-      window.U.$$('#obAv button').forEach(x => x.classList.remove('on'));
-      b.classList.add('on'); avatar = b.dataset.av;
-    });
-    window.U.$$('#obPn button').forEach(b => b.onclick = () => {
-      window.U.$$('#obPn button').forEach(x => x.classList.remove('on'));
-      b.classList.add('on'); pronoun = b.dataset.pn;
-    });
-
-    const go = $('#obGo');
-    go.onclick = async () => {
-      const name = $('#obKid').value.trim();
-      if (name.length < 1) return oops('Please enter their first name.');
-      busy(go, true);
-      try {
-        // Through Sync, so the child exists in the account and on this device
-        // under one and the same id.
-        await window.Sync.createChild({
-          name, emoji: avatar, pronoun, classLabel: $('#obClass').value.trim()
-        });
-        route();
-      } catch (e) {
-        busy(go, false);
-        oops(/has_consented|row-level/i.test(e.message || '')
-          ? 'Please agree to the terms first.'
-          : (e.message || 'That didn’t save.'));
-      }
-    };
-  }
 
 
   /* ==========================================================================
@@ -465,8 +484,8 @@
   }
 
   function askDevice() {
-    const { name: kid, p } = theChild();
-    const here = location.origin.replace(/^https?:\/\//, '');
+    const { name: kid, p } = theChild();   // 'your child' + they, until the child names themself
+    const here = ((window.CONFIG && CONFIG.APP_URL) || location.origin).replace(/^https?:\/\//, '');
     panel(`
       <h1>Where will ${esc(kid)} be playing?</h1>
       <p class="lead">You are probably reading this on your phone. If ${esc(kid)} will use
@@ -511,32 +530,30 @@
       helping — a first check that a parent has quietly corrected tells us
       nothing, and then every week after it is aimed at the wrong thing. */
   function handOver() {
-    const { name: kid, p } = theChild();
     panel(`
       <div class="ob-tick">${window.Icon ? Icon.icon('sparkle', { size: 40, stroke: 1.4 }) : '★'}</div>
-      <h1>Now hand it to ${esc(kid)}</h1>
-      <p class="lead">${p.Cap.they()} ${p.s('start')} with a short spelling check — about
-         twenty words, five minutes. It is not marked, and ${p.they()} cannot fail it.</p>
+      <h1>Now hand it to your child</h1>
+      <p class="lead">Ara — the macaw who runs the place — will ask their name, let them
+         pick a badge, and then do a short spelling check: about twenty words, five
+         minutes. It is not marked, and they cannot fail it.</p>
 
       <div class="ob-warn">
-        <b>Please don’t help ${p.them()} with this one.</b>
+        <b>Please don’t help with the check.</b>
         <p>Not a hint, not a nudge, not “are you sure?”. It feels unkind for five minutes
            and it is the single most useful thing you can do.</p>
-        <p>Everything AraBuzz does afterwards is built on what ${p.they()} can spell
+        <p>Everything AraBuzz does afterwards is built on what your child can spell
            <em>unaided today</em>. If the first check is a little better than the truth,
-           every week that follows practises the wrong words — and ${p.they()}
-           ${p.s('end')} up working harder for less. Let ${p.them()} get things wrong.
-           That is the point of it.</p>
+           every week that follows practises the wrong words — and they end up working
+           harder for less. Let them get things wrong. That is the point of it.</p>
       </div>
 
-      <p class="muted small">${p.Cap.they()} will never see a score, a red mark, or a
-         comparison with anyone else. If ${p.they()} ${p.s('ask')} how ${p.they()}
-         did, "you showed me exactly what to help you with" is both kind and
-         completely true.</p>
+      <p class="muted small">They will never see a score, a red mark, or a comparison
+         with anyone else. And the moment the check finishes, your starting-point note
+         is written — it will be waiting behind your PIN, under <b>Coach Report</b>.</p>
 
       <button class="btn-primary btn-wide" id="obGo" data-label="I’ve handed it over">
         I’ve handed it over</button>`,
-      { tag: 'Over to her' });
+      { tag: 'Over to them' });
 
     $('#obGo').onclick = () => finish();
   }
@@ -550,28 +567,112 @@
 
   /* ==========================================================================
      7 · Signing in when you are already a member
+     Two doors, deliberately unequal in size. Parents get the big warm one —
+     email, code, done. The admin door is a quiet line at the bottom with a
+     password behind it, because Prem asked for his sign-in to be nothing like
+     a parent's: knowing an email address must never be enough to reach the
+     console that sees every family.
      ========================================================================== */
   function askSignIn() {
     panel(`
       <h1>Welcome back</h1>
-      <p class="lead">Enter your email and we’ll send you a link. No password to remember.</p>
+      <p class="lead">Enter your email and we’ll send you a six-digit code. No password
+         to remember.</p>
       <div class="field"><label for="obEmail">Email</label>
         <input id="obEmail" type="email" inputmode="email" autocomplete="email"
                placeholder="you@example.com"></div>
       <div id="obErr" class="feedback bad" style="display:none"></div>
-      <button class="btn-primary btn-wide" id="obGo" data-label="Send me a link">Send me a link</button>`,
-      { tag: 'Sign in' });
+      <button class="btn-primary btn-wide" id="obGo" data-label="Email me a code">Email me a code</button>`,
+      { tag: 'Sign in', foot: '<a href="#" id="obAdmin" style="color:inherit">Admin sign in</a>' });
 
     const go = $('#obGo');
     const send = async () => {
       const email = $('#obEmail').value.trim();
       if (!/^\S+@\S+\.\S+$/.test(email)) return oops('That doesn’t look like an email address.');
       busy(go, true, 'Sending');
-      try { await Cloud.sendLink(email, location.origin); checkEmail(email); }
+      try { await Cloud.sendLink(email, location.origin); askCode(email); }
       catch (e) { busy(go, false); oops(e.message || 'That didn’t send.'); }
     };
     go.onclick = send;
     $('#obEmail').onkeydown = e => { if (e.key === 'Enter') send(); };
+    const adm = document.getElementById('obAdmin');
+    if (adm) adm.onclick = (e) => { e.preventDefault(); askAdminSignIn(); };
+  }
+
+  /* ==========================================================================
+     8 · The admin's door: email and password
+     ========================================================================== */
+  function askAdminSignIn() {
+    panel(`
+      <h1>Admin sign in</h1>
+      <p class="muted">This door is for running AraBuzz — inviting families and
+         publishing sheets. Parents don’t need it.</p>
+      <div class="field"><label for="obEmail">Email</label>
+        <input id="obEmail" type="email" inputmode="email" autocomplete="username"
+               placeholder="prem@cokindle.com"></div>
+      <div class="field"><label for="obPwd">Password</label>
+        <input id="obPwd" type="password" autocomplete="current-password" placeholder="••••••••"></div>
+      <div id="obErr" class="feedback bad" style="display:none"></div>
+      <button class="btn-primary btn-wide" id="obGo" data-label="Sign in">Sign in</button>
+      <p class="hint center-text"><a href="#" id="obReset">Set or reset my password</a>
+         &nbsp;·&nbsp; <a href="#" id="obBack">I’m a parent</a></p>`,
+      { tag: 'Admin' });
+
+    const go = $('#obGo');
+    const attempt = async () => {
+      const email = $('#obEmail').value.trim(), pwd = $('#obPwd').value;
+      if (!/^\S+@\S+\.\S+$/.test(email)) return oops('That doesn’t look like an email address.');
+      if (!pwd) return oops('Type your password — or use "Set or reset my password" below.');
+      busy(go, true, 'Checking');
+      try { await Cloud.signInPassword(email, pwd); route(); }
+      catch (e) {
+        busy(go, false);
+        oops(/invalid/i.test(e.message || '') ? 'That email and password don’t match.'
+          : (e.message || 'Could not sign in.'));
+      }
+    };
+    go.onclick = attempt;
+    $('#obPwd').onkeydown = e => { if (e.key === 'Enter') attempt(); };
+    $('#obBack').onclick = (e) => { e.preventDefault(); askSignIn(); };
+    $('#obReset').onclick = async (e) => {
+      e.preventDefault();
+      const email = $('#obEmail').value.trim();
+      if (!/^\S+@\S+\.\S+$/.test(email)) return oops('Type your email first, then tap that again.');
+      try {
+        await Cloud.sendPasswordReset(email);
+        panel(`
+          <div class="ob-tick">${window.Icon ? Icon.icon('mail', { size: 40, stroke: 1.4 }) : '✉'}</div>
+          <h1>Check your email</h1>
+          <p class="lead">A link to choose a password has gone to <b>${esc(email)}</b>.
+             Open it and you’ll land back here.</p>`, { tag: 'Admin' });
+      } catch (err) { oops(err.message || 'Could not send that.'); }
+    };
+  }
+
+  /** Arriving back from the set-password email. */
+  function askNewPassword() {
+    panel(`
+      <h1>Choose a password</h1>
+      <p class="muted">For the admin sign-in only. Parents never see or need this.</p>
+      <div class="field"><label for="obPwd">New password</label>
+        <input id="obPwd" type="password" autocomplete="new-password" placeholder="At least 8 characters"></div>
+      <div class="field"><label for="obPwd2">Again, to be sure</label>
+        <input id="obPwd2" type="password" autocomplete="new-password"></div>
+      <div id="obErr" class="feedback bad" style="display:none"></div>
+      <button class="btn-primary btn-wide" id="obGo" data-label="Save my password">Save my password</button>`,
+      { tag: 'Admin' });
+
+    $('#obGo').onclick = async () => {
+      const a = $('#obPwd').value, b = $('#obPwd2').value;
+      if (a.length < 8) return oops('Eight characters or more, please.');
+      if (a !== b) return oops('Those two don’t match.');
+      busy($('#obGo'), true);
+      try {
+        await Cloud.setPassword(a);
+        window.U.toast('Password saved.', 'good');
+        route();
+      } catch (e) { busy($('#obGo'), false); oops(e.message || 'That didn’t save.'); }
+    };
   }
 
   /* ==========================================================================
@@ -585,6 +686,9 @@
   async function route() {
     const code = inviteCode();
 
+    // Back from a set-password email: that comes before everything else.
+    if (Cloud.signedIn() && Cloud.inRecovery && Cloud.inRecovery()) return askNewPassword();
+
     if (!Cloud.signedIn()) {
       if (code) return showInvite(code);
       return askSignIn();
@@ -596,9 +700,9 @@
     if (!me.hasConsented)    return askConsent();
     if (!Cloud.pinIsSet())   return askPin();
 
-    if (!me.isAdmin) {
-      if (!me.children.length) return askChild();
-      // Only the first time: which device, then the hand-over.
+    if (!me.isAdmin && !me.children.length) {
+      // Which device, then the hand-over. The child is created on the next
+      // screen, by the child, telling Ara their name.
       if (!localStorage.getItem('arabuzz.handedOver')) {
         localStorage.setItem('arabuzz.handedOver', '1');
         return askDevice();
@@ -613,13 +717,13 @@
     if (!Cloud.available()) return false;
     if (inviteCode()) return true;
     if (!Cloud.signedIn()) return true;
+    if (Cloud.inRecovery && Cloud.inRecovery()) return true;
     const me = Cloud.whoAmI();
     if (!me) return true;
     if (!me.parent || !me.hasConsented || !Cloud.pinIsSet()) return true;
-    if (!me.isAdmin && !me.children.length) return true;
     return false;
   }
 
-  w.Onboard = { route, needed, close, CONSENT, askSignIn, askConsent, askPin, askChild,
+  w.Onboard = { route, needed, close, CONSENT, askSignIn, askAdminSignIn, askConsent, askPin,
                 askDevice, handOver };
 })(window);

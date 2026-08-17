@@ -412,12 +412,21 @@
      the correct spelling instantly but cannot produce it from memory — and that is
      a completely different problem from not knowing the word at all. Comparing the
      two scores tells us which one we are dealing with on day one. */
+  /* Twenty items now, still four kinds. The extra eight exist to give every
+     probe two or three chances to show itself — one miss on a doubling word is
+     noise, three misses is a pattern, and the onboarding report is written
+     the moment this finishes, so the patterns must be catchable from these
+     twenty answers alone. */
   const BASELINE = [
     // ---- listen and spell (produce, hardest)
     { kind: 'listen', word: 'because', meaning: 'The word you use to give a reason.',
       probe: 'vowelteam', level: 1 },
+    { kind: 'listen', word: 'people', meaning: 'More than one person.',
+      probe: 'vowelswap', level: 1 },
     { kind: 'listen', word: 'different', meaning: 'Not the same as something else.',
       probe: 'doubling', level: 2 },
+    { kind: 'listen', word: 'tomorrow', meaning: 'The day after today.',
+      probe: 'doubling', level: 3 },
     { kind: 'listen', word: 'knowledge', meaning: 'All the things a person knows.',
       probe: 'silent', level: 3 },
     { kind: 'listen', word: 'occasion', meaning: 'A special event, like a birthday.',
@@ -430,21 +439,46 @@
       probe: 'vowelteam', level: 2 },
     { kind: 'spell', word: 'separate', meaning: 'To move things apart from each other.',
       probe: 'vowelswap', level: 3 },
+    { kind: 'spell', word: 'disappear', meaning: 'To go out of sight completely.',
+      probe: 'doubling', level: 4 },
 
     // ---- spot the correct spelling (recognise)
+    { kind: 'spot', word: 'island', meaning: 'Land with water all the way around it.',
+      probe: 'silent', level: 2, options: ['iland', 'islend', 'ilande'] },
+    { kind: 'spot', word: 'weird', meaning: 'Strange, in a surprising way.',
+      probe: 'vowelswap', level: 3, options: ['wierd', 'weerd', 'wird'] },
     { kind: 'spot', word: 'necessary', meaning: 'Something you really need to have.',
       probe: 'doubling', level: 3, options: ['neccessary', 'necesary', 'nesessary'] },
     { kind: 'spot', word: 'rhythm', meaning: 'A repeating beat in music.',
       probe: 'silent', level: 4, options: ['rythm', 'rhythem', 'rithm'] },
+    { kind: 'spot', word: 'tongue', meaning: 'The part of your mouth you taste with.',
+      probe: 'silent', level: 4, options: ['tounge', 'tung', 'tonge'] },
 
     // ---- what does it mean (vocabulary — Spell Buzz tests this too)
+    { kind: 'meaning', word: 'curious', meaning: 'Wanting very much to find out about something.',
+      probe: 'vocab', level: 2, options: ['Feeling very cold.', 'Angry with a friend.', 'Extremely tidy.'] },
     { kind: 'meaning', word: 'ancient', meaning: 'Very, very old — from a long time ago.',
       probe: 'vocab', level: 2, options: ['Angry about something small.', 'Made completely of metal.', 'Happening every single day.'] },
     { kind: 'meaning', word: 'fragile', meaning: 'Easily broken, so you must be gentle.',
       probe: 'vocab', level: 3, options: ['Smells very strong.', 'Moves extremely fast.', 'Costs a lot of money.'] },
+    { kind: 'meaning', word: 'generous', meaning: 'Happy to share and to give to others.',
+      probe: 'vocab', level: 3, options: ['Very easily frightened.', 'Always arriving late.', 'Good at remembering.'] },
     { kind: 'meaning', word: 'reluctant', meaning: 'Not really wanting to do something.',
       probe: 'vocab', level: 4, options: ['Feeling very proud.', 'Completely worn out.', 'Full of clever ideas.'] }
   ];
+
+  /* The card shown when the check changes gear. Twenty questions of one thing
+     is a slog; four short chapters with a breath between them is a game. */
+  const BASELINE_KINDS = {
+    listen:  { title: 'First: listening ears',
+               blurb: 'Ara says a word out loud. Type how you think it’s spelled. Guessing is allowed — guessing is useful!' },
+    spell:   { title: 'Now something different',
+               blurb: 'No sound this time. You’ll read what a word means, then spell the word it’s describing.' },
+    spot:    { title: 'Now: detective eyes',
+               blurb: 'Nothing to type! Just look carefully and pick the one that’s spelled right.' },
+    meaning: { title: 'Last part: word meanings',
+               blurb: 'Pick what each word means. Four to go — you’re nearly done!' }
+  };
 
   const PRODUCE_KINDS = ['listen', 'spell'];
 
@@ -497,6 +531,6 @@
     beep, speak, speakWordThen, spellOut, loadVoices, bestVoice,
     fmtDate, fmtDay, pct, plural, daysBetween, noAutoCorrect,
     PRONOUNS, pronouns, pronounNote,
-    BASELINE, scoreBaseline
+    BASELINE, BASELINE_KINDS, scoreBaseline
   };
 })(window);

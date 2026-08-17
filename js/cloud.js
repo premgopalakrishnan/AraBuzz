@@ -59,12 +59,15 @@
   }
   function myFamilyId() { return me && me.parent ? me.parent.family_id : null; }
 
+  let recovery = false;   // true while a set-my-password link is being handled
+
   async function start() {
     const c = client();
     if (!c) return null;
     const { data } = await c.auth.getSession();
     session = data ? data.session : null;
-    c.auth.onAuthStateChange(async (_evt, s) => {
+    c.auth.onAuthStateChange(async (evt, s) => {
+      if (evt === 'PASSWORD_RECOVERY') recovery = true;
       session = s;
       me = null;
       await load();
@@ -91,6 +94,55 @@
     if (error) throw error;
     return true;
   }
+
+  /**
+   * The six-digit code from the same email as the link. Typing the code and
+   * tapping the link both work; the code is easier when the email arrives on
+   * a phone but AraBuzz is open on the iPad.
+   */
+  async function verifyCode(email, code) {
+    const c = client(); if (!c) throw new Error('offline');
+    const { data, error } = await c.auth.verifyOtp({
+      email: String(email || '').trim().toLowerCase(),
+      token: String(code || '').replace(/\D/g, ''),
+      type: 'email'
+    });
+    if (error) throw error;
+    session = data ? data.session : session;
+    await load();
+    return true;
+  }
+
+  /* --- the admin's door: a password, set and reset by email ------------- */
+  async function signInPassword(email, password) {
+    const c = client(); if (!c) throw new Error('offline');
+    const { data, error } = await c.auth.signInWithPassword({
+      email: String(email || '').trim().toLowerCase(), password
+    });
+    if (error) throw error;
+    session = data ? data.session : session;
+    await load();
+    return true;
+  }
+
+  async function sendPasswordReset(email) {
+    const c = client(); if (!c) throw new Error('offline');
+    const { error } = await c.auth.resetPasswordForEmail(
+      String(email || '').trim().toLowerCase(),
+      { redirectTo: (w.CONFIG && CONFIG.APP_URL) || location.origin });
+    if (error) throw error;
+    return true;
+  }
+
+  async function setPassword(password) {
+    const c = client(); if (!c) throw new Error('offline');
+    const { error } = await c.auth.updateUser({ password });
+    if (error) throw error;
+    recovery = false;
+    return true;
+  }
+
+  function inRecovery() { return recovery; }
 
   async function signOut() {
     const c = client(); if (!c) return;
@@ -245,7 +297,9 @@
   w.Cloud = {
     CONSENT_VERSION, SUPABASE_URL: URL,
     available, start, onChange, from, rpc, myFamilyId,
-    sendLink, signOut, signedIn, myEmail,
+    sendLink, verifyCode, signInPassword, sendPasswordReset, setPassword, inRecovery,
+    signOut, signedIn, myEmail,
+    get token() { return session ? session.access_token : null; },
     load, whoAmI,
     peekInvite, acceptInvite, bootstrapAdmin,
     recordConsent,

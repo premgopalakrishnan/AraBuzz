@@ -16,7 +16,9 @@ export default function handler(req, res) {
       anthropicKey: Boolean(process.env.ANTHROPIC_API_KEY),
       supabaseUrl: Boolean(process.env.SUPABASE_URL),
       supabaseAnonKey: Boolean(process.env.SUPABASE_ANON_KEY),
-      supabaseServiceKey: Boolean(process.env.SUPABASE_SERVICE_ROLE_KEY)
+      supabaseServiceKey: Boolean(process.env.SUPABASE_SERVICE_ROLE_KEY),
+      resendKey: Boolean(process.env.RESEND_API_KEY),
+      cronSecret: Boolean(process.env.CRON_SECRET)
     }
   });
 }

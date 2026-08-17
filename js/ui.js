@@ -160,12 +160,12 @@
         <div class="card glow" style="max-width:600px;margin:20px auto;text-align:center">
           <div class="ara-stage">${Ara.svg({ level: 1, width: 130, mood: 'think' })}</div>
           <h1>Nice to meet you, ${esc(setupState.name)}!</h1>
-          <p class="muted">Before we start, I'd like to see how you spell right now — just
-             <b>12 words</b>. It is <b>not a test</b> and nobody is marking you.
-             Some are meant to be hard. Getting them wrong actually helps me:
-             it tells me exactly what to practise with you.</p>
+          <p class="muted">Before we start, I'd like to see how you spell right now —
+             <b>20 questions, in four little parts</b>. It is <b>not a test</b> and nobody
+             is marking you. Some are meant to be hard. Getting them wrong actually helps
+             me: it tells me exactly what to practise with you.</p>
           <div class="row center wrap" style="gap:8px;margin:18px 0">
-            <span class="pill sage">${Icon.icon('clock',{size:15})} About 3 minutes</span>
+            <span class="pill sage">${Icon.icon('clock',{size:15})} About 5 minutes</span>
             <span class="pill honey">${Icon.icon('ear',{size:15})} You can hear each word</span>
             <span class="pill plum">${Icon.icon('lock',{size:15})} Just for us</span>
           </div>
@@ -180,6 +180,24 @@
     const i = setupState.i;
     if (i >= B.length) { finishSetup(window.U.scoreBaseline(setupState.rows)); return; }
     const item = B[i];
+
+    /* A new kind of question gets announced before it appears. Twenty questions
+       of one thing is a slog; four short chapters with a breath between them
+       stays a game. */
+    if (setupState.announced !== item.kind) {
+      const K = window.U.BASELINE_KINDS[item.kind] || { title: 'Next part', blurb: '' };
+      s.innerHTML = `
+        <div class="card glow" style="max-width:560px;margin:20px auto;text-align:center">
+          <div class="ara-stage ara-bob">${Ara.svg({ level: 1, width: 130, mood: 'happy' })}</div>
+          <p class="tiny faint" style="letter-spacing:.12em;text-transform:uppercase;margin:0 0 6px">
+            Question ${i + 1} of ${B.length}</p>
+          <h1>${K.title}</h1>
+          <p class="muted">${K.blurb}</p>
+          <button class="btn-go btn-xl btn-block" id="kindGo" style="margin-top:14px">Ready →</button>
+        </div>`;
+      $('#kindGo').onclick = () => { setupState.announced = item.kind; paintSetup(); };
+      return;
+    }
 
     const KIND = {
       listen:  { tag: 'Listen and spell',   ask: 'Listen, then type the word.' },
@@ -301,7 +319,18 @@
       });
       Store.db.profile.baseline = baseline || null;
       Store.db.game.lastPlayDay = '';
-      if (baseline) window.Sync.saveChild(Store.db.activeChildId, { baseline });
+      if (baseline) {
+        window.Sync.saveChild(Store.db.activeChildId, { baseline });
+        /* The onboarding report — written NOW, from these twenty answers.
+           That is the agreement with the parent: the first check IS the
+           assessment, and their starting-point note is waiting behind the
+           PIN by the time the child has finished celebrating. It runs in
+           the background; the child never waits on it or sees it. */
+        if (window.Parent && Parent.generateOnboardingReport) {
+          Parent.generateOnboardingReport(baseline).catch(e =>
+            console.warn('onboarding report deferred', e));
+        }
+      }
     } else {
       const existing = Store.db.profile || {};
       Store.db.profile = Object.assign({ createdAt: Date.now() }, existing, {
@@ -396,6 +425,29 @@
   /* ====================================================================== */
   /*  HOME                                                                  */
   /* ====================================================================== */
+  /** The newest set whose words this child has never even LOOKED at.
+   *  "Met" is a firstSeen stamp on the progress row — practice also sets it,
+   *  so a child who dove straight into a quiz is not nagged afterwards. */
+  function unmetWeek() {
+    const db = Store.db;
+    for (const wk of (db.weeks || [])) {
+      const ids = wk.wordIds || [];
+      if (!ids.length) continue;
+      const unmet = ids.filter(id => {
+        const pr = db.progress[id];
+        return !pr || (!pr.seen && !pr.firstSeen);
+      });
+      if (unmet.length >= Math.max(3, Math.ceil(ids.length * 0.6))) return wk;
+      return null;   // only ever the newest set — older ones are history
+    }
+    return null;
+  }
+
+  function startMeet(weekId) {
+    learnState = { weekId, i: 0, flipped: false, meet: true };
+    go('learn');
+  }
+
   function paintHome() {
     const db = Store.db, s = $('#scr-home');
     const name = db.profile.name;
@@ -423,8 +475,23 @@
       return;
     }
 
+    const meetWk = unmetWeek();
+
     s.innerHTML = `
       <div id="heroSlot" style="cursor:pointer">${Scene.hero()}</div>
+
+      ${meetWk ? `
+      <div class="card glow" style="margin-bottom:16px;border-color:var(--gold)">
+        <div class="row wrap between" style="gap:12px">
+          <div class="grow" style="min-width:200px">
+            <h3 style="margin:0">New words have arrived!</h3>
+            <p class="muted small" style="margin:4px 0 0">
+              ${esc(meetWk.topic || meetWk.title)} — ${window.U.plural((meetWk.wordIds || []).length, 'word')}.
+              Come and meet them first. No questions, no marks — just a hello.</p>
+          </div>
+          <button class="btn-primary" id="meetBtn">${Icon.icon('sparkle', { size: 17 })} Meet the words</button>
+        </div>
+      </div>` : ''}
 
       <div class="card glow" style="margin-bottom:16px">
         <div class="row wrap" style="gap:20px">
@@ -517,6 +584,7 @@
     window.U.$$('#modes .tile').forEach(t => t.onclick = () => go('play', { mode: t.dataset.mode }));
 
     if ($('#heroSlot')) $('#heroSlot').onclick = () => go('journey');
+    if ($('#meetBtn') && meetWk) $('#meetBtn').onclick = () => startMeet(meetWk.id);
     if ($('#scoresLink')) $('#scoresLink').onclick = () => go('scores');
     if ($('#weekQuiz')) $('#weekQuiz').onclick = () => go('play', { mode: 'spellbuzz', weekIds: [latest.id] });
     if ($('#studyBtn')) $('#studyBtn').onclick = () => go('learn', { weekId: latest.id });
@@ -691,11 +759,26 @@
     if (learnState.i >= words.length) learnState.i = 0;
     const wd = words[learnState.i];
     const plant = Game.plantFor(wd.id);
+    const meet = !!learnState.meet;
+    const last = learnState.i === words.length - 1;
+
+    /* Meeting a word leaves a fingerprint — firstSeen — without touching any
+       score. That is what tells the home screen the introductions are done,
+       on this device and (through sync) on every other. */
+    if (meet) {
+      const pr = Store.ensureProgress(wd.id);
+      if (!pr.firstSeen) {
+        pr.firstSeen = Date.now();
+        if (window.Sync) Sync.noteProgress(wd.id);
+      }
+    }
 
     s.innerHTML = `
       <div class="row between wrap" style="align-items:flex-end">
-        <div><h1 style="margin-bottom:0">Study</h1>
-        <p class="muted small">Look, listen, say it out loud. No marks here.</p></div>
+        <div><h1 style="margin-bottom:0">${meet ? 'Meet the words' : 'Study'}</h1>
+        <p class="muted small">${meet
+          ? 'This week\u2019s new words, saying hello. Look, listen, say each one out loud — nothing to get right or wrong.'
+          : 'Look, listen, say it out loud. No marks here.'}</p></div>
         <select id="wkSel" style="width:auto;min-width:190px">
           ${db.weeks.map(x => `<option value="${x.id}" ${x.id === learnState.weekId ? 'selected' : ''}>${Store.weekTag(x)} · ${esc(x.topic || x.title)}</option>`).join('')}
         </select>
@@ -728,7 +811,7 @@
 
         <div class="row center" style="margin-top:18px;gap:10px">
           <button class="btn-ghost" id="prev">← Back</button>
-          <button class="btn-primary" id="next">Next →</button>
+          <button class="btn-primary" id="next">${meet && last ? 'That\u2019s everyone! ✓' : 'Next →'}</button>
         </div>
       </div>
 
@@ -741,7 +824,19 @@
     $('#hear').onclick = () => window.U.speak(wd.word);
     $('#spellOut').onclick = () => window.U.spellOut(wd.word);
     $('#prev').onclick = () => { learnState.i = (learnState.i - 1 + words.length) % words.length; paintLearn(); };
-    $('#next').onclick = () => { learnState.i = (learnState.i + 1) % words.length; paintLearn(); };
+    $('#next').onclick = () => {
+      if (meet && last) {
+        // every word met — a small celebration, then home, where the callout
+        // will have been replaced by the practice card
+        Store.save(true);
+        learnState.meet = false;
+        confetti(50);
+        toast('You\u2019ve met all the new words. See you at practice!', 'good', 3000);
+        go('home');
+        return;
+      }
+      learnState.i = (learnState.i + 1) % words.length; paintLearn();
+    };
     $('#testMe').onclick = () => Quiz.start({ preset: 'spellbuzz', pool: words, count: Math.min(10, words.length), weekIds: [learnState.weekId] });
     setTimeout(() => window.U.speak(wd.word), 250);
   }

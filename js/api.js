@@ -43,7 +43,11 @@
     const own = (cfg().apiKey || '').trim();
     return own || ((window.CONFIG && CONFIG.DEFAULT_API_KEY) || '').trim();
   }
-  function hasKey() { return !!key(); }
+  /** "Can the app do AI things right now?" — yes if signed in (the server
+   *  holds the key), or if a personal key was typed into Settings. */
+  function hasKey() {
+    return !!key() || !!(window.Cloud && Cloud.available() && Cloud.signedIn());
+  }
   function usingOwnKey() { return !!(cfg().apiKey || '').trim(); }
 
   /** Which model runs this job. A per-job override beats the policy. */
@@ -64,6 +68,12 @@
   async function call(kind, { system, content, tool, maxTokens = 8000, model }) {
     if (!hasKey()) throw new Error('NO_KEY');
     const useModel = model || modelFor(kind);
+
+    /* The normal path: AraBuzz's own server makes the call, holding the key.
+       The device sends its signed-in identity and the server decides — admin
+       jobs for the admin, small per-child jobs for any parent, rate-limited.
+       A key typed into Settings switches to the old direct path (debugging). */
+    if (!usingOwnKey()) return serverCall(kind, { system, content, tool, maxTokens, model: useModel });
 
     const body = {
       model: useModel,
@@ -108,6 +118,36 @@
       throw new Error('The answer was cut short — try a smaller batch.');
     }
     return block.input;
+  }
+
+  /** The call as it normally happens: through /api/ai on our own server. */
+  async function serverCall(kind, { system, content, tool, maxTokens, model }) {
+    if (!window.Cloud || !Cloud.signedIn() || !Cloud.token) {
+      throw new Error('Please sign in first.');
+    }
+    const childId = (window.Sync && Sync.isDbId(Store.db.activeChildId))
+      ? Store.db.activeChildId : null;
+
+    const res = await fetch('/api/ai', {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+        authorization: 'Bearer ' + Cloud.token
+      },
+      body: JSON.stringify({ job: kind, system, content, tool, maxTokens, model, childId })
+    });
+
+    let json = null;
+    try { json = await res.json(); } catch (e) {}
+    if (!res.ok) {
+      const err = new Error((json && json.error) || ('Request failed (' + res.status + ')'));
+      err.status = res.status;
+      throw err;
+    }
+
+    const u = (json && json.usage) || {};
+    Store.logUsage({ kind, model: u.model || model, inTok: u.inTok || 0, outTok: u.outTok || 0, est: u.est || 0 });
+    return json.out;
   }
 
   /** Very occasionally a model hands back an array field as a JSON string.
@@ -493,6 +533,83 @@ Rules:
   }
 
   /* ======================================================================
+     THE ONBOARDING REPORT
+     Written the moment the first check finishes — that is its entire point.
+     Twenty answers IS the data; this report must never wish for more of it,
+     never suggest further assessment, and never read like a preview of a
+     better report to come. It tells the parent, confidently, where their
+     child is starting from and what the first fortnight will work on.
+     ====================================================================== */
+  const ONBOARD_TOOL = {
+    name: 'record_onboarding_report',
+    description: 'Record the starting-point report for the parent.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        headline: { type: 'string', description: 'One warm sentence: the single most useful thing the first check revealed. Under 28 words.' },
+        startingPoint: { type: 'string', description: 'Two or three short paragraphs on where the child is starting from, quoting their actual answers in double quotes as evidence. Address the parent as "you" and the child by name, with the pronouns given. State findings confidently — twenty answers is exactly the data this check was designed to produce.' },
+        strengths: {
+          type: 'array', minItems: 2, maxItems: 3,
+          items: {
+            type: 'object',
+            properties: {
+              title: { type: 'string' },
+              detail: { type: 'string', description: 'What the answers showed, with a concrete example.' }
+            }, required: ['title', 'detail']
+          }
+        },
+        focus: {
+          type: 'array', minItems: 1, maxItems: 3,
+          items: {
+            type: 'object',
+            properties: {
+              pattern: { type: 'string', description: 'The spelling pattern, in plain words a parent can repeat.' },
+              why: { type: 'string', description: 'Why this happens at this age — normal, and fixable.' },
+              example: { type: 'string', description: 'A real answer from the check that shows it.' }
+            }, required: ['pattern', 'why']
+          }
+        },
+        firstFortnight: { type: 'string', description: 'Two or three sentences on what AraBuzz will do with this over the next two weeks, and what the parent should expect to see. Practical, not promotional.' },
+        sayToThem: { type: 'string', description: 'One or two sentences the parent can say to the child tonight, word for word, that praise the effort of the check itself.' }
+      },
+      required: ['headline', 'startingPoint', 'strengths', 'focus', 'firstFortnight', 'sayToThem']
+    }
+  };
+
+  function onboardSystem(payload) {
+    const name = (payload && payload.name) || 'the child';
+    const pronounLine = window.U ? U.pronounNote(name, payload.pronoun || 'they')
+                                 : `Refer to ${name} as "they/them".`;
+    return `You are a warm, experienced primary literacy coach. A child has just finished
+their very first spelling check in AraBuzz — twenty questions, designed to reveal
+starting strengths and patterns. You are writing the STARTING-POINT report their
+parent reads tonight.
+
+The child is called ${name}. ${pronounLine}
+
+Rules that matter more than usual here:
+• This check IS the assessment. NEVER say more data, more practice or further
+  assessment is needed before conclusions can be drawn. Twenty targeted answers
+  is exactly what this report is built from — write with confidence about what
+  they show.
+• Quote real answers from the data as evidence, in double quotes.
+• First-day nerves on an unfamiliar app are real. Frame the picture as a strong
+  starting sketch that daily practice now sharpens — not as a verdict, and not
+  as something incomplete.
+• Never use "weak", "poor", "behind" or "struggling" — say "not yet", "still
+  growing", "still tricky".
+• Plain, specific, kind. The way a good teacher talks at a parents' evening.`;
+  }
+
+  async function onboardingReport(payload) {
+    const content = [{ type: 'text', text: JSON.stringify(payload, null, 2) }];
+    return call('onboarding-report', {
+      system: onboardSystem(payload), content, tool: ONBOARD_TOOL,
+      maxTokens: 6000, model: modelFor('coach-report')
+    });
+  }
+
+  /* ======================================================================
      6. CUSTOM TOPIC PACK — parent invents a list from a topic.
      ====================================================================== */
   const TOPIC_TOOL = {
@@ -541,6 +658,6 @@ Use British English. Mix single words and short terms. Avoid words that are triv
     return Date.now() - t0;
   }
 
-  w.API = { hasKey, usingOwnKey, key, modelFor, readDeck, enrich, topUp,
+  w.API = { hasKey, usingOwnKey, key, modelFor, readDeck, enrich, topUp, onboardingReport,
             memoryTricks, coachReport, topicList, test, estCost, RATES };
 })(window);

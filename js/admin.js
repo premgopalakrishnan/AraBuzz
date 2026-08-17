@@ -230,6 +230,15 @@
      shown — the promise in the consent screen comes first.
      ====================================================================== */
   async function openChild(childId, familyId) {
+    /* The PIN first. One PIN — the admin's own — gates looking at ANY child.
+       An unattended laptop with the console open must not be enough. */
+    const pin = await window.U.promptBox('Your PIN',
+      'Looking at a child\u2019s data needs your PIN, every time.', '\u2022\u2022\u2022\u2022', 'password');
+    if (!pin) return;
+    let pinOk = false;
+    try { pinOk = await Cloud.checkPin(String(pin).trim()); } catch (e) {}
+    if (!pinOk) return toast('That\u2019s not it.', 'bad');
+
     const kid = allChildren().find(c => c.id === childId) || {};
     const fam = families().find(f => (f.children || []).some(c => c.id === childId)) || {};
 
@@ -303,17 +312,16 @@
     $('#atab').innerHTML = `
       <div class="card" style="margin-top:14px">
         <h3 style="margin-top:0">Invite someone</h3>
-        <p class="muted small">This makes a code. Send them the link — it signs them in,
-           walks them through agreeing, a PIN and adding their child, and nothing else.</p>
+        <p class="muted small">Their name and their email — that's all. The invitation is
+           emailed to them the moment you press the button, and you also get a WhatsApp
+           version to copy if you'd rather send it yourself.</p>
         <div class="field"><label for="ivFam">Their first name</label>
           <input id="ivFam" placeholder="Meera"></div>
         <p class="hint" style="margin:-6px 0 14px">Just what you call them. It greets them by
-           name on the invitation, and it is how they appear on this screen.</p>
-        <div class="field"><label for="ivMail">Their email <span class="faint">(optional — just for your own notes)</span></label>
+           name in the email, and it is how they appear on this screen.</p>
+        <div class="field"><label for="ivMail">Their email</label>
           <input id="ivMail" type="email" placeholder="meera@example.com"></div>
-        <div class="field"><label for="ivKid">Child's first name <span class="faint">(optional)</span></label>
-          <input id="ivKid" placeholder="Kabir"></div>
-        <button class="btn-primary" id="ivGo" data-label="Make an invitation">Make an invitation</button>
+        <button class="btn-primary" id="ivGo" data-label="Invite them">Invite them</button>
         <div id="ivOut" style="margin-top:12px"></div>
       </div>
 
@@ -330,10 +338,18 @@
 
     $('#ivGo').onclick = makeInvite;
     wireCopies();
+    $$('#atab [data-remail]').forEach(b => b.onclick = async () => {
+      const [name, email, code] = b.dataset.remail.split('|');
+      b.disabled = true; b.textContent = 'Sending…';
+      const r = await emailInvite(name, email, code);
+      b.textContent = r.ok ? 'Sent again' : 'Failed';
+      setTimeout(() => { b.disabled = false; b.textContent = 'Email it again'; }, 2500);
+      if (!r.ok) toast(r.error || 'Could not send.', 'bad');
+    });
   }
 
   function inviteRow(i) {
-    const link = location.origin + '/?join=' + encodeURIComponent(i.code);
+    const link = appLink(i.code);
     return `
       <div class="card flat" style="margin-top:10px">
         <div class="row between wrap" style="gap:8px">
@@ -343,6 +359,7 @@
           <span class="pill honey" style="font-family:var(--font-body);letter-spacing:.08em">${esc(i.code)}</span>
         </div>
         <div class="row wrap" style="gap:6px;margin-top:8px">
+          ${i.email ? `<button class="btn-quiet btn-s" data-remail="${esc(i.family_name)}|${esc(i.email)}|${esc(i.code)}">Email it again</button>` : ''}
           <button class="btn-quiet btn-s" data-copy="${esc(link)}">Copy link</button>
           <button class="btn-quiet btn-s" data-copy-msg="${esc(i.family_name)}|${esc(link)}">Copy WhatsApp message</button>
         </div>
@@ -350,27 +367,53 @@
   }
 
   async function makeInvite() {
-    const fam = $('#ivFam').value.trim();
-    if (fam.length < 2) return toast('Type their first name first.', 'bad');
-    const btn = $('#ivGo'); btn.disabled = true;
+    const name = $('#ivFam').value.trim();
+    const email = $('#ivMail').value.trim();
+    if (name.length < 2) return toast('Type their first name first.', 'bad');
+    if (!/^\S+@\S+\.\S+$/.test(email)) return toast('Type their email — the invitation is sent there.', 'bad');
+    const btn = $('#ivGo'); btn.disabled = true; btn.textContent = 'Inviting…';
     try {
-      const row = await Cloud.createInvite(fam, $('#ivMail').value.trim(), $('#ivKid').value.trim());
-      const link = location.origin + '/?join=' + encodeURIComponent(row.code);
+      const row = await Cloud.createInvite(name, email, null);
+      const link = appLink(row.code);
+      const mailed = await emailInvite(name, email, row.code);
       $('#ivOut').innerHTML = `
-        <div class="feedback good"><b>Invitation ready.</b>
-          <p class="small" style="margin:6px 0">Code <b>${esc(row.code)}</b> — valid for 30 days,
-             and it can only be used once.</p>
+        <div class="feedback ${mailed.ok ? 'good' : 'bad'}">
+          <b>${mailed.ok ? `Invitation emailed to ${esc(email)}.` : 'The invitation exists, but the email did not send.'}</b>
+          <p class="small" style="margin:6px 0">${mailed.ok
+            ? `Code <b>${esc(row.code)}</b> — valid for 30 days, usable once. If it lands in
+               their spam, the WhatsApp version below says the same thing.`
+            : esc(mailed.error || '') + ' You can still send it yourself:'}</p>
           <div class="row wrap" style="gap:6px">
-            <button class="btn-primary btn-s" data-copy-msg="${esc(fam)}|${esc(link)}">Copy the message</button>
+            <button class="btn-primary btn-s" data-copy-msg="${esc(name)}|${esc(link)}">Copy the WhatsApp message</button>
             <button class="btn-quiet btn-s" data-copy="${esc(link)}">Copy just the link</button>
           </div>
         </div>`;
-      $('#ivFam').value = $('#ivMail').value = $('#ivKid').value = '';
+      $('#ivFam').value = $('#ivMail').value = '';
       wireCopies();
       data = null;
     } catch (e) {
       toast(e.message || 'Could not make the invitation.', 'bad');
-    } finally { btn.disabled = false; }
+    } finally { btn.disabled = false; btn.textContent = 'Invite them'; }
+  }
+
+  /** Every link AraBuzz hands out uses the real address, never vercel.app. */
+  function appLink(code) {
+    const base = (window.CONFIG && CONFIG.APP_URL) || location.origin;
+    return base + '/?join=' + encodeURIComponent(code);
+  }
+
+  /** The server sends it, as arabuzz@cokindlelabs.com. */
+  async function emailInvite(name, email, code) {
+    try {
+      const res = await fetch('/api/invite-email', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json', authorization: 'Bearer ' + Cloud.token },
+        body: JSON.stringify({ name, email, code })
+      });
+      const j = await res.json().catch(() => ({}));
+      if (!res.ok) return { ok: false, error: j.error || ('Sending failed (' + res.status + ')') };
+      return { ok: true };
+    } catch (e) { return { ok: false, error: e.message }; }
   }
 
   /** Prem's own words, so he can send it without rewriting it. These are
@@ -379,7 +422,7 @@
     return `Hi ${name}! I built a small spelling app for the kids in the class — it takes the ` +
       `weekly Spell Buzz sheet and turns it into games, and once a week it sends you a short ` +
       `note on what your child is finding tricky.\n\n` +
-      `It's just for our five families. It's not a business and there's nothing to pay.\n\n` +
+      `It's not a business — I made it for our own kids, and I'm sharing it only with close friends. There's nothing to pay.\n\n` +
       `Your link: ${link}\n\n` +
       `It takes about three minutes to set up. Any trouble, message me.\n\n— Prem`;
   }
