@@ -30,11 +30,12 @@ export default async function handler(req, res) {
   const inner = `
     <p style="margin:0 0 14px">Hi ${escapeHtml(name)},</p>
     <p style="margin:0 0 14px">I built a small spelling app for the kids in the class.
-       It takes the weekly Spell Buzz sheet and turns it into games — and once a week it
-       sends you a short note on what your child is finding tricky, and what's worth
-       helping with.</p>
+       It takes the weekly Spell Buzz sheet and turns it into game-based practice they
+       genuinely enjoy — to the kids it feels like playing; what they're really doing is
+       training their spellings. Once a week it sends you a short note on what your child
+       is finding tricky, and what's worth helping with.</p>
     <p style="margin:0 0 20px">It's not a business — I made it for our own kids, and I'm
-       sharing it only with close friends. There's nothing to pay.</p>
+       sharing it only with close friends.</p>
     <p style="margin:0 0 22px;text-align:center">
       <a href="${link}" style="display:inline-block;background:#B8862F;color:#fff;
          text-decoration:none;padding:13px 30px;border-radius:999px;font-size:16px">

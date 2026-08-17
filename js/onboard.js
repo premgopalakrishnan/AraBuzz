@@ -28,7 +28,7 @@
      reads only the bold parts they still know the six things that matter.
      ========================================================================== */
   const CONSENT = {
-    version: '1.0',
+    version: '1.1',
     title: 'Before you start',
     intro: [
       `AraBuzz is a small spelling app, made by a parent, for a handful of children
@@ -39,14 +39,18 @@
     what: {
       h: 'What it does',
       p: [
-        `It takes the Spell Buzz sheet the school sends each week and turns it into games
-         your child will actually play. While they play, it quietly notices which letters
-         they keep getting wrong.`,
-        `Once a week, it writes that up for you as a short note in plain English — what
-         they have got hold of, what is still slippery, and the one or two things worth
-         helping with. That note is the main thing AraBuzz gives <b>you</b>; the games are
-         what it gives <b>them</b>. There is more about the note further down, because it
-         is the part most worth understanding before you agree to any of this.`
+        `It takes the Spell Buzz sheet the school sends each week and turns it into
+         <b>game-based learning exercises</b>. To your child it feels like playing —
+         points, badges, a garden that grows. What they are actually doing, round after
+         round, is practising their spellings.`,
+        `Each new sheet begins as a <b>learning module</b>: your child meets the words
+         first — sees them, hears them, learns what they mean — with nothing marked and
+         nothing to get wrong. Only then do the games and practice exercises begin,
+         built from those same words. While they play, AraBuzz quietly notices which
+         letters keep going wrong.`,
+        `Once a week, it writes that up for you as a short note. The note has its own
+         section below, because it is the part most worth understanding before you
+         agree to any of this.`
       ]
     },
     points: [
@@ -54,20 +58,15 @@
         p: `We use them exactly as the school wrote them. We never invent a definition or
             look one up ourselves. If the sheet has a mistake in it, AraBuzz repeats that
             mistake — the practice is only ever as good as the sheet.` },
-      { h: 'The weekly note is a coach’s observation, not an assessment.',
-        p: `It says things like “they spell the ending -tion as -shun”. That is a
-            description of what they typed. It is not a psychological test, not a
-            diagnosis, and not clinically approved. It cannot tell you whether your child
-            has a learning difficulty. If something worries you, please speak to their
-            teacher or a professional — not to an app.` },
       { h: 'Your child is never compared with another child.',
         p: `No leaderboards, no rankings, no class averages, ever. Each child’s data is
             kept separately and you see only your own. This is a deliberate decision, not
             an oversight.` },
       { h: 'Who can see your child’s data.',
         p: `You, and Prem, who runs AraBuzz and uploads the weekly sheets. Nobody else.
-            Prem can open your child’s view to help fix a problem — and every time he
-            does, it is recorded, so there is always a record of who looked and when.` },
+            If something goes wrong technically, Prem can open your child’s view to fix
+            it — and every time he does, it is recorded, so there is always a record of
+            who looked and when.` },
       { h: 'What it is never used for.',
         p: `Not sold. Not shared with the school or anyone else. Not used for research.
             Not used to train any AI model. No advertising, and no tracking of you or your
@@ -81,26 +80,39 @@
         p: `Your name, email and mobile. Your child’s first name only, a chosen avatar,
             and their answers to spelling questions. No photographs, no address, no date of
             birth, no school records, no location.` },
-      { h: 'Five minutes a day is the whole idea.',
-        p: `AraBuzz is built for short, daily practice. More is not better, and nothing in
-            it is designed to keep your child on a screen for longer.` }
+      { h: 'About twenty minutes a day is the sweet spot.',
+        p: `AraBuzz works best as short, focused daily practice — around twenty minutes is
+            ideal. More than that earns nothing extra, and nothing in the app is designed
+            to keep your child on a screen for longer.` }
     ],
-    using: {
-      h: 'More about that weekly note',
-      lead: `This is the part we most want you to read, because a note about your child is
-             easy to read as more than it is.`,
-      p: [
-        `It is written for you, to help you help them — a nudge about what to practise
-         next, not a verdict on your child.`,
-        `Please don’t lean on it for decisions it isn’t built to carry: choosing a
-         school or a stream, arranging tutoring, or anything medical. And please don’t
-         pass it on as though it were a formal assessment — it isn’t one, and out of
-         context it could easily be read as more than it is.`,
-        `Once a note leaves the app we have no way of knowing where it goes or how it is
-         read, so we can’t take responsibility for how it is used or interpreted. If
-         something in a note worries you, treat it as a good reason to talk to their
-         teacher, not as an answer in itself.`
-      ]
+    note: {
+      h: 'The weekly note',
+      lead: `Once a week, AraBuzz writes you a short note about your child’s spelling.
+             This is the part we most want you to read.`,
+      is: {
+        h: 'What it is',
+        p: [
+          `A few plain-English paragraphs from the week’s practice: what your child has
+           got hold of, what is still tricky, and one or two specific things worth
+           helping with — with their own spellings quoted as evidence, things like
+           “they wrote ‘becuase’ three times this week”.`,
+          `Think of it as an observation sheet from a coach who watched every round.
+           It is written for you, to help you help them — a nudge about what to practise
+           next, never a verdict on your child.`
+        ]
+      },
+      isnt: {
+        h: 'What it is not',
+        p: [
+          `It is not a clinical report, not a diagnosis, and not a formal assessment —
+           that is exactly why we call it a <b>note</b> and not a report. It cannot tell
+           you whether your child has a learning difficulty.`,
+          `Please don’t use it for decision-making — choosing a school, arranging
+           tutoring, or anything medical — and please don’t pass it on as if it were a
+           formal assessment. If something in a note worries you, treat it as a good
+           reason to talk to their teacher, not as an answer in itself.`
+        ]
+      }
     },
     first: {
       h: 'The first check',
@@ -202,7 +214,8 @@
     panel(`
       <div class="ob-kicker">${esc(inv.invited_by)} invited you</div>
       <h1>Hi ${esc(inv.family_name)}</h1>
-      <p class="lead">AraBuzz is a gamified version of the weekly Spell Buzz sheets.</p>
+      <p class="lead">AraBuzz turns the weekly Spell Buzz sheets into game-based practice —
+         it feels like playing, but it's really spelling training.</p>
       <ul class="ob-list">
         <li>It starts with a quick five-minute check to see where your child is.</li>
         <li>Then it works out which words and letters they find hard, and practises
@@ -385,9 +398,12 @@
           </div>`).join('')}
       </div>
 
-      <h3 class="ob-h">${esc(C.using.h)}</h3>
-      <p class="lead">${esc(C.using.lead)}</p>
-      ${C.using.p.map(p => `<p>${p}</p>`).join('')}
+      <h3 class="ob-h">${esc(C.note.h)}</h3>
+      <p class="lead">${esc(C.note.lead)}</p>
+      <p style="margin-bottom:6px"><b>${esc(C.note.is.h)}</b></p>
+      ${C.note.is.p.map(p => `<p>${p}</p>`).join('')}
+      <p style="margin-bottom:6px"><b>${esc(C.note.isnt.h)}</b></p>
+      ${C.note.isnt.p.map(p => `<p>${p}</p>`).join('')}
 
       <h3 class="ob-h">${esc(C.first.h)}</h3>
       <p>${C.first.p}</p>

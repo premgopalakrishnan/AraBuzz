@@ -22,7 +22,7 @@
   const SCHEMA = 'arabuzz';
 
   /** The wording currently in force. Bump this and every parent is asked again. */
-  const CONSENT_VERSION = '1.0';
+  const CONSENT_VERSION = '1.1';
 
   let sb = null;          // the Supabase client
   let session = null;     // the signed-in session, or null

@@ -1196,7 +1196,7 @@
             <div class="tiny">${d} day${d > 1 ? 's' : ''}</div></div>`).join('')}
         </div>
         <p class="muted small center-text" style="margin-top:12px">Practise on any day and the flame grows.
-           Miss one and I'll save you — <b>once</b>. Five minutes a day beats an hour on Sunday.</p>
+           Miss one and I'll save you — <b>once</b>. A little every day beats an hour on Sunday.</p>
       </div>
 
       <div class="center-text" style="margin:22px 0">
@@ -1301,7 +1301,7 @@
         <p class="muted">Practise on any day and your streak goes up by one. Miss a day and it
            starts again — but I'll save you <b>once</b> with a streak freeze, because
            everybody has a busy day sometimes. You earn another freeze every 7 days.</p>
-        <p class="muted"><b>Five minutes every day beats an hour once a week.</b> That's not me being
+        <p class="muted"><b>Practising every day beats one big session a week.</b> That's not me being
            bossy, that's just how remembering works.</p>
       </div>
 

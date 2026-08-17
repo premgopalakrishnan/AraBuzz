@@ -101,7 +101,7 @@
             <p class="muted" style="margin:0">It turns the weekly spelling sheet from school into
                games ${esc(name)} will actually choose to play — and it watches, quietly, exactly which
                letters she gets wrong. Then it tells you what to do about it in plain English.</p>
-            <p class="muted" style="margin:10px 0 0"><b>Five minutes a day is the whole ask.</b>
+            <p class="muted" style="margin:10px 0 0"><b>Around twenty minutes a day is the sweet spot.</b>
                Not an hour on Sunday. That is not us being strict — it is simply how memory works.</p>
           </div>
         </div>
