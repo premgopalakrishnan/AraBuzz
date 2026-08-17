@@ -14,43 +14,69 @@
   let tab = null;   // decided on first paint
   let draft = null;   // a deck being reviewed before it is published
 
+  /** Where the upload flow is being shown right now. Adding words lives in the
+   *  admin console, but the code for it lives here — so every repaint during
+   *  an upload has to know which screen it is painting into. */
+  let host = 'parent';   // 'parent' | 'admin'
+
   /** Sheets come only from Prem now — a parent's grown-up area has no way to
    *  add words. That is deliberate: one person uploads for everybody, once,
-   *  which is also what keeps the AI cost a few pence a week. */
+   *  which is also what keeps the AI cost tiny. */
   function isAdmin() {
     const me = window.Cloud && Cloud.whoAmI();
     return !!(me && me.isAdmin);
   }
 
+  /** Repaint whatever currently hosts the upload flow. Called after every
+   *  step of reading, reviewing and publishing a sheet. */
+  function repaintHere(opts) {
+    if (host === 'admin' && window.Admin && window.UI && UI.current === 'admin') {
+      const at = $('#atab');
+      if (at) {
+        at.innerHTML = '<div id="ptab"></div>';
+        return draft ? paintDraft() : tabUpload();
+      }
+    }
+    paint(opts);
+  }
+
   function paint(opts) {
+    host = 'parent';
     if (opts && opts.tab) tab = opts.tab;
     const admin = isAdmin();
+    // Words are added in the admin console now; progress and reports need a
+    // child, which the admin account deliberately does not have.
     if (!admin && (tab === 'upload' || tab === 'words')) tab = 'about';
+    if (admin && (tab === 'progress' || tab === 'report')) tab = 'about';
+    if (tab === 'storage' || tab === 'upload') tab = admin ? 'words' : 'settings';
     // First visit — or nothing set up yet — opens on the explainer.
-    if (!tab) tab = (Store.db.weeks.length && Store.db.attempts.length)
-      ? (admin ? 'upload' : 'progress') : 'about';
+    if (!tab) tab = admin ? 'words'
+      : ((Store.db.weeks.length && Store.db.attempts.length) ? 'progress' : 'about');
+    const kidName = Store.db.profile ? Store.db.profile.name : null;
     const scr = $('#scr-parent');
     scr.innerHTML = `
       <div class="row between wrap" style="gap:10px">
         <div>
           <h1 style="margin-bottom:2px">Grown-ups</h1>
-          <p class="muted small" style="margin:0">${esc(Store.db.profile ? Store.db.profile.name : '')}'s AraBuzz · synced safely to your family account</p>
+          <p class="muted small" style="margin:0">${kidName
+            ? esc(kidName) + `'s AraBuzz · synced safely to your family account`
+            : (admin ? 'Admin account · the families live in the admin console'
+                     : 'Synced safely to your family account')}</p>
         </div>
         <div class="row" style="gap:8px">
-          ${(window.Cloud && Cloud.whoAmI() && Cloud.whoAmI().isAdmin)
+          ${admin
             ? `<button class="btn-quiet btn-s" id="goAdmin">${Icon.icon('keys', { size: 15 })} Admin console</button>`
             : ''}
-          <button class="btn-ghost btn-s" id="exitParent">← Back to ${esc(Store.db.profile ? Store.db.profile.name : 'app')}</button>
+          <button class="btn-ghost btn-s" id="exitParent">← Back to ${esc(kidName || 'the app')}</button>
         </div>
       </div>
 
       <div class="tabs" id="ptabs" style="margin-top:16px">
         ${(admin
-          ? [['about', 'sparkle', 'Start here'], ['upload', 'upload', 'Add words'], ['words', 'book', 'Word lists'],
-             ['progress', 'chart', 'Progress'], ['report', 'doc', 'Coach Report'], ['storage', 'save', 'Storage'],
+          ? [['about', 'sparkle', 'Start here'], ['words', 'book', 'Word lists'],
              ['settings', 'gear', 'Settings']]
           : [['about', 'sparkle', 'Start here'],
-             ['progress', 'chart', 'Progress'], ['report', 'doc', 'Coach Report'], ['storage', 'save', 'Storage'],
+             ['progress', 'chart', 'Progress'], ['report', 'doc', 'Coach Report'],
              ['settings', 'gear', 'Settings']])
           .map(([k, i, t]) => `<button data-t="${k}" class="${tab === k ? 'on' : ''}">
              ${Icon.icon(i, { size: 16 })} ${t}</button>`).join('')}
@@ -63,7 +89,19 @@
     window.U.$$('#ptabs button').forEach(b => b.onclick = () => { tab = b.dataset.t; paint(); });
 
     ({ about: tabAbout, upload: tabUpload, words: tabWords, progress: tabProgress,
-       report: tabReport, storage: tabStorage, settings: tabSettings }[tab] || tabAbout)();
+       report: tabReport, settings: tabSettings }[tab] || tabAbout)();
+  }
+
+  /** The admin console calls this to show the upload flow inside its own
+   *  "Add words" tab. The grown-ups screen keeps a stale #ptab in its DOM,
+   *  which would shadow the admin's one — so it is emptied first. */
+  function openUpload() {
+    host = 'admin';
+    const sp = $('#scr-parent'); if (sp) sp.innerHTML = '';
+    const at = $('#atab');
+    if (!at) return;
+    at.innerHTML = '<div id="ptab"></div>';
+    if (draft) paintDraft(); else tabUpload();
   }
 
   /* ======================================================================
@@ -73,24 +111,9 @@
   function tabAbout() {
     const box = $('#ptab');
     const db = Store.db;
-    const name = db.profile ? db.profile.name : 'your child';
+    const name = db.profile ? db.profile.name : 'your kid';
     const words = Store.allWords().length;
-    const weeks = db.weeks.length;
-    const st = window.Vault ? Vault.status() : { hasSecondary: false };
-
-    const steps = [
-      { done: !!db.profile, t: 'Set up a profile', d: 'She types her name and does a short starting check.',
-        go: null },
-      { done: !!db.settings.pin, t: 'Set a PIN', d: 'Keeps this area yours.', go: 'settings' },
-      isAdmin()
-        ? { done: weeks > 0, t: 'Add the first Spell Buzz sheet', d: 'Drop in the PDF the school sends.', go: 'upload' }
-        : { done: weeks > 0, t: 'The words arrive by themselves', d: 'Prem adds each week\'s sheet once, for everybody. It appears here on its own.', go: null },
-      { done: db.attempts.length >= 12, t: 'Let her play a few rounds',
-        d: 'The reports need something to read.', go: null },
-      { done: (db.reports || []).length > 0, t: 'Read your first Coach Report',
-        d: 'Tells you what to actually practise this week.', go: 'report' }
-    ];
-    const doneN = steps.filter(s => s.done).length;
+    const admin = isAdmin();
 
     box.innerHTML = `
       <div class="card glow">
@@ -100,7 +123,7 @@
             <h2 style="margin-bottom:6px">What AraBuzz is</h2>
             <p class="muted" style="margin:0">It turns the weekly spelling sheet from school into
                games ${esc(name)} will actually choose to play — and it watches, quietly, exactly which
-               letters she gets wrong. Then it tells you what to do about it in plain English.</p>
+               letters trip them up. Then it tells you what to do about it in plain English.</p>
             <p class="muted" style="margin:10px 0 0"><b>Around twenty minutes a day is the sweet spot.</b>
                Not an hour on Sunday. That is not us being strict — it is simply how memory works.</p>
           </div>
@@ -108,29 +131,15 @@
       </div>
 
       <div class="card" style="margin-top:14px">
-        <div class="row between wrap">
-          <h3 style="margin:0">Your setup — ${doneN} of ${steps.length} done</h3>
-          <span class="pill ${doneN === steps.length ? 'sage' : 'honey'}">${
-            doneN === steps.length ? ' All set' : `${steps.length - doneN} left`}</span>
-        </div>
-        <div class="bar sage" style="margin:12px 0 16px"><i style="width:${Math.round(doneN / steps.length * 100)}%"></i></div>
-        ${steps.map(s => `
-          <div class="row between wrap" style="gap:10px;padding:9px 0;border-bottom:1px solid var(--line)">
-            <div class="row" style="gap:12px">
-              <span style="font-size:1.2rem">${s.done ? '' : '⬜'}</span>
-              <div><b style="${s.done ? 'opacity:.6' : ''}">${esc(s.t)}</b>
-                <div class="tiny faint">${esc(s.d)}</div></div>
-            </div>
-            ${!s.done && s.go ? `<button class="btn-ghost btn-s" data-goto="${s.go}">Do it</button>` : ''}
-          </div>`).join('')}
-      </div>
-
-      <div class="card" style="margin-top:14px">
         <h3>Your week, in three steps</h3>
         <div class="grid grid-3" style="margin-top:14px">
-          ${[['', 'Thursday', 'The school sends the sheet. You drop the PDF in — that is your whole job for the week. Takes under a minute.'],
-             ['', 'All week', `${esc(name)} plays. Ten different games, and never the same quiz twice, so she cannot learn the quiz instead of the words.`],
-             ['', 'Before the test', 'You read the Coach Report. It names the exact words to drill and three things to do at the kitchen table.']]
+          ${(admin
+            ? [['', 'When the sheet arrives', 'You drop the PDF into the admin console — that is the whole job. Takes under a minute, and every family gets it at once.'],
+               ['', 'All week', 'The kids play. Ten different games, and never the same quiz twice, so nobody can learn the quiz instead of the words.'],
+               ['', 'Before the test', 'Each family reads their own Coach Report — it names the exact words to drill.']]
+            : [['', 'When the sheet arrives', `The week's words appear here by themselves — there is nothing for you to upload or set up.`],
+               ['', 'All week', `${esc(name)} plays. Ten different games, and never the same quiz twice, so they cannot learn the quiz instead of the words.`],
+               ['', 'Before the test', 'You read the Coach Report. It names the exact words to drill and three things to do at the kitchen table.']])
             .map(([i, t, d]) => `<div class="card flat pad-s" style="background:var(--paper-2);border:none">
               <div style="font-size:2rem">${i}</div>
               <b>${t}</b><p class="small muted" style="margin:6px 0 0">${d}</p></div>`).join('')}
@@ -144,13 +153,13 @@
         <div class="grid grid-2" style="margin-top:14px">
           ${[
             ['', 'Words come back on purpose',
-             'A word she gets wrong returns in two days. Get it right and the gap widens — 4 days, 8, 16. Words she has mastered stop taking up her time. This one mechanism does more than everything else combined.'],
-            ['', 'She has to produce it, not recognise it',
-             'Ticking the right spelling from four options is easy. Writing it from an empty box is what actually builds the memory. Most of the games make her produce the word.'],
+             'A word they get wrong keeps coming back — more often than the ones they already know — until it finally sticks. Words they have mastered stop taking up their time. This one mechanism does more than everything else combined.'],
+            ['', 'They have to produce it, not recognise it',
+             'Ticking the right spelling from four options is easy. Writing it from an empty box is what actually builds the memory. Most of the games make them produce the word.'],
             ['', 'No red pen, ever',
-             'A wrong answer is never just "wrong". She sees her spelling next to the correct one, letter by letter, with the missing letters in green — and she gets another go while the word is still in her head.'],
-            ['', 'It aims at her mistakes, not generic ones',
-             'AraBuzz remembers the exact letters she drops in each word, and hides those letters when it tests her. Her own past misspellings become the wrong options she has to reject.']
+             'A wrong answer is never just "wrong". They see their spelling next to the correct one, letter by letter, with the missing letters in green — and they get another go while the word is still fresh.'],
+            ['', 'It aims at their mistakes, not generic ones',
+             'AraBuzz remembers the exact letters your kid drops in each word, and hides those letters when it tests them. Their own past misspellings become the wrong options they have to reject.']
           ].map(([i, t, d]) => `<div class="card flat pad-s" style="background:var(--paper-2);border:none">
             <b>${i} ${t}</b><p class="small muted" style="margin:6px 0 0">${d}</p></div>`).join('')}
         </div>
@@ -162,46 +171,42 @@
           <div style="flex:none">${Garden.treeSVG({ pct: Game.grownCount() / Math.max(words, 12), width: 128 })}</div>
           <div class="grow" style="min-width:240px">
             <ul class="muted" style="margin:0;padding-left:20px;line-height:1.8">
-              <li>A macaw called Ara who <b>grows because she practised</b> — eight stages, from scruffy chick to full blue-and-gold.</li>
+              <li>A macaw called Ara who <b>grows because they practised</b> — eight stages, from scruffy chick to full blue-and-gold.</li>
               <li>A <b>tree</b> that fills out as words go in for good.</li>
-              <li>Points, a daily streak, ${Game.BADGES.length} badges, and her own garden of words.</li>
-              <li><b>Points are never taken away.</b> Getting something wrong costs her nothing — it just means the word comes back sooner.</li>
+              <li>Points, a daily streak, ${Game.BADGES.length} badges, and their own garden of words.</li>
+              <li><b>Points are never taken away.</b> Getting something wrong costs nothing — it just means the word comes back sooner.</li>
             </ul>
           </div>
         </div>
-        <p class="hint">She has her own picture guide to all of this — it is under  Help in her side of the app.</p>
+        <p class="hint">There is a picture guide to all of this on their side of the app, under Help.</p>
       </div>
 
       <div class="card" style="margin-top:14px">
         <h3>What you get out of it</h3>
         <ul class="muted" style="padding-left:20px;line-height:1.8">
-          <li><b>A straight answer to "how is she doing?"</b> — not a score, but which kinds of mistakes she makes and whether they are shrinking.</li>
-          <li><b>The single most useful number</b>: what share of her misspellings would sound correct if you read them aloud. For a child taught by phonics first, that number tells you her ear is fine and it is her visual memory that needs building — and you can watch it fall over the term.</li>
+          <li><b>A straight answer to "how are they doing?"</b> — not a score, but which kinds of mistakes they make and whether those are shrinking.</li>
+          <li><b>The single most useful number</b>: what share of their misspellings would sound correct if you read them aloud. For a child taught by phonics first, that number says the ear is fine and it is the visual memory that needs building — and you can watch it fall over the term.</li>
           <li><b>Three specific things to do this week</b>, five minutes each, naming the actual words.</li>
-          <li><b>Something to say to her</b>, word for word, that praises real effort rather than being vague.</li>
-          <li>Every report is kept and dated, so you can see the shape of a whole term.</li>
+          <li><b>Something to say to your kid</b>, word for word, that praises real effort rather than being vague.</li>
+          <li>Every note is kept and dated, so you can see the shape of a whole term.</li>
         </ul>
       </div>
 
       <div class="card" style="margin-top:14px">
         <h3>Common questions</h3>
         ${[
-          ['Does she need the internet?',
-           'Only to add a new sheet. All the practice, the crosswords, the word searches and the typing game are generated on this computer. On a plane, in the car, with the wifi off — it all still works.'],
-          ['Where does her data go?',
-           'Nowhere. It stays on this device, and in the folders you choose under Storage. The only thing ever sent out is the list of words themselves, so the AI can write clues for them. No names, no scores, no history.'],
-          ['What does it cost to run?',
-           'About 15 pence to 20 pence for a week\'s sheet, and a few pence a week after that no matter how much she plays. Settings shows a running total and will warn you if it goes above a limit you set.'],
-          ['Will she just memorise the quiz?',
-           'She cannot. Every quiz re-picks the words, changes the question type, rotates the wording and moves the gaps. Three quizzes in a row from the same word list share almost no questions.'],
-          ['Is the AI marking her?',
-           'No. The AI writes the practice material once per word and writes your report. Every judgement about whether an answer is right, which word comes next and how hard to make it is made on this computer by fixed rules you can inspect under Progress.'],
-          ['She is upset about spelling. Will this make it worse?',
-           'It is built the other way round. No timers except in one optional game, no red, no lost points, no leaderboards, and a wrong answer always gets a second try and an explanation. The words she gets wrong are described to her as the most useful words in the app — because they are.'],
-          ['Can another child use it?',
-           'Yes. Settings has "Set up a different child", which keeps the word lists and clears everything personal. Take a backup first from Storage if you want to keep her records.'],
-          ['What if the school changes the sheet format?',
-           'It is read by AI rather than by a fixed pattern, precisely because the sheets are made by hand and change week to week. You always see what it read and can correct it before publishing.']
+          ['Do they need the internet?',
+           'Only now and then. The device connects once to download the latest words and questions, and everything after that — the quizzes, the crosswords, the word searches, the typing game — runs on the device itself. On a plane, in the car, with the wifi off, it all still works. Anything played offline is saved on the device and syncs quietly to your family account the next time it connects.'],
+          ['Where does the data go?',
+           'It stays on the device and in your own private family account — which is what lets progress follow your kid onto any device they sign in on. It is never sold, never shared, and never used to train anything. You can download a copy or delete everything, any time, from Settings.'],
+          ['Will they just memorise the quiz?',
+           'They cannot. Every quiz re-picks the words, changes the question type, rotates the wording and moves the gaps. Three quizzes in a row from the same word list share almost no questions.'],
+          ['Is the AI marking my kid?',
+           'No. The AI writes the practice material and writes your note. Every judgement about whether an answer is right, which word comes next and how hard to make it is made on the device by fixed rules you can see working under Progress.'],
+          ['My kid is upset about spelling. Will this make it worse?',
+           'It is built the other way round. No timers except in one optional game, no red, no lost points, no leaderboards, and a wrong answer always gets a second try and an explanation. The words they get wrong are described to them as the most useful words in the app — because they are.'],
+          ['Can more than one of my kids use it?',
+           'Yes. Kids in the same family can each use AraBuzz — every kid gets their own profile, their own questions and their own badges, all built from the same sheets everyone shares. Just write to us and we will set the extra profile up for you.']
         ].map(([q, a]) => `<details style="border-bottom:1px solid var(--line);padding:11px 0">
           <summary style="cursor:pointer;font-weight:600;font-family:var(--font-head)">${esc(q)}</summary>
           <p class="muted small" style="margin:8px 0 0">${esc(a)}</p></details>`).join('')}
@@ -229,7 +234,7 @@
         <p class="muted">Drop in the PDF the school sends. The layout changes from week to
            week — different headings, sometimes an intro paragraph, sometimes not — so
            AraBuzz reads it with AI rather than looking for a fixed format. You'll get to
-           check and correct everything before it goes to ${esc(Store.db.profile.name)}.</p>
+           check and correct everything before it goes out to the kids.</p>
 
         <div id="drop" class="card flat" style="border:2px dashed var(--line);text-align:center;padding:34px 20px;margin-top:16px;cursor:pointer">
           <div style="color:var(--gold)">${Icon.icon('upload', { size: 34, stroke: 1.4 })}</div>
@@ -261,7 +266,7 @@
           <li>Each word gets a practice pack built: four clues, four sentences, six likely
               misspellings, a crossword clue, a memory hook — <b>1 API call for the whole week</b>.</li>
           <li>After that, every quiz, crossword and word search is generated on this device
-              for free, however many times she plays.</li>
+              for free, however many times the kids play.</li>
         </ol>
       </div>`;
 
@@ -332,7 +337,7 @@
     status(failed.length ? `<div class="feedback bad"><b>${failed.length} file(s) could not be read.</b>
       ${failed.map(f => `<p class="small" style="margin:4px 0 0">${esc(f.name)}</p>`).join('')}</div>` : '');
 
-    if (docs.length === 1) { draft = { docs, mode: 'separate', tab: 0 }; paint(); return; }
+    if (docs.length === 1) { draft = { docs, mode: 'separate', tab: 0 }; repaintHere(); return; }
     askSeparateOrTogether(docs, failed);
   }
 
@@ -341,12 +346,12 @@
     const total = docs.reduce((n, d) => n + d.words.length, 0);
     const m = modal(`
       <h2>${docs.length} sheets read</h2>
-      <p class="muted">Found <b>${total} words</b> altogether. How should ${esc(Store.db.profile.name)} get them?</p>
+      <p class="muted">Found <b>${total} words</b> altogether. How should the kids get them?</p>
       <div class="grid" style="gap:12px;margin-top:16px">
         <div class="tile" data-choice="separate">
           <span class="emoji"></span>
           <h3>Keep them separate</h3>
-          <p>${docs.length} separate weeks. She can practise one week at a time, or tick several
+          <p>${docs.length} separate weeks. The kids can practise one week at a time, or tick several
              together. Best for catching up on past sheets — the Coach Report can then show
              progress topic by topic.</p>
         </div>
@@ -385,7 +390,7 @@
         draft = { mode: 'separate', tab: 0, docs };
       }
       m.close('chosen');
-      paint();
+      repaintHere();
     });
   }
 
@@ -507,11 +512,11 @@
       if (!yes) return;
       draft.docs.splice(draft.tab, 1);
       draft.tab = 0;
-      if (!draft.docs.length) { draft = null; paint(); } else paintDraft();
+      if (!draft.docs.length) { draft = null; repaintHere(); } else paintDraft();
     };
     $('#cancelDraft').onclick = async () => {
       const yes = await confirmBox('Discard these words?', 'Nothing will be saved.', 'Discard');
-      if (yes) { draft = null; paint(); }
+      if (yes) { draft = null; repaintHere(); }
     };
     $('#publish').onclick = () => { stash(); publishDraft(); };
   }
@@ -550,7 +555,7 @@
         console.error(e);
         st.innerHTML = `<div class="feedback bad"><b>Couldn't build the practice material.</b>
           <p class="small" style="margin:6px 0 0">${esc(e.message || e)}</p>
-          <p class="small muted">The words will still be saved — she can practise with the school's meanings,
+          <p class="small muted">The words will still be saved — the kids can practise with the school's meanings,
           and you can retry the extras later from Word lists.</p></div>`;
       }
     }
@@ -577,8 +582,14 @@
     Store.save(true);
     UI.checkpointVault();
     draft = null;
-    tab = 'words';
-    paint();
+    if (host === 'admin' && window.Admin && window.UI && UI.current === 'admin') {
+      // Straight to Sheets, where the new week sits ready to publish to the
+      // database so every family's devices can pick it up.
+      Admin.paint({ tab: 'sheets' });
+    } else {
+      tab = 'words';
+      paint();
+    }
     toast(docs.length > 1
       ? `${docs.length} weeks added — ${added} words ready to practise!`
       : `${added} words are ready to practise!`, 'good', 3400);
@@ -608,7 +619,7 @@ Reflex = A quick automatic response"></textarea>
       const topic = m.box.querySelector('#mTopic').value.trim();
       draft = { mode: 'separate', tab: 0, docs: [{ title: topic || 'Spell Buzz', topic, sentOn: '',
         assessedOn: m.box.querySelector('#mTest').value, notes: '', words, file: null }] };
-      m.close('ok'); paint();
+      m.close('ok'); repaintHere();
     };
   }
 
@@ -616,8 +627,8 @@ Reflex = A quick automatic response"></textarea>
     if (!API.hasKey()) return toast('Add an API key in Settings first.', 'bad');
     const m = modal(`
       <h2>Make a list from a topic</h2>
-      <p class="muted small">Useful between school sheets — holidays, a book she's reading, or a
-         subject she finds hard.</p>
+      <p class="muted small">Useful between school sheets — holidays, a book the kids are reading, or a
+         topic they find hard.</p>
       <div class="field"><label>Topic</label><input id="tTopic" placeholder="e.g. Volcanoes, Ancient Egypt, Space"></div>
       <div class="grid grid-2">
         <div class="field"><label>How hard?</label>
@@ -636,7 +647,7 @@ Reflex = A quick automatic response"></textarea>
         const out = await API.topicList(t, m.box.querySelector('#tDiff').value, +m.box.querySelector('#tN').value);
         draft = { mode: 'separate', tab: 0, docs: [{ title: out.title || t, topic: out.topic || t,
           sentOn: '', assessedOn: '', notes: '', words: out.words || [], file: null }] };
-        m.close('ok'); paint();
+        m.close('ok'); repaintHere();
       } catch (e) {
         stat.innerHTML = `<div class="feedback bad"><b>Didn't work.</b><p class="small">${esc(e.message || e)}</p></div>`;
       }
@@ -693,7 +704,7 @@ Reflex = A quick automatic response"></textarea>
     window.U.$$('[data-del]').forEach(b => b.onclick = async () => {
       const wk = Store.db.weeks.find(x => x.id === b.dataset.del);
       const yes = await confirmBox('Delete this list?',
-        `"${esc(wk.title)}" will be removed. Her scores for those words stay in the history.`, 'Delete');
+        `"${esc(wk.title)}" will be removed. The scores for those words stay in the history.`, 'Delete');
       if (yes) { Store.deleteWeek(b.dataset.del); UI.checkpointVault(); paint(); }
     });
     window.U.$$('[data-enrich]').forEach(b => b.onclick = () => enrichWeek(b.dataset.enrich, b));
@@ -737,7 +748,7 @@ Reflex = A quick automatic response"></textarea>
       // No history yet — but the parent can still see exactly how AraBuzz is
       // going to teach, which is the question they actually have on day one.
       box.innerHTML = `<div class="card center-text muted">
-          The numbers appear as soon as she has played a few rounds.
+          The numbers appear as soon as they have played a few rounds.
         </div>${adaptCard()}`;
       const rb0 = $('#rebuildPreview');
       if (rb0) rb0.onclick = () => { paint(); toast('Re-picked.'); };
@@ -772,8 +783,8 @@ Reflex = A quick automatic response"></textarea>
             <div style="font-family:var(--font-head);font-size:3rem;font-weight:800;color:var(--honey-deep);line-height:1">
               ${Math.round(summary.phonetic.share * 100)}%</div>
             <div class="grow" style="min-width:220px">
-              <p style="margin:0"><b>of her misspellings sound exactly right when read aloud.</b></p>
-              <p class="small muted" style="margin:4px 0 0">Her ear is working. It's the visual memory of
+              <p style="margin:0"><b>of their misspellings sound exactly right when read aloud.</b></p>
+              <p class="small muted" style="margin:4px 0 0">Their ear is working. It's the visual memory of
                  the word that needs building — which is what a Montessori phonics start predicts.</p>
             </div>
           </div>
@@ -795,7 +806,7 @@ Reflex = A quick automatic response"></textarea>
 
       <div class="grid grid-2" style="margin-top:16px">
         <div class="card">
-          <h3>How she does in each game</h3>
+          <h3>How they do in each game</h3>
           ${byMode.map(m => `
             <div style="margin-bottom:12px">
               <div class="row between small"><span>${esc(m.label)}</span><span class="faint">${Math.round(m.pct * 100)}% · ${m.n}</span></div>
@@ -821,15 +832,15 @@ Reflex = A quick automatic response"></textarea>
       </div>
 
       <div class="card" style="margin-top:16px">
-        <h3>Words that keep catching her out</h3>
+        <h3>Words that keep catching them out</h3>
         <table class="data">
-          <thead><tr><th>Word</th><th style="width:80px">Right</th><th>She has written</th></tr></thead>
+          <thead><tr><th>Word</th><th style="width:80px">Right</th><th>They have written</th></tr></thead>
           <tbody>${worst.map(x => `
             <tr>
               <td><b>${esc(x.word.word)}</b><div class="tiny faint">${esc(x.word.trickyBit || '')}</div></td>
               <td class="small">${Math.round(x.acc * 100)}%<div class="tiny faint">${x.pr.seen} tries</div></td>
               <td class="small">${(x.pr.misspellings || []).slice(-4).map(m => `<span class="pill coral tiny">${esc(m)}</span>`).join(' ') || '<span class="faint">—</span>'}</td>
-            </tr>`).join('') || '<tr><td colspan="3" class="muted small">Nothing troubling her — nice.</td></tr>'}
+            </tr>`).join('') || '<tr><td colspan="3" class="muted small">Nothing troubling them — nice.</td></tr>'}
           </tbody>
         </table>
       </div>
@@ -879,12 +890,12 @@ Reflex = A quick automatic response"></textarea>
 
     return `
       <div class="card" style="margin-top:16px">
-        <h3>How her next quiz is being chosen <span class="pill tiny sky">live</span></h3>
+        <h3>How the next quiz is being chosen <span class="pill tiny sky">live</span></h3>
         <p class="muted small">The AI writes each word's raw material <b>once</b> — four different clues,
            four sentences, six likely misspellings, a crossword clue. After that it is not involved.
-           Every quiz is <b>assembled on this device, fresh, from her record</b>: which words come up,
+           Every quiz is <b>assembled on this device, fresh, from their record</b>: which words come up,
            which kind of question each becomes, which wording is used, and which letters get hidden.
-           That is why a retake is never the same, and why it gets harder as she improves.</p>
+           That is why a retake is never the same, and why it gets harder as they improve.</p>
 
         <div class="grid grid-2" style="margin-top:14px">
           <div>
@@ -899,20 +910,20 @@ Reflex = A quick automatic response"></textarea>
             <button class="btn-quiet btn-s" id="rebuildPreview" style="margin-top:6px">↻ Re-pick</button>
           </div>
           <div>
-            <div class="kicker">Resting — she knows these</div>
+            <div class="kicker">Resting — they know these</div>
             ${rested.length
               ? `<div class="row wrap" style="gap:6px;margin-top:8px">
                    ${rested.map(r => `<span class="pill sage tiny">${esc(r.wd.word)}</span>`).join('')}</div>
                  <p class="tiny faint" style="margin-top:8px">These come back on a widening schedule —
                     2 days, then 4, then 8, then 16 — rather than every session.</p>`
               : `<p class="small muted" style="margin-top:8px">Nothing fully locked in yet. Words move here
-                   once she has got them right several times in a row.</p>`}
+                   once they have got them right several times in a row.</p>`}
 
-            <div class="kicker" style="margin-top:16px">Aimed at her own mistakes</div>
+            <div class="kicker" style="margin-top:16px">Aimed at their own mistakes</div>
             <p class="tiny faint" style="margin-top:6px">In Missing Letters, the letters AraBuzz hides are
-               weighted towards the ones she personally drops on that exact word — not random gaps.
-               In Spot the Spelling, her own past misspellings are used as the wrong options,
-               but only once she half-knows the word.</p>
+               weighted towards the ones they personally drop on that exact word — not random gaps.
+               In Spot the Spelling, their own past misspellings are used as the wrong options,
+               but only once they half-know the word.</p>
             ${gapExample()}
           </div>
         </div>
@@ -933,7 +944,7 @@ Reflex = A quick automatic response"></textarea>
     for (let i = 0; i < word.length; i++) if (/[a-z]/i.test(word[i])) map.push(i);
     const hot = Object.keys(weak).sort((a, b) => weak[b] - weak[a]).slice(0, 2).map(i => map[+i]);
     return `<div class="card flat pad-s" style="background:var(--paper-2);border:none;margin-top:10px">
-      <div class="tiny faint">For example — she has written <b>${esc(word)}</b> as
+      <div class="tiny faint">For example — they have written <b>${esc(word)}</b> as
         ${(cand.pr.misspellings || []).slice(-2).map(m => `"${esc(m)}"`).join(', ')}, so AraBuzz now hides:</div>
       <div style="font-size:1.4rem;letter-spacing:.14em;margin-top:8px;font-weight:600">
         ${word.split('').map((ch, i) => hot.includes(i)
@@ -944,7 +955,7 @@ Reflex = A quick automatic response"></textarea>
 
   function baselineCard(b) {
     return `<div class="card" style="margin-top:16px">
-      <h3>Her starting point</h3>
+      <h3>Their starting point</h3>
       <p class="small muted">Taken ${esc(window.U.fmtDate(b.takenAt))} — ${b.correct} of ${b.total} correct,
          and ${Math.round(b.phoneticShare * 100)}% of the misses sounded right.</p>
       <div class="row wrap" style="gap:6px">
@@ -1074,10 +1085,10 @@ Reflex = A quick automatic response"></textarea>
       <div class="card">
         <h2>Coach Report</h2>
         <p class="muted">A written report on how ${esc(name)} is really doing — what she's good at,
-           the exact patterns behind her mistakes with her own spellings quoted as evidence, and
+           the exact patterns behind their mistakes with their own spellings quoted as evidence, and
            three specific things to do this week. Plain English, not teacher-speak.</p>
         <p class="muted small"><b>Reports are never overwritten.</b> Each one is filed by date and kept,
-           so you can open any of them again and watch the shape of her progress change from one to the next.</p>
+           so you can open any of them again and watch the shape of their progress change from one to the next.</p>
         <div class="row wrap" style="gap:10px;margin-top:14px">
           <select id="rRange" style="width:auto">
             <option value="14">Last 2 weeks</option>
@@ -1089,7 +1100,7 @@ Reflex = A quick automatic response"></textarea>
             ${saved.length ? 'Write a new report →' : 'Write the report →'}</button>
         </div>
         ${att.length < 12
-          ? `<p class="hint">She needs a bit more practice first — about ${12 - att.length} more answers.</p>`
+          ? `<p class="hint">They need a bit more practice first — about ${12 - att.length} more answers.</p>`
           : `<p class="hint">One API call, about 30 seconds.${saved.length
               ? ` The new report will compare itself against ${esc(window.U.fmtDate(saved[0].ts))}.` : ''}</p>`}
         <div id="rStatus"></div>
@@ -1120,7 +1131,7 @@ Reflex = A quick automatic response"></textarea>
     });
     window.U.$$('[data-rdel]').forEach(b => b.onclick = async () => {
       const yes = await confirmBox('Delete this report?',
-        'The report text goes, but none of her practice history is touched — you can always write a new report covering the same dates.', 'Delete');
+        'The report text goes, but none of the practice history is touched — you can always write a new report covering the same dates.', 'Delete');
       if (!yes) return;
       Store.db.reports = Store.db.reports.filter(x => x.id !== b.dataset.rdel);
       Store.save(true); UI.checkpointVault(); paint();
@@ -1539,30 +1550,30 @@ Reflex = A quick automatic response"></textarea>
 
     const accChart = Charts.line(
       weeks.map(x => ({ label: x.label, v: Math.round(x.accuracy * 100), n: x.n })),
-      { title: 'How often she got it right, week by week', suffix: '%', max: 100, min: 0,
+      { title: 'How often they got it right, week by week', suffix: '%', max: 100, min: 0,
         sub: 'Higher is better. Remember the words get harder each week.' });
 
     const phonChart = weeks.some(x => x.misspellings >= 3) ? Charts.line(
       weeks.filter(x => x.misspellings >= 1).map(x => ({ label: x.label, v: Math.round(x.phoneticShare * 100), n: x.misspellings })),
-      { title: 'Share of her misspellings that sound correct', suffix: '%', max: 100, min: 0,
-        sub: 'This is the number to watch. Lower means she is switching from spelling by ear to spelling by sight.',
+      { title: 'Share of their misspellings that sound correct', suffix: '%', max: 100, min: 0,
+        sub: 'This is the number to watch. Lower means they are switching from spelling by ear to spelling by sight.',
         note: 'A falling line here is the clearest sign the Montessori phonics habit is giving way to visual memory.' }) : '';
 
     const patternChart = Charts.compareBars(cmp.rows, {
       title: 'What kind of mistakes, and whether they are shrinking',
-      sub: cmp.hasPrev ? 'Each bar is that pattern\'s share of all her misspellings.'
-                       : 'Each bar is that pattern\'s share of all her misspellings.',
+      sub: cmp.hasPrev ? 'Each bar is that pattern\'s share of all their misspellings.'
+                       : 'Each bar is that pattern\'s share of all their misspellings.',
       aLabel: 'This period', bLabel: 'The period before', suffix: '%'
     });
 
     const masteryChart = weeks.length >= 2
       ? Charts.cumulative(masterySeries(weeks), { title: 'Words locked in over time',
-          sub: 'A word counts once she has got it right three times running.' })
+          sub: 'A word counts once they have got it right three times running.' })
       : '';
 
     const actChart = Charts.activity(dailyActivity(Math.min(days, 56)).map(d => ({
       label: window.U.fmtDay(new Date(d.day).getTime()), n: d.n
-    })), { title: 'When she practised' });
+    })), { title: 'When they practised' });
 
     return `
     <div class="card report" id="theReport" style="margin-top:18px">
@@ -1600,7 +1611,7 @@ Reflex = A quick automatic response"></textarea>
       <table>
         <tr><th>Answers given</th><td>${o.answers}</td><th>Got right</th><td>${Math.round((o.accuracy || 0) * 100)}%</td></tr>
         <tr><th>Words practised</th><td>${o.wordsSeen}</td><th>Words locked in</th><td>${o.wordsMastered}</td></tr>
-        <tr><th>Days she practised</th><td>${e.activeDays} of ${days}</td><th>Longest streak</th><td>${e.bestStreak} days</td></tr>
+        <tr><th>Days practised</th><td>${e.activeDays} of ${days}</td><th>Longest streak</th><td>${e.bestStreak} days</td></tr>
         ${moved !== null ? `<tr><th>Change across the period</th><td colspan="3">${
           moved > 2 ? `<b style="color:var(--sage-deep)">up ${moved} points</b> — ${Math.round(o.accuracyEarlyInPeriod * 100)}% at the start, ${Math.round(o.accuracyLateInPeriod * 100)}% by the end`
           : moved < -2 ? `down ${Math.abs(moved)} points — but note the words get harder each week`
@@ -1610,11 +1621,11 @@ Reflex = A quick automatic response"></textarea>
       <h2>What she's good at</h2>
       <ul>${r.strengths.map(s => `<li><b>${esc(s.title)}.</b> ${esc(s.detail)}</li>`).join('')}</ul>
 
-      <h2>The patterns behind her mistakes</h2>
+      <h2>The patterns behind their mistakes</h2>
       ${payload.spellingPatterns.soundsRightShare >= 0.4 ? `
         <blockquote><b>${Math.round(payload.spellingPatterns.soundsRightShare * 100)}% of ${esc(name)}'s misspellings would sound
         correct if you read them out loud.</b> That is the single most useful number in this report — it says
-        her hearing and her phonics are fine, and the gap is purely in remembering how words <i>look</i>.</blockquote>` : ''}
+        their hearing and phonics are fine, and the gap is purely in remembering how words <i>look</i>.</blockquote>` : ''}
       ${phonChart ? `<div class="report-section" style="margin:20px 0">${phonChart}</div>` : ''}
       <div class="report-section" style="margin:22px 0">${patternChart}</div>
       ${r.patterns.map(p => {
@@ -1644,13 +1655,13 @@ Reflex = A quick automatic response"></textarea>
       ${masteryChart ? `<h2>Words going in for good</h2>
       <div class="report-section" style="margin:14px 0 22px">${masteryChart}</div>` : ''}
 
-      <h2>Is she actually enjoying it?</h2>
+      <h2>Are they actually enjoying it?</h2>
       ${paras(r.motivation)}
       <div class="report-section" style="margin:16px 0 20px">${actChart}</div>
       <table>
         <tr><th>Sessions</th><td>${e.sessions}</td><th>Average length</th><td>${e.averageSessionMinutes} min</td></tr>
         <tr><th>Current streak</th><td>${e.currentStreak} days</td><th>Badges earned</th><td>${e.badgesEarned}</td></tr>
-        <tr><th>Games she picks</th><td colspan="3">${Object.keys(e.gamesChosen).map(k => `${esc(k)} (${e.gamesChosen[k]})`).join(', ') || '—'}</td></tr>
+        <tr><th>Games they pick</th><td colspan="3">${Object.keys(e.gamesChosen).map(k => `${esc(k)} (${e.gamesChosen[k]})`).join(', ') || '—'}</td></tr>
       </table>
 
       <div style="margin-top:24px;padding:18px 22px;background:var(--sage-soft);border-radius:18px">
@@ -1708,180 +1719,6 @@ th,td{padding:10px 12px;border:1px solid #E5DDD1;text-align:left}th{background:#
       a.href = URL.createObjectURL(blob);
       a.download = `AraBuzz-Coach-Report-${new Date().toISOString().slice(0, 10)}.html`;
       a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 1500);
-    };
-  }
-
-  /* ====================================================================== */
-  /*  5. STORAGE                                                            */
-  /* ====================================================================== */
-  /**
-   * Sends this device's whole AraBuzz to the computer serving it, which writes
-   * it into its Backups folder. The only route her iPad data has onto a disk.
-   */
-  async function sendBackupHome() {
-    const btn = $('#sendBk'), msg = $('#sendMsg');
-    const was = btn.innerHTML;
-    btn.disabled = true; btn.innerHTML = '<span class="loader"></span> Sending';
-    msg.textContent = '';
-    try {
-      Store.stashActive();
-      const child = (Store.db.profile && Store.db.profile.name) || 'AraBuzz';
-      const res = await fetch('/__backup', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ child, sentAt: new Date().toISOString(), data: Store.db })
-      });
-      const j = await res.json();
-      if (!j.ok) throw new Error(j.error || 'refused');
-      msg.innerHTML = 'Saved as <b>' + esc(j.folder + '/' + j.file) + '</b>';
-      toast('Backed up to the computer.', 'good');
-    } catch (e) {
-      msg.textContent = 'Could not reach the computer. Is it still running AraBuzz?';
-      toast('Backup failed.', 'bad');
-    }
-    btn.disabled = false; btn.innerHTML = was;
-  }
-
-  function tabStorage() {
-    const box = $('#ptab');
-    const db = Store.db;
-    const size = Math.round(JSON.stringify(db).length / 1024);
-
-    box.innerHTML = `
-      <div class="card">
-        <h2>Where everything is kept</h2>
-        <p class="muted">Her record lives in AraBuzz's own database, saved as she plays and
-           reachable from any device she signs in on. There is nothing for you to back up
-           by hand and nothing that can be lost by losing a laptop.</p>
-        <p class="hint">It is never sold, never shared, and never used to train anything.
-           You can take a copy or delete the lot at any time, below.</p>
-      </div>
-
-      <div class="card" id="sendHome" style="margin-top:14px;display:none">
-        <h3>Back up to the computer</h3>
-        <p class="small muted">This device is on the same wifi as the computer running AraBuzz.
-           One tap saves everything — words, progress, every answer, every report — into the
-           <b>Backups</b> folder next to the app on that computer.</p>
-        <p class="small muted" style="margin-top:6px"><b>Worth doing on the iPad.</b> Safari can't
-           write to folders itself, so this is the only way her iPad data reaches your disk.</p>
-        <div class="row wrap" style="gap:10px">
-          <button class="btn-primary btn-s" id="sendBk">Back up to the computer</button>
-          <span class="small muted" id="sendMsg"></span>
-        </div>
-      </div>
-
-      <div class="card" style="margin-top:14px">
-        <h3>Always available</h3>
-        <p class="small muted">Works in every browser, including on an iPad.</p>
-        <div class="row wrap" style="gap:10px">
-          <button class="btn-primary btn-s" id="dlBackup">Download a backup</button>
-          <button class="btn-ghost btn-s" id="upBackup">Restore from a backup</button>
-          <input type="file" id="restoreFile" accept=".json" style="display:none">
-        </div>
-        <p class="hint">Current data: about ${size} KB · ${Object.keys(db.words).length} words ·
-           ${db.attempts.length} recorded answers · ${db.sessions.length} sessions</p>
-      </div>
-
-      ${st.hasPrimary ? `<div class="card" style="margin-top:14px">
-        <h3>Daily snapshots</h3>
-        <div id="bkList" class="small muted">Loading…</div>
-      </div>` : ''}
-
-      <div class="card" style="margin-top:14px;border-color:var(--coral)">
-        <h3>Danger zone</h3>
-        <div class="row wrap" style="gap:10px">
-          <button class="btn-danger btn-s" id="resetScores">Clear scores only</button>
-          <button class="btn-danger btn-s" id="wipeAll">Erase everything</button>
-        </div>
-        <p class="hint">Take a backup first. Neither can be undone from inside the app.</p>
-        <p class="hint"><b>Testing a new version?</b> You can also add <code>?reset</code> to the end of the
-           address (for example <code>http://localhost:8777/?reset</code>) to wipe everything and start
-           clean without needing the PIN. Or just open the app in a private / incognito window — that
-           always starts empty and leaves your real data alone.</p>
-      </div>`;
-
-    if (st.supported) {
-      if ($('#pickP')) $('#pickP').onclick = async () => {
-        try {
-          const { existing } = await Vault.pickPrimary();
-          if (existing) {
-            const yes = await confirmBox('There is already AraBuzz data in that folder',
-              'Load it and replace what is currently in the browser? Choose Cancel to keep what you have and overwrite the folder instead.', 'Load from folder');
-            if (yes) { Store.importJSON(existing); toast('Loaded from folder.', 'good'); UI.renderHud(); }
-          }
-          await Vault.checkpoint(Store.db);
-          toast('Folder connected.', 'good'); paint();
-        } catch (e) { if (e.name !== 'AbortError') toast('Could not open that folder.', 'bad'); }
-      };
-      if ($('#pickS')) $('#pickS').onclick = async () => {
-        try { await Vault.pickSecondary(); await Vault.checkpoint(Store.db); toast('Backup folder connected.', 'good'); paint(); }
-        catch (e) { if (e.name !== 'AbortError') toast('Could not open that folder.', 'bad'); }
-      };
-      if ($('#openP')) $('#openP').onclick = async () => { await Vault.checkpoint(Store.db); toast('Saved to folder.', 'good'); };
-      if ($('#dropP')) $('#dropP').onclick = async () => { await Vault.forget('primary'); paint(); };
-      if ($('#dropS')) $('#dropS').onclick = async () => { await Vault.forget('secondary'); paint(); };
-
-      if ($('#bkList')) Vault.listBackups('primary').then(list => {
-        const b = $('#bkList'); if (!b) return;
-        b.innerHTML = list.length
-          ? list.slice(0, 12).map(n => `<div class="row between" style="padding:6px 0;border-bottom:1px solid var(--line)">
-              <span>${esc(n)}</span><button class="btn-quiet btn-s" data-bk="${esc(n)}">Restore</button></div>`).join('')
-          : 'No snapshots yet — one is written the first time you use the app each day.';
-        window.U.$$('[data-bk]').forEach(btn => btn.onclick = async () => {
-          const yes = await confirmBox('Restore this snapshot?', `Everything since <b>${esc(btn.dataset.bk)}</b> will be replaced.`, 'Restore');
-          if (!yes) return;
-          const txt = await Vault.readBackup(btn.dataset.bk, 'primary');
-          if (!txt) return toast('Could not read that file.', 'bad');
-          Store.importJSON(txt); toast('Restored.', 'good'); UI.renderHud(); paint();
-        });
-      });
-    }
-
-    /* Is the computer that serves AraBuzz reachable right now? Only then is
-       there anywhere to send a backup to. Asked quietly; if there's no answer
-       within a second the card simply never appears. */
-    (async () => {
-      const card = $('#sendHome');
-      if (!card) return;
-      try {
-        const ctrl = new AbortController();
-        const t = setTimeout(() => ctrl.abort(), 1200);
-        const res = await fetch('/__ping', { signal: ctrl.signal, cache: 'no-store' });
-        clearTimeout(t);
-        const j = await res.json();
-        if (!j || !j.ok) return;
-        card.style.display = '';
-        $('#sendBk').onclick = () => sendBackupHome();
-      } catch (e) { /* not served from the AraBuzz computer — nothing to do */ }
-    })();
-
-    $('#dlBackup').onclick = () => { Vault.download(Store.db); toast('Backup downloaded.', 'good'); };
-    $('#upBackup').onclick = () => $('#restoreFile').click();
-    $('#restoreFile').onchange = async e => {
-      const f = e.target.files[0]; if (!f) return;
-      const yes = await confirmBox('Restore this backup?', 'Everything currently in AraBuzz will be replaced.', 'Restore');
-      if (!yes) return;
-      try { Store.importJSON(await f.text()); toast('Restored.', 'good'); UI.renderHud(); paint(); }
-      catch (err) { toast('That file could not be read.', 'bad'); }
-    };
-
-    $('#resetScores').onclick = async () => {
-      const yes = await confirmBox('Clear all scores?', 'Word lists stay. Points, streaks, history and the garden reset to zero.', 'Clear scores');
-      if (!yes) return;
-      const db = Store.db;
-      db.attempts = []; db.sessions = []; db.progress = {}; db.reports = [];
-      db.game = Object.assign(Store.blank().game, {});
-      Object.keys(db.words).forEach(id => Store.ensureProgress(id));
-      Store.save(true); UI.checkpointVault(); toast('Scores cleared.'); paint();
-    };
-    $('#wipeAll').onclick = async () => {
-      const yes = await confirmBox('Erase everything?',
-        'Profile, word lists, scores, history, reports, your PIN and the links to your saved folders — all of it, and AraBuzz restarts as if newly installed.<br><br>' +
-        'The files already written into your folders on disk are <b>not</b> deleted.', 'Erase everything');
-      if (!yes) return;
-      try { Store.wipe(); } catch (e) {}
-      try { if (window.Vault && Vault.supported) await Vault.wipeHandles(); } catch (e) {}
-      location.replace(location.pathname);
     };
   }
 
@@ -1963,7 +1800,7 @@ th,td{padding:10px 12px;border:1px solid #E5DDD1;text-align:left}th{background:#
         </details>
       </div>`}
 
-      <div class="card" style="margin-top:14px">
+      ${!admin ? '' : `<div class="card" style="margin-top:14px">
         <h3>What it has cost so far</h3>
         <div class="grid grid-3" style="margin-top:10px">
           ${[['This week', use.calls + ' calls'], ['Tokens in', use.inTok.toLocaleString()],
@@ -1989,10 +1826,10 @@ th,td{padding:10px 12px;border:1px solid #E5DDD1;text-align:left}th{background:#
             <td class="small faint">${u.inTok}→${u.outTok}</td>
             <td class="small">$${(u.est || 0).toFixed(4)}</td></tr>`).join('')}
           </tbody></table></details>` : ''}
-      </div>
+      </div>`}
 
       <div class="card" style="margin-top:14px">
-        <h3>How she practises</h3>
+        <h3>How the practice behaves</h3>
         <div class="grid grid-2">
           <div class="field"><label>Questions per quiz</label>
             <select id="qlen">${[5, 8, 10, 12, 15, 20].map(n => `<option ${s.quizLength === n ? 'selected' : ''}>${n}</option>`).join('')}</select></div>
@@ -2022,10 +1859,10 @@ th,td{padding:10px 12px;border:1px solid #E5DDD1;text-align:left}th{background:#
         </label>
       </div>
 
-      <div class="card" style="margin-top:14px">
+      ${!Store.db.profile ? '' : `<div class="card" style="margin-top:14px">
         <h3>Who is using AraBuzz</h3>
         <div class="grid grid-2">
-          <div class="field"><label>Her name</label><input id="kidName" value="${esc(Store.db.profile ? Store.db.profile.name : '')}"></div>
+          <div class="field"><label>Your kid's name</label><input id="kidName" value="${esc(Store.db.profile.name)}"></div>
           <div class="field"><label>PIN for this area</label>
             <button class="btn-ghost" id="changePin" style="width:100%">Change PIN</button></div>
         </div>
@@ -2033,10 +1870,23 @@ th,td{padding:10px 12px;border:1px solid #E5DDD1;text-align:left}th{background:#
           <button class="btn-ghost btn-s" id="redoBaseline">Re-take the starting check</button>
           <button class="btn-ghost btn-s" id="newChild"> Set up a different child</button>
         </div>
-        <p class="hint"><b>Set up a different child</b> keeps every word list you have uploaded but clears
+        <p class="hint"><b>Set up a different child</b> keeps every word list but clears
            the name, scores, streak, garden, badges and history, then runs the welcome and starting check
-           again — so a sibling or a friend can start clean without you re-uploading anything.
-           Take a backup first if you want to keep her records.</p>
+           again — so a sibling can start clean. Download a copy of your data first, below, if you
+           want to keep the records.</p>
+      </div>`}
+
+      <div class="card" style="margin-top:14px">
+        <h3>Your data</h3>
+        <p class="muted small">Everything AraBuzz knows about your family — the words, every answer,
+           every note — belongs to you. Both promises from the agreement live here.</p>
+        <div class="row wrap" style="gap:10px;margin-top:10px">
+          <button class="btn-primary btn-s" id="dlEverything">Download everything</button>
+          ${admin ? '' : `<button class="btn-danger btn-s" id="delEverything">Delete everything and leave</button>`}
+        </div>
+        <p class="hint">Download gives you a file with the lot — keep it wherever you like.
+           ${admin ? '' : `Delete removes your family's record from AraBuzz — every kid, every answer,
+           every note, gone from our side — signs this device out and wipes it clean. It cannot be undone.`}</p>
       </div>
 
       <div class="card" style="margin-top:14px;text-align:center">
@@ -2098,23 +1948,59 @@ th,td{padding:10px 12px;border:1px solid #E5DDD1;text-align:left}th{background:#
       if (window.Scene) Scene.update(true);
     });
     $('#testVoice').onclick = () => { s.voiceURI = $('#voice').value; window.U.speak('Cerebellum'); };
-    $('#kidName').onchange = e => { Store.db.profile.name = e.target.value.trim() || 'Speller'; Store.save(true); UI.syncVault(); };
+    if ($('#kidName')) $('#kidName').onchange = e => { Store.db.profile.name = e.target.value.trim() || 'Speller'; Store.save(true); UI.syncVault(); };
 
-    $('#changePin').onclick = async () => {
+    if ($('#changePin')) $('#changePin').onclick = async () => {
       const p = await promptBox('New PIN', 'At least 4 digits.', '••••', 'number');
-      if (p && p.trim().length >= 4) { s.pin = p.trim(); Store.save(true); toast('PIN updated.', 'good'); }
-      else if (p !== null) toast('Needs at least 4 digits.');
+      if (p === null) return;
+      const pin = String(p).trim();
+      if (pin.length < 4) return toast('Needs at least 4 digits.');
+      try {
+        // The PIN lives in the family account, so it opens this area on every
+        // device at once. Only a device that has never signed in keeps it locally.
+        if (window.Cloud && Cloud.signedIn && Cloud.signedIn()) await Cloud.setPin(pin);
+        else { s.pin = pin; Store.save(true); }
+        toast('PIN updated.', 'good');
+      } catch (e) { toast('Could not update the PIN — ' + (e.message || e), 'bad'); }
     };
-    $('#redoBaseline').onclick = async () => {
+    if ($('#redoBaseline')) $('#redoBaseline').onclick = async () => {
       const yes = await confirmBox('Re-take the starting check?',
-        'She answers the same twelve questions again. The old result is replaced but all her practice history stays.', 'Re-take');
+        'They answer about twenty questions again. The old result is replaced but all the practice history stays.', 'Re-take');
       if (!yes) return;
       const nm = Store.db.profile.name;
       Store.db.profile.baseline = null; Store.save(true);
       UI.retakeBaseline();
       toast('Hand the device to ' + nm + '.');
     };
-    $('#newChild').onclick = newChild;
+    if ($('#newChild')) $('#newChild').onclick = newChild;
+
+    /* -------- the two promises from the agreement: a copy, and a way out */
+    $('#dlEverything').onclick = () => {
+      Vault.download(Store.db);
+      toast('Your copy is downloading.', 'good');
+    };
+    if ($('#delEverything')) $('#delEverything').onclick = async () => {
+      const yes = await confirmBox('Delete everything and leave?',
+        `Your family's record — every kid, every answer, every note — is removed from
+         AraBuzz for good, and this device is wiped clean.<br><br>
+         <b>This cannot be undone.</b> Download a copy first if you want to keep anything.`,
+        'Delete everything');
+      if (!yes) return;
+      const typed = await promptBox('Type DELETE to confirm', 'Just so a stray tap cannot do it.', 'DELETE');
+      if (typed === null) return;
+      if (String(typed).trim().toUpperCase() !== 'DELETE') return toast('Nothing was deleted.');
+      try {
+        if (window.Cloud && Cloud.signedIn && Cloud.signedIn()) {
+          const { error } = await Cloud.rpc('delete_my_family');
+          if (error) throw error;
+          await Cloud.signOut();
+        }
+      } catch (e) {
+        return toast('Could not delete from the server — ' + (e.message || e), 'bad');
+      }
+      try { Store.wipe(); } catch (e) {}
+      location.replace(location.pathname);
+    };
   }
 
   /** Hand AraBuzz to a different child: keep the word lists, clear the person. */
@@ -2123,12 +2009,12 @@ th,td{padding:10px 12px;border:1px solid #E5DDD1;text-align:left}th{background:#
       `Every word list you have uploaded is kept.<br><br>
        <b>${esc(Store.db.profile ? Store.db.profile.name : 'The current child')}'s</b> name, points, level,
        streak, badges, garden, answer history and saved reports will all be cleared.<br><br>
-       This cannot be undone from inside the app — take a backup from <b>Storage</b> first if you want to keep her records.`,
+       This cannot be undone from inside the app — use <b>Download everything</b> in Settings first if you want to keep the records.`,
       'Yes, start fresh');
     if (!yes) return;
 
     const keep = await confirmBox('Keep the word lists?',
-      'Choose <b>Keep</b> to hand over the same weeks she has been practising.<br>Choose <b>Cancel</b> to clear the word lists too and start completely empty.',
+      'Choose <b>Keep</b> to hand over the same weeks they have been practising.<br>Choose <b>Cancel</b> to clear the word lists too and start completely empty.',
       'Keep the word lists');
 
     const db = Store.db;
@@ -2146,5 +2032,5 @@ th,td{padding:10px 12px;border:1px solid #E5DDD1;text-align:left}th{background:#
     UI.startFresh();
   }
 
-  w.Parent = { paint, buildReportPayload, renderReport, wrapReportHTML, generateOnboardingReport };
+  w.Parent = { paint, openUpload, buildReportPayload, renderReport, wrapReportHTML, generateOnboardingReport };
 })(window);

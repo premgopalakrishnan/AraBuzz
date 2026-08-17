@@ -1052,21 +1052,6 @@ body.onboarding > .nav { display: none !important; }
 }
 
 /* While nothing is on screen yet — first paint, buffering, waiting for the
-   network — the maker's mark sits centred like a splash, not stranded at the
-   top of an empty page. The moment any screen becomes active it drops back to
-   being a quiet footer. */
-.app:not(:has(.screen.active)) #madeBy {
-  position: fixed;
-  inset: 0;
-  margin: 0;
-  padding: 0;
-  display: grid;
-  place-content: center;
-  opacity: .85;
-}
-body.onboarding .app #madeBy { display: none; }   /* onboarding has its own branding */
-
-/* While nothing is on screen yet — first paint, buffering, waiting for the
    network — the maker's mark sits centred like a splash on every device, not
    stranded at the top of an empty page. The moment any screen becomes active
    it drops back to being a quiet footer. */
@@ -1082,11 +1067,14 @@ body.onboarding .app #madeBy { display: none; }   /* onboarding has its own bran
 body.onboarding #madeBy { display: none; }   /* onboarding carries its own branding */
 
 /* The one moment the app has nothing to show: a device just signed in on,
-   waiting to be told whose it is. */
+   waiting to be told whose it is. It carries the CoKindle mark itself, so the
+   splash version of #madeBy must get out of the way — a solid opaque cover
+   plus hiding the mark underneath, or the two print on top of each other. */
 .boot-wait {
-  position: fixed; inset: 0; z-index: 200; display: grid; place-items: center;
-  align-content: center; gap: 14px; background: var(--bg);
+  position: fixed; inset: 0; z-index: 300; display: grid; place-items: center;
+  align-content: center; gap: 14px; background: var(--paper);
 }
+body.bootwait #madeBy { display: none !important; }
 .boot-wait p { margin: 0; font-size: .9rem; }
 
 /* --- onboarding: choices, steps, and the one warning that matters -------- */

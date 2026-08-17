@@ -109,7 +109,8 @@
 
       <div class="tabs" id="atabs" style="margin-top:16px">
         ${[['families', 'home', 'Families'], ['invite', 'mail', 'Invite'],
-           ['sheets', 'book', 'Sheets'], ['spend', 'chart', 'Usage']]
+           ['upload', 'upload', 'Add words'], ['sheets', 'book', 'Sheets'],
+           ['spend', 'chart', 'Usage']]
           .map(([k, i, t]) => `<button data-t="${k}" class="${tab === k ? 'on' : ''}">
              ${Icon.icon(i, { size: 16 })} ${t}</button>`).join('')}
       </div>
@@ -120,8 +121,16 @@
       e.target.disabled = true; data = null; await paint(); };
     $$('#atabs button').forEach(b => b.onclick = () => { tab = b.dataset.t; paint(); });
 
-    ({ families: tabFamilies, invite: tabInvite, sheets: tabSheets, spend: tabSpend }[tab] || tabFamilies)();
+    ({ families: tabFamilies, invite: tabInvite, upload: tabUploadHere,
+       sheets: tabSheets, spend: tabSpend }[tab] || tabFamilies)();
     watch();
+  }
+
+  /** Adding a sheet lives here now — the same flow parent.js has always had,
+   *  painted into this console instead of the grown-ups screen. */
+  function tabUploadHere() {
+    if (window.Parent && Parent.openUpload) Parent.openUpload();
+    else $('#atab').innerHTML = '<p class="muted">Not available.</p>';
   }
 
   /* ======================================================================
@@ -135,6 +144,9 @@
   function safeToRepaint() {
     if (document.hidden) return false;
     if (!window.UI || UI.current !== 'admin') return false;
+    // Never repaint over a sheet being read, checked or published — that
+    // work-in-progress lives only on this screen and would be lost.
+    if (tab === 'upload') return false;
     if (document.querySelector('.modal-bg')) return false;
     const a = document.activeElement;
     if (a && (a.tagName === 'INPUT' || a.tagName === 'TEXTAREA' || a.tagName === 'SELECT')

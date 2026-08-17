@@ -542,9 +542,12 @@
       <p class="lead">On the iPad or laptop ${p.they()} will use:</p>
       <ol class="ob-steps">
         <li>Open a browser and go to <b class="ob-addr">${esc(here)}</b></li>
-        <li>Enter <b>the same email you just used</b> — that is what links the device to
-            your family. A link arrives in your inbox; open it on that device.</li>
-        <li>You will land straight in, with ${esc(kid)} already set up. No PIN to redo,
+        <li>Choose <b>sign in</b> and enter <b>the same email you just used</b> — that is
+            what links the device to your family.</li>
+        <li>A <b>6-digit code</b> lands in your email. Read it on this phone, and
+            <b>type it into the iPad or laptop</b>. That device is now yours — nothing
+            needs to arrive on it.</li>
+        <li>It lands straight in, with ${esc(kid)} already set up. No PIN to redo,
             no details to enter again.</li>
         <li><b>On an iPad, add it to the Home Screen</b> — tap Share, then
             <b>Add to Home Screen</b>. Safari deletes saved data for sites that only ever
@@ -553,7 +556,7 @@
       <p class="hint">You can use as many devices as you like. ${p.Cap.their()} progress
          follows ${p.them()}, because it lives in the account rather than the device.</p>
       <button class="btn-primary btn-wide" id="obGo" data-label="Done — carry on">Done — carry on</button>`,
-      { tag: 'Her device' });
+      { tag: 'Another device' });
     $('#obGo').onclick = () => handOver();
   }
 

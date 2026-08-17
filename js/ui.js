@@ -1488,9 +1488,11 @@
        <div class="tiny faint center-text" style="margin-bottom:18px">AraBuzz — a CoKindle Labs initiative</div>
        <span class="loader" style="margin:0 auto"></span>
        <p class="muted center-text">Fetching your details…</p>`);
+    document.body.classList.add('bootwait');   // hides the splash #madeBy underneath
     document.body.appendChild(el);
   }
   function hideBootWait() {
+    document.body.classList.remove('bootwait');
     const el = document.getElementById('bootWait');
     if (el) el.remove();
   }
