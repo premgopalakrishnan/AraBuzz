@@ -229,15 +229,15 @@
          can delete your data and leave at any time.</p>
 
       <div class="field" style="margin-top:20px">
-        <label for="obEmail">Your email</label>
+        <label for="obEmail">Enter your email address to register your account</label>
         <input id="obEmail" type="email" inputmode="email" autocomplete="email"
                placeholder="you@example.com">
       </div>
       <div id="obErr" class="feedback bad" style="display:none"></div>
       <button class="btn-primary btn-wide" id="obGo" data-label="Email me a sign-in code">
         Email me a sign-in code</button>
-      <p class="hint center-text">No password to invent. A six-digit code arrives by
-         email; type it in and you’re in.</p>`,
+      <p class="hint center-text">You’ll confirm it by typing the code we send there —
+         so make sure it’s an email you actively check. No password to invent.</p>`,
       { tag: 'You’ve been invited' });
 
     const go = $('#obGo');
