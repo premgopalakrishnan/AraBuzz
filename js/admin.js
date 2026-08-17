@@ -367,6 +367,17 @@
 
     $('#ivGo').onclick = makeInvite;
     wireCopies();
+    $$('#atab [data-cancel-invite]').forEach(b => b.onclick = async () => {
+      const yes = await window.U.confirmBox('Cancel this invitation?',
+        `${esc(b.dataset.cancelName)}'s code stops working immediately. If they already
+         have the email, its link and code will simply say the invitation isn't valid.
+         You can always invite them again.`, 'Cancel it');
+      if (!yes) return;
+      const { error } = await Cloud.from('invites').delete().eq('id', b.dataset.cancelInvite);
+      if (error) return toast(error.message, 'bad');
+      toast('Invitation cancelled.', 'good');
+      data = null; paint();
+    });
     $$('#atab [data-remail]').forEach(b => b.onclick = async () => {
       const [name, email, code] = b.dataset.remail.split('|');
       b.disabled = true; b.textContent = 'Sending…';
@@ -391,6 +402,7 @@
           ${i.email ? `<button class="btn-quiet btn-s" data-remail="${esc(i.family_name)}|${esc(i.email)}|${esc(i.code)}">Email it again</button>` : ''}
           <button class="btn-quiet btn-s" data-copy="${esc(link)}">Copy link</button>
           <button class="btn-quiet btn-s" data-copy-msg="${esc(i.family_name)}|${esc(link)}">Copy WhatsApp message</button>
+          <button class="btn-quiet btn-s" data-cancel-invite="${i.id}" data-cancel-name="${esc(i.family_name)}">Cancel invite</button>
         </div>
       </div>`;
   }
