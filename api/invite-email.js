@@ -29,13 +29,14 @@ export default async function handler(req, res) {
 
   const inner = `
     <p style="margin:0 0 14px">Hi ${escapeHtml(name)},</p>
-    <p style="margin:0 0 14px">I built a small spelling app for the kids in the class.
-       It takes the weekly Spell Buzz sheet and turns it into game-based practice they
-       genuinely enjoy — to the kids it feels like playing; what they're really doing is
-       training their spellings. Once a week it sends you a short note on what your child
-       is finding tricky, and what's worth helping with.</p>
+    <p style="margin:0 0 14px">I built a small spelling app for the kids. It takes the
+       weekly Spell Buzz sheets shared by the school and turns them into game-based
+       practice they genuinely enjoy — to the kids it feels like playing; what they're
+       really doing is training their spellings. Once a week it sends you a short note on
+       what your child is finding tricky, and what's worth helping with.</p>
     <p style="margin:0 0 20px">It's not a business — I made it for our own kids, and I'm
-       sharing it only with close friends.</p>
+       sharing it only with close friends. And you can delete your data and exit the app
+       anytime you wish.</p>
     <p style="margin:0 0 22px;text-align:center">
       <a href="${link}" style="display:inline-block;background:#B8862F;color:#fff;
          text-decoration:none;padding:13px 30px;border-radius:999px;font-size:16px">
@@ -47,7 +48,7 @@ export default async function handler(req, res) {
     <p style="margin:14px 0 0">— Prem</p>`;
 
   try {
-    await sendEmail(email, `${name}, your kids' class now has a spelling app`, emailShell(inner));
+    await sendEmail(email, `${name}, I made a spelling app for the kids`, emailShell(inner));
     return send(res, 200, { sent: true, to: email });
   } catch (e) {
     return send(res, 502, { error: e.message });

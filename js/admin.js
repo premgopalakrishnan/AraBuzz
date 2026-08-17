@@ -448,11 +448,13 @@
   /** Prem's own words, so he can send it without rewriting it. These are
    *  people he knows, so it opens with their name rather than "Dear family". */
   function inviteMessage(name, link) {
-    return `Hi ${name}! I built a small spelling app for the kids in the class — it takes the ` +
-      `weekly Spell Buzz sheet and turns it into game-based practice they genuinely enjoy. ` +
-      `To the kids it feels like playing; what they're really doing is training their spellings. ` +
-      `Once a week it sends you a short note on what your child is finding tricky.\n\n` +
-      `It's not a business — I made it for our own kids, and I'm sharing it only with close friends.\n\n` +
+    return `Hi ${name}! I built a small spelling app for the kids — it takes the weekly ` +
+      `Spell Buzz sheets shared by the school and turns them into game-based practice they ` +
+      `genuinely enjoy. To the kids it feels like playing; what they're really doing is ` +
+      `training their spellings. Once a week it sends you a short note on what your child ` +
+      `is finding tricky.\n\n` +
+      `It's not a business — I made it for our own kids, and I'm sharing it only with ` +
+      `close friends. And you can delete your data and exit the app anytime you wish.\n\n` +
       `Your link: ${link}\n\n` +
       `It takes about three minutes to set up. Any trouble, message me.\n\n— Prem`;
   }

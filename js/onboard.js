@@ -214,8 +214,8 @@
     panel(`
       <div class="ob-kicker">${esc(inv.invited_by)} invited you</div>
       <h1>Hi ${esc(inv.family_name)}</h1>
-      <p class="lead">AraBuzz turns the weekly Spell Buzz sheets into game-based practice —
-         it feels like playing, but it's really spelling training.</p>
+      <p class="lead">AraBuzz turns the weekly Spell Buzz sheets shared by the school into
+         game-based practice — it feels like playing, but it's really spelling training.</p>
       <ul class="ob-list">
         <li>It starts with a quick five-minute check to see where your child is.</li>
         <li>Then it works out which words and letters they find hard, and practises
@@ -225,7 +225,8 @@
         <li>You get a short note each week on what’s worth helping with.</li>
       </ul>
       <p class="muted small">It’s not a business — Prem made it for his own kids and is
-         sharing it only with close friends. Nobody can see anyone else’s child.</p>
+         sharing it only with close friends. Nobody can see anyone else’s child, and you
+         can delete your data and leave at any time.</p>
 
       <div class="field" style="margin-top:20px">
         <label for="obEmail">Your email</label>
