@@ -606,7 +606,7 @@
      ========================================================================== */
   function askSignIn() {
     panel(`
-      <h1>Welcome back</h1>
+      <h1>Welcome</h1>
       <p class="lead">Already registered? Enter your email and we’ll send you a sign-in
          code. No password to remember.</p>
       <div class="field"><label for="obEmail">Email</label>
