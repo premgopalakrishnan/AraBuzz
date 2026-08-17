@@ -248,7 +248,7 @@ assuming 20xx for two-digit years.`;
               partOfSpeech: { type: 'string', description: 'noun, verb, adjective, or phrase.' },
               clues: {
                 type: 'array', minItems: 4, maxItems: 4,
-                description: 'Four DIFFERENT riddle-style clues a child can solve to reach the word. Each under 20 words, each taking a different angle (what it does / where it is / what happens without it / an everyday example). CRITICAL: never include the word, any part of it, or an obvious root of it.',
+                description: 'Four DIFFERENT riddle-style clues a child can solve to reach the word. Each under 20 words, each taking a different angle (what it does / where it is / what happens without it / an everyday example). Spread them across difficulty: the first almost gives it away, the last is a genuine stretch — different children are at different levels and all four will be used. CRITICAL: never include the word, any part of it, or an obvious root of it.',
                 items: { type: 'string' }
               },
               sentences: {

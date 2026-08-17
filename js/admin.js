@@ -31,7 +31,10 @@
 
   let tab = 'families';
   let data = null;         // the last admin_overview()
+  let dataAt = 0;          // when it was fetched
   let loading = false;
+  let inviteNotice = null; // the result of the last invitation, kept across repaints
+  let watching = false;    // the live-refresh loop, started once
 
   /** modal() gives back a card that already contains its own close button;
    *  everything we write goes inside the body, not over the top of it. */
@@ -56,6 +59,7 @@
       const { data: d, error } = await Cloud.rpc('admin_overview');
       if (error) throw error;
       data = d;
+      dataAt = Date.now();
     } catch (e) {
       console.error('[admin]', e);
       data = null;
@@ -117,6 +121,49 @@
     $$('#atabs button').forEach(b => b.onclick = () => { tab = b.dataset.t; paint(); });
 
     ({ families: tabFamilies, invite: tabInvite, sheets: tabSheets, spend: tabSpend }[tab] || tabFamilies)();
+    watch();
+  }
+
+  /* ======================================================================
+     STAYING FRESH
+     The console re-reads the account every half minute while it is on
+     screen, and the moment the window regains focus — so an invitation
+     being accepted, a child finishing a game, or anything else shows up on
+     its own. It never repaints under your fingers: if a modal is open or
+     you are typing in a field, it waits for the next pass.
+     ====================================================================== */
+  function safeToRepaint() {
+    if (document.hidden) return false;
+    if (!window.UI || UI.current !== 'admin') return false;
+    if (document.querySelector('.modal-bg')) return false;
+    const a = document.activeElement;
+    if (a && (a.tagName === 'INPUT' || a.tagName === 'TEXTAREA' || a.tagName === 'SELECT')
+          && $('#scr-admin') && $('#scr-admin').contains(a)) return false;
+    return true;
+  }
+
+  async function liveCheck() {
+    if (!safeToRepaint()) return;
+    const before = JSON.stringify(data);
+    try {
+      const { data: d, error } = await Cloud.rpc('admin_overview');
+      if (error || !d) return;
+      if (JSON.stringify(d) !== before) {
+        data = d; dataAt = Date.now();
+        if (safeToRepaint()) paint();
+      } else {
+        dataAt = Date.now();
+      }
+    } catch (e) { /* quiet — the next pass will try again */ }
+  }
+
+  function watch() {
+    if (watching) return;
+    watching = true;
+    setInterval(liveCheck, 30000);
+    window.addEventListener('focus', () => {
+      if (Date.now() - dataAt > 10000) liveCheck();
+    });
   }
 
   const families = () => (data && data.families) || [];
@@ -354,7 +401,7 @@
         <div class="field"><label for="ivMail">Their email</label>
           <input id="ivMail" type="email" placeholder="meera@example.com"></div>
         <button class="btn-primary" id="ivGo" data-label="Invite them">Invite them</button>
-        <div id="ivOut" style="margin-top:12px"></div>
+        <div id="ivOut" style="margin-top:12px">${inviteNotice || ''}</div>
       </div>
 
       <div class="card" style="margin-top:14px">
@@ -420,7 +467,7 @@
       const row = await Cloud.createInvite(name, email, null);
       const link = appLink(row.code);
       const mailed = await emailInvite(name, email, row.code);
-      $('#ivOut').innerHTML = `
+      inviteNotice = `
         <div class="feedback ${mailed.ok ? 'good' : 'bad'}">
           <b>${mailed.ok ? `Invitation emailed to ${esc(email)}.` : 'The invitation exists, but the email did not send.'}</b>
           <p class="small" style="margin:6px 0">${mailed.ok
@@ -432,12 +479,14 @@
             <button class="btn-quiet btn-s" data-copy="${esc(link)}">Copy just the link</button>
           </div>
         </div>`;
-      $('#ivFam').value = $('#ivMail').value = '';
-      wireCopies();
+      // repaint with fresh data, so the new invitation is already in the
+      // waiting list below the moment the button finishes
       data = null;
+      await paint();
     } catch (e) {
       toast(e.message || 'Could not make the invitation.', 'bad');
-    } finally { btn.disabled = false; btn.textContent = 'Invite them'; }
+      btn.disabled = false; btn.textContent = 'Invite them';
+    }
   }
 
   /** Every link AraBuzz hands out uses the real address, never vercel.app. */

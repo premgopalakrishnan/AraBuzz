@@ -42,6 +42,7 @@
   const BATCH          = 200;     // rows per request
   const DEBOUNCE_MS    = 4000;    // wait this long after the last change
   const HEARTBEAT_MS   = 60000;   // and try again at least this often
+  const PULL_EVERY_MS  = 300000;  // fresh sheets/children appear within 5 min, no reopen needed
   const BACKOFF_MS     = [4000, 15000, 60000, 300000];
 
   /* A database id looks like this; a local-only one never does. */
@@ -711,13 +712,19 @@
     flush(true);
 
     clearInterval(beat);
-    beat = setInterval(() => { flush(); }, HEARTBEAT_MS);
+    beat = setInterval(() => {
+      flush();
+      // New sheets, new children, new notes appear on their own — nobody
+      // should have to close and reopen the app to see what Prem published.
+      if (Date.now() - state.lastPull > PULL_EVERY_MS) pull();
+    }, HEARTBEAT_MS);
 
     // The three moments worth catching: the wifi coming back, the app being
     // put away, and the app being closed.
-    w.addEventListener('online', () => { fails = 0; flush(true); });
+    w.addEventListener('online', () => { fails = 0; flush(true); pull(); });
     document.addEventListener('visibilitychange', () => {
-      if (document.hidden) flush(true); else { flush(); }
+      if (document.hidden) flush(true);
+      else { flush(); if (Date.now() - state.lastPull > 60000) pull(); }
     });
     w.addEventListener('pagehide', () => { try { S().save(true); saveOutbox(); } catch (e) {} });
 
