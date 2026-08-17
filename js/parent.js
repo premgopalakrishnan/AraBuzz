@@ -1068,7 +1068,7 @@ Reflex = A quick automatic response"></textarea>
     mergeCloudReports().then(changed => { if (changed && tab === 'report') tabReport(); });
     const saved = (Store.db.reports || []).slice().sort((a, b) => b.ts - a.ts);
     const att = Store.db.attempts;
-    const name = Store.db.profile.name;
+    const name = Store.db.profile ? Store.db.profile.name : 'your child';
 
     box.innerHTML = `
       <div class="card">

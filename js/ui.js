@@ -27,7 +27,8 @@
       garden: paintGarden, me: paintMe, howto: paintHowTo, journey: paintJourney,
       who: paintWho, scores: paintScores,
       parent: () => window.Parent.paint(opts),
-      admin:  () => window.Admin.paint(opts)
+      admin:  () => window.Admin.paint(opts),
+      landing: paintLanding
     };
     if (painters[name]) painters[name](opts);
     if (window.Scene) Scene.update();
@@ -78,7 +79,7 @@
 
   function renderNav() {
     const nav = $('#nav');
-    const HIDE_NAV = ['quiz', 'setup', 'parent', 'admin', 'puzzle', 'result', 'who'];
+    const HIDE_NAV = ['quiz', 'setup', 'parent', 'admin', 'landing', 'puzzle', 'result', 'who'];
     if (!Store.db.profile || HIDE_NAV.includes(current)) {
       nav.style.display = 'none'; return;
     }
@@ -1345,6 +1346,37 @@
   /*  PARENT GATE                                                           */
   /* ====================================================================== */
   async function openParentGate() {
+    /* Signed-in families set their PIN during onboarding and it lives in the
+       database, checked by Postgres — that is the one that counts. The local
+       settings PIN is only for the original offline, single-device mode.
+       (Before this check existed, a new parent's grown-ups area was not
+       actually locked on the child's device. It is now.) */
+    if (window.Cloud && Cloud.available() && Cloud.signedIn() && Cloud.pinIsSet()) {
+      const m = modal(`
+        <h2>Grown-ups only</h2>
+        <p class="muted">Enter your PIN.</p>
+        <input type="password" id="pin" data-autofocus inputmode="numeric" placeholder="••••"
+               style="text-align:center;font-size:1.6rem;letter-spacing:.4em">
+        <div class="row center" style="margin-top:14px">
+          <button class="btn-primary btn-block" data-primary id="ok">Unlock</button></div>
+        <p class="tiny faint center-text" style="margin:12px 0 0">Esc or tap outside to go back</p>`);
+      const inp = m.box.querySelector('#pin');
+      const tryPin = async () => {
+        const btn = m.box.querySelector('#ok');
+        btn.disabled = true; btn.textContent = 'Checking…';
+        let ok = false;
+        try { ok = await Cloud.checkPin(inp.value.trim()); } catch (e) {}
+        if (ok) { m.close('ok'); go('parent'); return; }
+        btn.disabled = false; btn.textContent = 'Unlock';
+        inp.value = ''; inp.classList.add('shake');
+        setTimeout(() => inp.classList.remove('shake'), 500);
+        toast('Not quite', 'bad');
+      };
+      m.box.querySelector('#ok').onclick = tryPin;
+      inp.onkeydown = e => { if (e.key === 'Enter') tryPin(); };
+      return;
+    }
+
     const pin = Store.db.settings.pin;
     if (!pin) {
       const m = modal(`
@@ -1394,6 +1426,52 @@
     if (window.Vault && Vault.supported) Vault.checkpoint(Store.db);
   }
 
+  /* ======================================================================
+     THE LANDING — a signed-in grown-up, on a device with no child on it.
+     This screen exists because of a real bug: the admin finished setting his
+     password and was dropped straight into Ara asking "What should I call
+     you?" — the app assumed every device belongs to a child. It doesn't.
+     A parent checking the weekly note on their own phone is the everyday
+     case, and this is their front door.
+     ====================================================================== */
+  function paintLanding() {
+    const s = $('#scr-landing');
+    const me = (window.Cloud && Cloud.whoAmI()) || {};
+    const who = (me.parent && me.parent.full_name) || 'there';
+    const admin = !!me.isAdmin;
+    const hasKids = !!(me.children && me.children.length);
+
+    s.innerHTML = `
+      <div class="card glow" style="max-width:560px;margin:26px auto;text-align:center">
+        <div class="ara-stage ara-bob">${Ara.svg({ level: 1, width: 140, mood: 'happy' })}</div>
+        <h1>Hello, ${esc(who)}</h1>
+        <p class="muted">${admin
+          ? 'You’re signed in as the AraBuzz admin.'
+          : hasKids
+            ? 'You’re signed in. Your child is set up on another device — from here you can read your notes and check progress.'
+            : 'You’re signed in. No child is set up on this device yet.'}</p>
+
+        <div class="col" style="gap:10px;margin-top:18px;align-items:stretch">
+          ${admin ? `
+            <button class="btn-primary btn-xl" id="ldAdmin">${Icon.icon('keys',{size:18})} Open the admin console</button>
+            <button class="btn-quiet" id="ldParent">${Icon.icon('lock',{size:16})} The grown-ups’ area</button>
+            <button class="btn-ghost" id="ldKid">Set up a child to play on this device</button>`
+          : `
+            <button class="btn-primary btn-xl" id="ldParent">${Icon.icon('lock',{size:18})} Open the grown-ups’ area</button>
+            <button class="btn-${hasKids ? 'ghost' : 'quiet'}" id="ldKid">${hasKids
+              ? 'My child will also play on this device'
+              : 'Set up my child on this device'}</button>`}
+        </div>
+        <p class="hint" style="margin-top:14px">${admin
+          ? ''
+          : 'The grown-ups’ area asks for your PIN — the weekly notes live behind it.'}</p>
+      </div>`;
+
+    const a = $('#ldAdmin');   if (a) a.onclick = () => go('admin');
+    const pa = $('#ldParent'); if (pa) pa.onclick = openParentGate;
+    const k = $('#ldKid');     if (k) k.onclick = () => { startFresh(); };
+  }
+
   /* ====================================================================== */
   /*  BOOT                                                                  */
   /* ====================================================================== */
@@ -1423,10 +1501,27 @@
       // Never redraw the screen she is answering a question on.
       if (current === 'quiz' || current === 'puzzle' || current === 'result') return;
       if (current === 'setup' && Store.db.profile) { go('home'); return; }
+      if (current === 'landing') { if (Store.db.profile) go('home'); else paintLanding(); return; }
       renderHud();
       if (window.Scene) Scene.update(true);
       if (REPAINTABLE.includes(current)) go(current);
     } catch (e) { console.warn('refresh after sync', e); }
+  }
+
+  /** Where does a signed-in person land? A child's device goes home; the
+   *  admin's own machine goes to the console; a parent's phone goes to the
+   *  landing, where the grown-ups' area is one tap away. NOBODY is dropped
+   *  into "What should I call you?" unless they chose to set up a child. */
+  function arrive() {
+    const me = window.Cloud && Cloud.whoAmI();
+    if (me && me.isAdmin && window.Onboard && Onboard.onAdminPath && Onboard.onAdminPath()) {
+      history.replaceState({}, '', '/');
+      go('admin');
+      return;
+    }
+    if (Store.db.profile) { go('home'); return; }
+    if (me && me.parent) { go('landing'); return; }
+    go('setup');   // offline / local-only: the original single-device flow
   }
 
   /** Called by Onboard once the grown-up has joined, agreed and set a PIN. */
@@ -1436,7 +1531,7 @@
       if (window.Sync) await Sync.start();
       if (window.Scene) Scene.update(true);
       renderHud();
-      go(Store.db.profile ? 'home' : 'setup');
+      arrive();
     } catch (e) { console.error('afterOnboard', e); }
   }
 
@@ -1523,6 +1618,7 @@
           if (Store.db.profile) Sync.start();
           else { showBootWait(); await Sync.start(); hideBootWait(); }
         }
+        if (!Store.db.profile) { arrive(); return; }
       } catch (e) {
         console.warn('cloud unavailable, carrying on locally', e);
       }
@@ -1548,7 +1644,7 @@
     document.addEventListener('touchstart', primeSpeech, { once: true });
     document.addEventListener('click', primeSpeech, { once: true });
 
-    go(Store.db.profile ? 'home' : 'setup');
+    arrive();
   }
 
   let primed = false;

@@ -269,10 +269,10 @@
     panel(`
       <div class="ob-tick">${window.Icon ? Icon.icon('mail', { size: 40, stroke: 1.4 }) : '✉'}</div>
       <h1>Check your email</h1>
-      <p class="lead">We’ve sent a six-digit code to <b>${esc(email)}</b>.</p>
+      <p class="lead">We’ve sent a sign-in code to <b>${esc(email)}</b>.</p>
       <div class="field"><label for="obCode">Type the code here</label>
-        <input id="obCode" inputmode="numeric" autocomplete="one-time-code" maxlength="8"
-               placeholder="123456" class="ob-pin" style="letter-spacing:.35em;text-align:center;font-size:1.4rem">
+        <input id="obCode" inputmode="numeric" autocomplete="one-time-code" maxlength="10"
+               placeholder="12345678" class="ob-pin" style="letter-spacing:.3em;text-align:center;font-size:1.4rem">
       </div>
       <div id="obErr" class="feedback bad" style="display:none"></div>
       <button class="btn-primary btn-wide" id="obGo" data-label="Sign me in">Sign me in</button>
@@ -282,8 +282,8 @@
 
     const go = $('#obGo');
     const verify = async () => {
-      const codeTyped = $('#obCode').value.trim();
-      if (!/^\d{6}$/.test(codeTyped.replace(/\s/g, ''))) return oops('The code is six digits.');
+      const codeTyped = $('#obCode').value.replace(/\D/g, '');
+      if (codeTyped.length < 6) return oops('Type the whole code from the email.');
       busy(go, true, 'Checking');
       try {
         await Cloud.verifyCode(email, codeTyped);
@@ -337,6 +337,10 @@
         busy(btn, true);
         try {
           await Cloud.acceptInvite(code, name, $('#obMob').value.trim());
+          if (sessionStorage.getItem('arabuzz.preagreed')) {
+            try { await Cloud.recordConsent(name); } catch (e) { console.warn('consent retried later', e); }
+            sessionStorage.removeItem('arabuzz.preagreed');
+          }
           sessionStorage.removeItem('arabuzz.joining');
           sessionStorage.removeItem('arabuzz.invname');
           route();
@@ -370,6 +374,10 @@
       try {
         if (code) await Cloud.acceptInvite(code, name, $('#obMob').value.trim());
         else await Cloud.bootstrapAdmin(name);
+        if (sessionStorage.getItem('arabuzz.preagreed')) {
+          try { await Cloud.recordConsent(name); } catch (e2) { console.warn('consent retried later', e2); }
+          sessionStorage.removeItem('arabuzz.preagreed');
+        }
         sessionStorage.removeItem('arabuzz.joining');
         route();
       } catch (e) {
@@ -382,7 +390,7 @@
   /* ==========================================================================
      3 · What this is, and agreeing to it
      ========================================================================== */
-  function askConsent() {
+  function askConsent(beforeJoining) {
     const C = CONSENT;
     panel(`
       <h1>${esc(C.title)}</h1>
@@ -431,6 +439,12 @@
     go.onclick = async () => {
       if (!box.checked) return;
       busy(go, true);
+      if (beforeJoining) {
+        // Their account doesn't exist yet — remember the agreement and write it
+        // to the record the moment it does (see askName).
+        sessionStorage.setItem('arabuzz.preagreed', '1');
+        return route();
+      }
       try {
         const meNow = Cloud.whoAmI();
         await Cloud.recordConsent(meNow && meNow.parent ? meNow.parent.full_name : null);
@@ -593,13 +607,16 @@
   function askSignIn() {
     panel(`
       <h1>Welcome back</h1>
-      <p class="lead">Enter your email and we’ll send you a six-digit code. No password
-         to remember.</p>
+      <p class="lead">Already registered? Enter your email and we’ll send you a sign-in
+         code. No password to remember.</p>
       <div class="field"><label for="obEmail">Email</label>
         <input id="obEmail" type="email" inputmode="email" autocomplete="email"
                placeholder="you@example.com"></div>
       <div id="obErr" class="feedback bad" style="display:none"></div>
-      <button class="btn-primary btn-wide" id="obGo" data-label="Email me a code">Email me a code</button>`,
+      <button class="btn-primary btn-wide" id="obGo" data-label="Email me a code">Email me a code</button>
+      <p class="hint center-text">Not part of AraBuzz yet? It’s invitation-only — write to
+         <a href="mailto:arabuzz@cokindlelabs.com">arabuzz@cokindlelabs.com</a> and ask to
+         be added.</p>`,
       { tag: 'Sign in', foot: '<a href="#" id="obAdmin" style="color:inherit">Admin sign in</a>' });
 
     const go = $('#obGo');
@@ -700,6 +717,11 @@
     return q || sessionStorage.getItem('arabuzz.joining') || null;
   }
 
+  /** arabuzz.cokindlelabs.com/admin goes straight to the admin's door. */
+  function onAdminPath() {
+    return /^\/admin\/?$/.test(location.pathname);
+  }
+
   async function route() {
     const code = inviteCode();
 
@@ -708,13 +730,20 @@
 
     if (!Cloud.signedIn()) {
       if (code) return showInvite(code);
+      if (onAdminPath()) return askAdminSignIn();
       return askSignIn();
     }
 
     const me = Cloud.whoAmI() || await Cloud.load();
 
-    if (!me || !me.parent)   return askName(code);      // signed in, not yet joined
-    if (!me.hasConsented)    return askConsent();
+    if (!me || !me.parent) {
+      // Nobody should type their details into something they haven't read.
+      // The agreement is shown FIRST; the tick is remembered and recorded the
+      // moment their account exists, a few seconds later.
+      if (!sessionStorage.getItem('arabuzz.preagreed')) return askConsent(true);
+      return askName(code);
+    }
+    if (!me.hasConsented)    return askConsent(false);
     if (!Cloud.pinIsSet())   return askPin();
 
     if (!me.isAdmin && !me.children.length) {
@@ -742,5 +771,5 @@
   }
 
   w.Onboard = { route, needed, close, CONSENT, askSignIn, askAdminSignIn, askConsent, askPin,
-                askDevice, handOver };
+                askDevice, handOver, onAdminPath };
 })(window);
