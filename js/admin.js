@@ -198,6 +198,31 @@
     $$('#atab [data-child]').forEach(b => b.onclick = () => openChild(b.dataset.child, b.dataset.family));
     $$('#atab [data-toggle-family]').forEach(b => b.onclick = () => toggleFamily(b.dataset.toggleFamily, b.dataset.to === '1'));
     $$('#atab [data-toggle-child]').forEach(b => b.onclick = () => toggleChild(b.dataset.toggleChild, b.dataset.to === '1'));
+    $$('#atab [data-delete-family]').forEach(b => b.onclick = () => deleteFamily(b.dataset.deleteFamily, b.dataset.fname));
+  }
+
+  /** Remove a family completely, so a fresh invitation can start it over.
+   *  Different from Switch off, which keeps everything and can be undone. */
+  async function deleteFamily(id, fname) {
+    const yes = await window.U.confirmBox(`Delete ${esc(fname)} for good?`,
+      `Everything this family has — parents, kids, every answer, every note —
+       is removed permanently, and any open invitation for them is cancelled.<br><br>
+       <b>This cannot be undone.</b> If you just want to pause them, use Switch off instead.<br><br>
+       You can invite the same person again afterwards and they start from nothing.`,
+      'Delete for good');
+    if (!yes) return;
+    const typed = await window.U.promptBox('Type DELETE to confirm',
+      `Just so a stray tap cannot remove ${esc(fname)}.`, 'DELETE');
+    if (typed === null) return;
+    if (String(typed).trim().toUpperCase() !== 'DELETE') return window.U.toast('Nothing was deleted.');
+    try {
+      const { error } = await Cloud.rpc('delete_family', { p_family_id: id });
+      if (error) throw error;
+      window.U.toast(fname + ' removed.', 'good');
+      data = null; await paint();
+    } catch (e) {
+      window.U.toast('Could not delete — ' + (e.message || e), 'bad');
+    }
   }
 
   function familyCard(f) {
@@ -216,8 +241,12 @@
           </div>
           ${mine
             ? '<span class="pill honey">your family</span>'
-            : `<button class="btn-quiet btn-s" data-toggle-family="${f.id}" data-to="${f.active ? 0 : 1}">
-                 ${f.active ? 'Switch off' : 'Switch back on'}</button>`}
+            : `<div class="row" style="gap:6px">
+                 <button class="btn-quiet btn-s" data-toggle-family="${f.id}" data-to="${f.active ? 0 : 1}">
+                   ${f.active ? 'Switch off' : 'Switch back on'}</button>
+                 <button class="btn-quiet btn-s" data-delete-family="${f.id}" data-fname="${esc(f.name)}"
+                   style="color:var(--coral-deep)">Delete…</button>
+               </div>`}
         </div>
 
         <div class="row wrap" style="gap:6px;margin:10px 0 4px">
