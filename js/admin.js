@@ -258,15 +258,34 @@
       return;
     }
 
-    const [{ data: prog }, { data: sess }, { data: att }] = await Promise.all([
+    const famId = fam.id || familyId || null;
+    const [{ data: prog }, { data: sess }, { data: att }, { data: shares }] = await Promise.all([
       Cloud.from('progress').select('box, seen, right_count, wrong_count, misspellings, word_id').eq('child_id', childId),
       Cloud.from('sessions').select('ts, kind, label, total, correct, points').eq('child_id', childId).order('ts', { ascending: false }).limit(12),
-      Cloud.from('attempts').select('ts, given, ok, mode, errors, word_id').eq('child_id', childId).order('ts', { ascending: false }).limit(60)
+      Cloud.from('attempts').select('ts, given, ok, mode, errors, word_id').eq('child_id', childId).order('ts', { ascending: false }).limit(60),
+      // the same cost picture the parent's Settings shows them, from the ledger
+      famId ? Cloud.from('api_usage_shares').select('ts, kind, share_cost, share_in_tok, share_out_tok').eq('family_id', famId)
+            : Promise.resolve({ data: [] })
     ]);
 
     const rows = prog || [];
     const wrong = (att || []).filter(a => !a.ok && a.given);
     const p = window.U.pronouns(kid.pronoun);
+
+    /* What this family is costing — sliced exactly the way the parent's own
+       Settings slices it, so "view as" genuinely shows what they see. */
+    const week = Date.now() - 7 * 864e5;
+    const sh = shares || [];
+    const shWeek = sh.filter(x => Date.parse(x.ts) >= week);
+    const sum = (list, f) => list.reduce((a, x) => a + (+x[f] || 0), 0);
+    const cost = {
+      weekCalls: shWeek.length,
+      weekIn: sum(shWeek, 'share_in_tok'),
+      weekOut: sum(shWeek, 'share_out_tok'),
+      weekEst: sum(shWeek, 'share_cost'),
+      allEst: sum(sh, 'share_cost'),
+      allCalls: sh.length
+    };
 
     body(m).innerHTML = `
       <div class="row between wrap" style="gap:8px">
@@ -288,6 +307,16 @@
         <div class="row between"><span class="small">${esc(s.label || s.kind || 'practice')}</span>
         <span class="small faint">${s.correct}/${s.total} · ${window.U.fmtDay(Date.parse(s.ts))}</span></div>`).join('')}</div>`
         : '<p class="muted small">Nothing played yet.</p>'}
+
+      <h4 style="margin:16px 0 6px">What it costs this family</h4>
+      <p class="tiny faint" style="margin:0 0 8px">The same numbers their own Settings
+         page shows them — their share of every AI call, from the ledger.</p>
+      <div class="row wrap" style="gap:6px">
+        <span class="pill honey">${money(cost.weekEst)} this week</span>
+        <span class="pill">${window.U.plural(cost.weekCalls, 'call')} this week</span>
+        <span class="pill sky">${cost.weekIn.toLocaleString()} in / ${cost.weekOut.toLocaleString()} out tokens</span>
+        <span class="pill faint">${money(cost.allEst)} all time · ${window.U.plural(cost.allCalls, 'call')}</span>
+      </div>
 
       <h4 style="margin:16px 0 6px">What ${p.they()} ${p.s('get')} wrong</h4>
       ${wrong.length ? `<div class="list">${wrong.slice(0, 14).map(a => `
