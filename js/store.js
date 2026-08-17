@@ -167,12 +167,19 @@
   /** Lightweight summary for the picker, without unpacking each child. */
   function childList() {
     stashActive();
+    // The account may know a child's name even when this device's slot lost
+    // it — never show "Speller" for a kid the family can name.
+    const me = (window.Cloud && Cloud.whoAmI && Cloud.whoAmI()) || null;
+    const cloudName = id => {
+      const k = me && me.children && me.children.find(x => x.id === id);
+      return k ? k.name : null;
+    };
     return db.children.map(c => {
       const p = c.profile || {};
       const g = c.game || {};
       return {
         id: c.id,
-        name: p.name || 'Speller',
+        name: p.name || cloudName(c.id) || 'Speller',
         emoji: p.emoji || '🦜',
         colour: p.colour || '#E8A33D',
         points: g.points || 0,

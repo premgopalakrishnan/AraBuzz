@@ -452,13 +452,17 @@ label { font-size: .82rem; font-weight: 500; color: var(--ink-soft); display: bl
 .ltile.space { width: 20px; border: none; background: none; box-shadow: none; cursor: default; }
 @media (max-width: 560px) { .ltile { width: 42px; height: 48px; font-size: 1.28rem; } }
 
+/* width/height carry !important because the global text-field rule above
+   (input:not([type=…])…, four :not()s deep) outweighs a single class and was
+   stretching each gap into a full-width row of its own. */
 .gap-input {
-  width: 52px; height: 58px; border-radius: var(--r-s) !important;
+  width: 52px !important; height: 58px !important; flex: none;
+  border-radius: var(--r-s) !important;
   border: 1px dashed var(--gold) !important; background: var(--gold-soft) !important;
   text-align: center; font-size: 1.55rem !important; font-weight: 400; padding: 0 !important;
   font-family: var(--font-body);
 }
-@media (max-width: 560px) { .gap-input { width: 42px; height: 48px; font-size: 1.28rem !important; } }
+@media (max-width: 560px) { .gap-input { width: 42px !important; height: 48px !important; font-size: 1.28rem !important; } }
 
 /* ==========================================================================
    Word Rush

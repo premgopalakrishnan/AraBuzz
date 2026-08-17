@@ -627,6 +627,31 @@
     $$('#atab [data-unpublish]').forEach(b => b.onclick = () => setStatus(b.dataset.unpublish, 'draft'));
     $$('#atab [data-republish]').forEach(b => b.onclick = () => setStatus(b.dataset.republish, 'published'));
     $$('#atab [data-audience]').forEach(b => b.onclick = () => chooseAudience(b.dataset.audience));
+    $$('#atab [data-deldeck]').forEach(b => b.onclick = () => deleteDeck(b.dataset.deldeck, b.dataset.dname));
+  }
+
+  /** Remove a sheet completely — its words with it, everywhere. Meant for
+   *  test sheets and genuine mistakes; a sheet families have practised is
+   *  better withdrawn, which keeps their history. */
+  async function deleteDeck(deckId, dname) {
+    const yes = await window.U.confirmBox(`Delete “${esc(dname)}” for good?`,
+      `The sheet and its words are removed from the database and from every family's
+       app. Practice history recorded against these words goes with them.<br><br>
+       <b>This cannot be undone.</b> If families have already practised this sheet,
+       <b>Withdraw</b> is the kinder option — it hides the sheet but keeps their history.`,
+      'Delete for good');
+    if (!yes) return;
+    try {
+      const { error } = await Cloud.from('decks').delete().eq('id', deckId);
+      if (error) throw error;
+      // this device's local copy of that week goes too
+      Store.db.weeks = Store.db.weeks.filter(k => k.id !== deckId);
+      Store.save(true);
+      toast('Sheet deleted.', 'good');
+      data = null; paint();
+    } catch (e) {
+      toast('Could not delete — ' + (e.message || e), 'bad');
+    }
   }
 
   function deckRow(d) {
@@ -644,6 +669,8 @@
             ${d.status === 'published'
               ? `<button class="btn-quiet btn-s" data-unpublish="${d.id}">Withdraw</button>`
               : `<button class="btn-primary btn-s" data-republish="${d.id}">Publish</button>`}
+            <button class="btn-quiet btn-s" data-deldeck="${d.id}" data-dname="${esc(d.title)}"
+              style="color:var(--coral-deep)">Delete…</button>
           </div>
         </div>
       </div>`;
@@ -684,6 +711,13 @@
       const rows = words.map((x, i) => Sync.wordOut(x, deck.id, i));
       const { error: e2 } = await Cloud.from('words').insert(rows);
       if (e2) throw e2;
+
+      /* This device's local copy is now the published deck — remove the local
+         week AT ONCE so the "Publish" button cannot be pressed a second time
+         (which used to create a duplicate, empty deck). The pull below brings
+         the published copy back with every bit of practice history merged in. */
+      Store.db.weeks = Store.db.weeks.filter(k => k.id !== weekId);
+      Store.save(true);
 
       toast(`${wk.title} published to every family.`, 'good', 3000);
       await Sync.pull();          // merges this device's copy into the published one

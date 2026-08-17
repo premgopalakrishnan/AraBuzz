@@ -16,9 +16,17 @@
     if (name === 'home' && window.ARABUZZ_UPDATE && window.arabuzzTakeUpdate) {
       if (window.arabuzzTakeUpdate()) return;
     }
-    window.U.$$('.screen').forEach(s => s.classList.remove('active'));
     const scr = $('#scr-' + name);
     if (!scr) return;
+    /* Empty the screen being left, not just hide it. Screens keep their HTML
+       in the document, and two screens both containing an id like #quit or
+       #ptab means document.querySelector finds the STALE one — which is how
+       Word Rush's Stop button ended up wired to a dead quiz screen. Every
+       screen repaints in full on entry, so nothing of value is lost. */
+    window.U.$$('.screen').forEach(s => {
+      if (s !== scr && s.classList.contains('active')) s.innerHTML = '';
+      s.classList.remove('active');
+    });
     scr.classList.add('active');
     current = name;
     window.scrollTo({ top: 0, behavior: 'instant' in window ? 'instant' : 'auto' });
@@ -61,16 +69,16 @@
     if (!db.profile) { hud.innerHTML = ''; return; }
     const st = Game.levelProgress(db.game.points);
     const inQuiz = current === 'quiz';
-    const many = (db.children || []).length > 1;
     hud.innerHTML = inQuiz ? '' : `
-      ${many ? `<button class="pill who-chip" id="whoBtn" title="Switch player"
+      <button class="pill who-chip" id="whoBtn" title="Switch player, or add a brother or sister"
           style="--who:${esc((db.profile && db.profile.colour) || '#E8A33D')}">
           ${esc((db.profile && db.profile.emoji) || '🦜')} ${esc(db.profile ? db.profile.name : '')}
-          ${Icon.icon('swap', { size: 14 })}</button>` : ''}
+          ${Icon.icon('swap', { size: 14 })}</button>
       <span class="pill honey" title="Buzz Points">${Icon.icon('star', { size: 15 })} ${db.game.points}</span>
       <span class="pill sky" title="Level">Lv ${st.level}</span>
       <span class="pill coral" title="Day streak">${Icon.icon('flame', { size: 15 })} ${db.game.streakDays}</span>
-      <button class="btn-quiet btn-icon" id="parentBtn" title="Grown-ups">${Icon.icon('lock', { size: 19 })}</button>`;
+      <button class="btn-quiet btn-s" id="parentBtn" title="For parents — PIN needed" style="gap:6px">
+        ${Icon.icon('lock', { size: 16 })} Grown-ups</button>`;
     const pb = $('#parentBtn');
     if (pb) pb.onclick = openParentGate;
     const wb = $('#whoBtn');
@@ -172,12 +180,18 @@
           </div>
           <button class="btn-go btn-xl btn-block" id="go2">I'm ready</button>
         </div>`;
-      $('#go2').onclick = () => { setupState.step = 2; setupState.i = 0; setupState.rows = []; paintSetup(); };
+      $('#go2').onclick = () => {
+        setupState.step = 2; setupState.i = 0; setupState.rows = [];
+        // A fresh mix every sitting — same parts, same difficulty, different
+        // words and a different order, so siblings never sit the same check.
+        setupState.qs = window.U.buildBaseline ? window.U.buildBaseline() : window.U.BASELINE;
+        paintSetup();
+      };
       return;
     }
 
     // step 2 — the baseline itself
-    const B = window.U.BASELINE;
+    const B = setupState.qs || window.U.BASELINE;
     const i = setupState.i;
     if (i >= B.length) { finishSetup(window.U.scoreBaseline(setupState.rows)); return; }
     const item = B[i];
@@ -222,6 +236,7 @@
           <button class="btn-primary btn-xl" id="hear">${Icon.icon('speaker',{size:20})} Hear the word</button>
           <div class="row center" style="gap:8px;margin-top:10px">
             <button class="btn-ghost btn-s" id="slow">${Icon.icon('clock',{size:16})} Slower</button>
+            ${window.U.speedBtn()}
           </div>
         </div>
         <p class="center-text muted small" style="margin:14px 0 4px">${esc(item.meaning)}</p>
@@ -451,6 +466,16 @@
 
   function paintHome() {
     const db = Store.db, s = $('#scr-home');
+    /* No child on this device: the home screen has nobody to greet. The admin
+       belongs in the console, a signed-in parent on the landing, and only a
+       truly blank offline device falls through to the welcome. This is what
+       froze "Back to the app" for the admin — a blank screen mid-crash. */
+    if (!db.profile) {
+      const me = window.Cloud && Cloud.whoAmI();
+      if (me && me.isAdmin) return go('admin');
+      if (me && me.parent) return go('landing');
+      return go('setup');
+    }
     const name = db.profile.name;
     const lv = Game.levelProgress(db.game.points);
     const weeks = db.weeks;
@@ -776,7 +801,9 @@
 
     s.innerHTML = `
       <div class="row between wrap" style="align-items:flex-end">
-        <div><h1 style="margin-bottom:0">${meet ? 'Meet the words' : 'Study'}</h1>
+        <div>
+        <button class="btn-quiet btn-s" id="learnExit" style="margin-bottom:8px">← Home</button>
+        <h1 style="margin-bottom:0">${meet ? 'Meet the words' : 'Study'}</h1>
         <p class="muted small">${meet
           ? 'This week\u2019s new words, saying hello. Look, listen, say each one out loud — nothing to get right or wrong.'
           : 'Look, listen, say it out loud. No marks here.'}</p></div>
@@ -800,10 +827,12 @@
         <div class="row center wrap" style="gap:8px;margin:16px 0">
           <button class="btn-ghost btn-s" id="hear">${Icon.icon('speaker',{size:16})} Hear it</button>
           <button class="btn-ghost btn-s" id="spellOut">${Icon.icon('spell',{size:16})} Spell it to me</button>
+          ${window.U.speedBtn()}
         </div>
 
         <div class="card flat" style="background:var(--honey-soft);border:none;text-align:left">
-          <p style="margin:0"><b>Means:</b> ${esc(wd.kidMeaning || wd.meaning)}</p>
+          <p style="margin:0"><b>Means:</b> ${esc(wd.kidMeaning || wd.meaning)}
+            ${window.U.sayMeaningBtn(wd.meaning || wd.kidMeaning, wd.kidMeaning)}</p>
           ${wd.trickyBit ? `<p style="margin:10px 0 0"><b>Watch out:</b> ${esc(wd.trickyBit)}</p>` : ''}
           ${wd.memoryTrick ? `<p style="margin:10px 0 0"><b>Trick to remember:</b> ${esc(wd.memoryTrick)}</p>` : ''}
           ${wd.sentences && wd.sentences[0] ? `<p style="margin:10px 0 0" class="muted"><i>${esc(wd.sentences[0].replace(/_{3,}/, wd.word))}</i></p>` : ''}
@@ -811,8 +840,8 @@
         </div>
 
         <div class="row center" style="margin-top:18px;gap:10px">
-          <button class="btn-ghost" id="prev">← Back</button>
-          <button class="btn-primary" id="next">${meet && last ? 'That\u2019s everyone! ✓' : 'Next →'}</button>
+          <button class="btn-ghost" id="prev">‹ Previous word</button>
+          <button class="btn-primary" id="next">${meet && last ? 'That\u2019s everyone! ✓' : 'Next word ›'}</button>
         </div>
       </div>
 
@@ -821,6 +850,7 @@
         <button class="btn-go" id="testMe">Test me on these →</button>
       </div>`;
 
+    $('#learnExit').onclick = () => { learnState.meet = false; go('home'); };
     $('#wkSel').onchange = e => { learnState.weekId = e.target.value; learnState.i = 0; paintLearn(); };
     $('#hear').onclick = () => window.U.speak(wd.word);
     $('#spellOut').onclick = () => window.U.spellOut(wd.word);

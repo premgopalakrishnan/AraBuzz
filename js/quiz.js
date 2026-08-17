@@ -169,9 +169,11 @@
           <div class="row center" style="gap:8px;margin-top:10px">
             <button class="btn-ghost btn-s" id="slow">Slower</button>
             <button class="btn-ghost btn-s" id="meaningBtn">What does it mean?</button>
+            ${window.U.speedBtn()}
           </div>
         </div>`
-        : `<p class="center-text" style="font-size:1.2rem;line-height:1.6;margin:6px 0 4px">${esc(q.prompt)}</p>`}
+        : `<p class="center-text" style="font-size:1.2rem;line-height:1.6;margin:6px 0 4px">${esc(q.prompt)}
+             ${window.U.sayMeaningBtn(q.prompt, q.prompt === wd.meaning ? wd.kidMeaning : '')}</p>`}
       <p class="center-text small faint" style="margin:10px 0 14px">${esc(q.sub)}</p>
       <input type="text" class="spell-input" id="ans" placeholder="spell it here">
       <div id="hintBox"></div>`;
@@ -290,7 +292,8 @@
     body.innerHTML = `
       ${q.meta.spelling || q.mode === 'meaning'
         ? `<div class="center-text"><div class="big-word">${esc(q.prompt)}</div></div>`
-        : `<p class="center-text" style="font-size:1.2rem;line-height:1.6">${esc(q.prompt)}</p>`}
+        : `<p class="center-text" style="font-size:1.2rem;line-height:1.6">${esc(q.prompt)}
+             ${window.U.sayMeaningBtn(q.prompt, q.prompt === wd.meaning ? wd.kidMeaning : '')}</p>`}
       <p class="center-text small faint" style="margin:12px 0 16px">${esc(q.sub)}</p>
       <div class="opts" id="opts">
         ${q.options.map((o, i) => `
@@ -299,7 +302,7 @@
           </button>`).join('')}
       </div>`;
     actions.innerHTML = q.mode === 'meaning'
-      ? `<button class="btn-ghost btn-s" id="hearIt">Hear the word</button>` : '';
+      ? `<button class="btn-ghost btn-s" id="hearIt">Hear the word</button> ${window.U.speedBtn()}` : '';
     if ($('#hearIt')) $('#hearIt').onclick = () => window.U.speak(wd.word);
 
     window.U.$$('#opts .opt').forEach(b => b.onclick = () => {
@@ -319,7 +322,8 @@
     const word = wd.word;
     const gaps = q.meta.gaps;
     body.innerHTML = `
-      <p class="center-text" style="font-size:1.05rem;line-height:1.6;margin-bottom:4px">${esc(q.prompt)}</p>
+      <p class="center-text" style="font-size:1.05rem;line-height:1.6;margin-bottom:4px">${esc(q.prompt)}
+        ${window.U.sayMeaningBtn(q.prompt, q.prompt === wd.meaning ? wd.kidMeaning : '')}</p>
       <p class="center-text small faint" style="margin:8px 0 4px">${esc(q.sub)}</p>
       <div class="letters" id="gapRow">
         ${word.split('').map((ch, i) => {
@@ -331,6 +335,7 @@
       </div>`;
     actions.innerHTML = `
       <button class="btn-ghost btn-s" id="hearIt">Hear it</button>
+      ${window.U.speedBtn()}
       <button class="btn-primary btn-xl" id="ok">Check</button>`;
 
     const inputs = window.U.$$('.gap-input');
@@ -364,7 +369,8 @@
     let picked = [];
 
     body.innerHTML = `
-      <p class="center-text" style="font-size:1.05rem;line-height:1.6">${esc(q.prompt)}</p>
+      <p class="center-text" style="font-size:1.05rem;line-height:1.6">${esc(q.prompt)}
+        ${window.U.sayMeaningBtn(q.prompt, q.prompt === wd.meaning ? wd.kidMeaning : '')}</p>
       <p class="center-text small faint" style="margin:8px 0 4px">${esc(q.sub)}</p>
       <div class="letters" id="slots"></div>
       <div style="height:6px"></div>
@@ -421,13 +427,26 @@
     actions.innerHTML = `
       <button class="btn-ghost btn-s" id="clear">Clear</button>
       <button class="btn-ghost btn-s" id="hearIt">Hear it</button>
+      ${window.U.speedBtn()}
       <button class="btn-primary btn-xl" id="ok">Check</button>`;
     $('#clear').onclick = () => { picked = []; paintValues(); };
     $('#hearIt').onclick = () => window.U.speak(wd.word);
     $('#ok').onclick = () => {
-      const built = picked.map(i => tiles[i]).join('');
+      let built = picked.map(i => tiles[i]).join('');
       if (!built) { toast('Tap the letters to build the word.'); return; }
+      /* Two tiles carrying the same letter — a capital E and a small e — are
+         the same letter to a child, so choosing the "other" one is not a
+         mistake. Accept it, and teach the capital rule gently instead. */
+      let capNote = false;
+      if (built !== wd.word && built.toLowerCase() === wd.word.toLowerCase()) {
+        capNote = true; built = wd.word;
+      }
       handleAnswer(q, wd, built, Engine.check(q, built));
+      if (capNote) {
+        const fb = document.querySelector('#scr-quiz #fb');
+        if (fb && fb.firstElementChild) fb.firstElementChild.insertAdjacentHTML('beforeend',
+          `<p class="small" style="margin:8px 0 0">One thing worth knowing: <b>${esc(wd.word[0])}</b> is a capital here because the first letter of a name — or the first word of a sentence — always gets one.</p>`);
+      }
     };
   }
 
@@ -1015,9 +1034,11 @@
      ====================================================================== */
   let rush = null;
 
+  /* Two levels, not three — copying it once and then writing it from memory
+     is enough. Three passes plus slip-backs meant the same word four or five
+     times in a row, which stops feeling like a game. */
   const RUSH_STAGES = [
     { key: 'copy',   label: 'Copy it',     hint: 'Type what you see.' },
-    { key: 'peek',   label: 'Quick peek',  hint: 'Look hard — it disappears in a moment!' },
     { key: 'memory', label: 'From memory', hint: 'No looking. You have got this.' }
   ];
 
@@ -1064,7 +1085,7 @@
 
     const wd = item.wd;
     const stage = RUSH_STAGES[item.stage];
-    const showWord = item.stage === 0 || item.stage === 1;
+    const showWord = item.stage === 0;
     const elapsed = Math.max(1, (Date.now() - rush.started) / 60000);
     const wpm = Math.round((rush.hits / 5) / elapsed);
     const acc = rush.keystrokes ? Math.round(rush.hits / rush.keystrokes * 100) : 100;
@@ -1081,7 +1102,7 @@
       </div>
 
       <h1 style="margin-bottom:2px">Word Rush</h1>
-      <p class="muted small" style="margin-top:0">Clear all three levels on a word and it's yours.</p>
+      <p class="muted small" style="margin-top:0">Copy it once, then write it from memory — two levels and the word is yours.</p>
 
       <div class="card glow" style="text-align:center" id="rushCard">
         <div class="rush-stage">
@@ -1110,6 +1131,7 @@
         <div class="row center wrap" style="gap:8px;margin-top:14px">
           <button class="btn-ghost btn-s" id="say">Say it</button>
           <button class="btn-ghost btn-s" id="spellIt">Spell it to me</button>
+          ${window.U.speedBtn()}
           ${item.stage > 0 ? `<button class="btn-ghost btn-s" id="peek">Show me (costs the combo)</button>` : ''}
           <button class="btn-quiet btn-s" id="skip">Skip this one</button>
         </div>
@@ -1117,18 +1139,19 @@
 
       <div class="rush-queue">
         ${rush.queue.map((q, k) => `<span class="${q.cleared ? 'cleared' : k === rush.at ? 'active' : ''}">
-          ${q.cleared ? ' ' : ''}${esc(q.wd.word)}${q.cleared ? '' : ' · ' + (q.stage + 1) + '/3'}</span>`).join('')}
+          ${q.cleared ? ' ' : ''}${esc(q.wd.word)}${q.cleared ? '' : ' · ' + (q.stage + 1) + '/2'}</span>`).join('')}
       </div>
 
       <p class="center-text small faint" style="margin-top:16px">
         ${rush.cleared} of ${rush.queue.length} words cleared</p>`;
 
-    $('#quit').onclick = confirmQuitRush;
-    $('#say').onclick = () => window.U.speak(wd.word);
-    $('#spellIt').onclick = () => window.U.spellOut(wd.word);
-    $('#skip').onclick = () => { rush.at = (rush.at + 1) % rush.queue.length; rush.typed = ''; paintRush(); };
-    if ($('#hear')) $('#hear').onclick = () => window.U.speak(wd.word);
-    if ($('#peek')) $('#peek').onclick = () => {
+    const el = sel => scr.querySelector(sel);
+    el('#quit').onclick = confirmQuitRush;
+    el('#say').onclick = () => window.U.speak(wd.word);
+    el('#spellIt').onclick = () => window.U.spellOut(wd.word);
+    el('#skip').onclick = () => { rush.at = (rush.at + 1) % rush.queue.length; rush.typed = ''; paintRush(); };
+    if (el('#hear')) el('#hear').onclick = () => window.U.speak(wd.word);
+    if (el('#peek')) el('#peek').onclick = () => {
       rush.combo = 0;
       const t = $('#target') || window.U.el('div');
       toast(wd.word, '', 1600);
@@ -1151,14 +1174,17 @@
     input.onblur = () => { const t = $('#tapHere'); if (t) t.style.borderColor = 'var(--coral)'; };
     input.onfocus = () => { const t = $('#tapHere'); if (t) { t.style.borderColor = 'var(--line)'; t.textContent = 'Keep typing…'; } };
 
-    // stage 2: show it briefly, then take it away
     clearTimeout(rush.peekTimer);
-    if (item.stage === 1) {
-      rush.peekTimer = setTimeout(() => {
-        const t = $('#target'); if (t) t.classList.add('faded');
-      }, 2500);
+    if (item.stage === 1) setTimeout(() => window.U.speak(wd.word), 320);
+    /* The first time a word appears it introduces itself properly — the word,
+       then what it means. Once per word, and only from the sheet's own
+       meaning; nothing is invented. */
+    if (item.stage === 0 && !item.introduced) {
+      item.introduced = true;
+      setTimeout(() => window.U.speak(wd.word, {
+        onend: () => setTimeout(() => window.U.speak(wd.kidMeaning || wd.meaning || '', { rate: 0.92 }), 280)
+      }), 320);
     }
-    if (item.stage === 2) setTimeout(() => window.U.speak(wd.word), 320);
   }
 
   /** Live per-letter echo — green for right, red for wrong, amber on the cursor. */
@@ -1212,7 +1238,7 @@
 
   function rushWordDone(item, ok) {
     const input = $('#rushIn'); if (input) input.value = '';
-    const isRecall = item.stage === 2;
+    const isRecall = item.stage === 1;
 
     if (isRecall) {
       rush.recalls++;
@@ -1225,9 +1251,9 @@
     }
 
     if (ok) {
-      const gain = [4, 7, 14][item.stage] + Math.min(8, Math.floor(rush.combo / 4));
+      const gain = [5, 14][item.stage] + Math.min(8, Math.floor(rush.combo / 4));
       rush.points += gain;
-      window.U.beep(item.stage === 2 ? 'great' : 'good');
+      window.U.beep(item.stage === 1 ? 'great' : 'good');
       window.U.speak(item.wd.word);
       const card = $('#rushCard');
       if (card) {
@@ -1235,7 +1261,7 @@
         floatPoints('+' + gain, r.left + r.width / 2, r.top + 60);
       }
       popBubble();
-      if (item.stage >= 2) {
+      if (item.stage >= 1) {
         item.cleared = true;
         rush.cleared++;
         confetti(40);
@@ -1247,8 +1273,8 @@
       item.slips++;
       rush.combo = 0;
       window.U.beep('bad');
-      // drop back one level rather than to the bottom — never punitive
-      item.stage = Math.max(0, item.stage - 1);
+      // stay on the same level and simply try again — never punitive, and
+      // never the same word five times over
       const card = $('#rushCard');
       if (card) { card.classList.add('shake'); setTimeout(() => card.classList.remove('shake'), 450); }
       toast('Not quite — let’s look at it again', 'bad', 1500);

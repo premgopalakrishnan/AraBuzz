@@ -179,6 +179,14 @@
         <div class="ob-card">${inner}</div>
         ${o.foot ? `<p class="ob-foot">${o.foot}</p>` : ''}
       </div>`;
+    /* Enter should always mean "carry on". Every onboarding card has one
+       obvious primary button; pressing Enter in any of its fields clicks it. */
+    const primary = host.querySelector('.btn-primary, .btn-go');
+    if (primary) host.querySelectorAll('input').forEach(inp => {
+      inp.addEventListener('keydown', e => {
+        if (e.key === 'Enter' && !primary.disabled) { e.preventDefault(); primary.click(); }
+      });
+    });
     return host;
   }
 
@@ -314,19 +322,30 @@
      confirms rather than asks. One tap for almost everyone; a box for the
      person Prem knows as "Chikki" who would rather sign up as Lakshmi.
      ========================================================================== */
-  function askName(code) {
-    const invited = (sessionStorage.getItem('arabuzz.invname') || '').trim();
+  async function askName(code) {
+    let invited = (sessionStorage.getItem('arabuzz.invname') || '').trim();
+
+    /* The email-code sign-in often lands in a fresh tab, where sessionStorage
+       is empty — so ask the invitation itself rather than trusting a note
+       that may not have survived the journey. */
+    if (!invited && code) {
+      try {
+        const inv = await Cloud.peekInvite(code);
+        if (inv && inv.family_name) invited = String(inv.family_name).trim();
+      } catch (e) { /* fine — the plain question below still works */ }
+    }
 
     if (invited) {
       panel(`
         <h1>Do I call you ${esc(invited)}?</h1>
-        <p class="muted">That’s the name on your invitation. It’s how you’ll appear to
-           Prem, and nowhere else.</p>
+        <p class="muted">That’s the name on your invitation — change it below if you’d like.</p>
+        <p class="muted small">This is <b>your</b> grown-up profile, not your kid’s.
+           Your kid introduces themself to Ara later, on their own device.</p>
         <button class="btn-primary btn-wide" id="obYes" data-label="Yes — I’m ${esc(invited)}">
           Yes — I’m ${esc(invited)}</button>
         <div class="field" style="margin-top:18px">
           <label for="obName">Or something else</label>
-          <input id="obName" autocomplete="name" placeholder="What should I call you?"></div>
+          <input id="obName" autocomplete="name" placeholder="The name you'd prefer"></div>
         <div class="field"><label for="obMob">Mobile <span class="faint">(optional)</span></label>
           <input id="obMob" type="tel" inputmode="tel" autocomplete="tel" placeholder="+91"></div>
         <div id="obErr" class="feedback bad" style="display:none"></div>
@@ -347,6 +366,10 @@
         } catch (e) { busy(btn, false); oops(e.message || 'Something went wrong.'); }
       };
       $('#obYes').onclick = () => join(invited, $('#obYes'));
+      $('#obName').oninput = () => {
+        // typing a different name makes "use that instead" the obvious button
+        $('#obGo').classList.toggle('btn-primary', !!$('#obName').value.trim());
+      };
       $('#obGo').onclick = () => {
         const alt = $('#obName').value.trim();
         if (alt.length < 2) return oops('Type the name you’d prefer first.');
@@ -357,7 +380,8 @@
 
     panel(`
       <h1>What should we call you?</h1>
-      <p class="muted">This is how you’ll appear to Prem, and nowhere else.</p>
+      <p class="muted small">Your own name — this is <b>your</b> grown-up profile, not your
+         kid’s. Your kid introduces themself to Ara later.</p>
       <div class="field"><label for="obName">Your name</label>
         <input id="obName" autocomplete="name" placeholder="Meera"></div>
       <div class="field"><label for="obMob">Mobile <span class="faint">(optional)</span></label>

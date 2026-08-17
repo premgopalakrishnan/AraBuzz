@@ -508,6 +508,21 @@
       else db.weeks.unshift(wk);
     });
 
+    /* A local, unpublished week whose words have all been absorbed into a
+       published deck is the SAME sheet wearing its old id. Leaving it in the
+       list showed a second "Publish" button for a sheet already out — one
+       more tap made a duplicate, empty deck. It goes; the published copy
+       carries everything, including the practice history just merged in. */
+    const cloudWeekIds = new Set(decks.map(d => d.id));
+    db.weeks = db.weeks.filter(k => {
+      if (cloudWeekIds.has(k.id) || k.fromCloud || isDbId(k.id)) return true;
+      const ids = k.wordIds || [];
+      if (!ids.length) return false;                        // empty local shell
+      const covered = db.weeks.some(o =>
+        o !== k && cloudWeekIds.has(o.id) && ids.every(id => (o.wordIds || []).includes(id)));
+      return !covered;
+    });
+
     db.weeks.sort((a, b) => (b.no || 0) - (a.no || 0));
     db.weekSeq = Math.max(db.weekSeq || 0, ...db.weeks.map(k => k.no || 0), 0);
     return decks.length;
@@ -545,6 +560,15 @@
         if (kid.avatar) slot.profile.emoji = kid.avatar;
         if (kid.colour) slot.profile.colour = kid.colour;
         if (kid.baseline && !slot.profile.baseline) slot.profile.baseline = kid.baseline;
+        /* The active child lives in the LIVE fields, not the slot — update
+           both, or the next stash writes the old name straight back and the
+           picker shows "Speller" for a child the account knows by name. */
+        if (kid.id === db.activeChildId && db.profile) {
+          db.profile.name = kid.name;
+          db.profile.pronoun = kid.pronoun || db.profile.pronoun || 'they';
+          if (kid.avatar) db.profile.emoji = kid.avatar;
+          if (kid.colour) db.profile.colour = kid.colour;
+        }
       }
     });
 

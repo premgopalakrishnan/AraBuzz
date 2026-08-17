@@ -275,6 +275,61 @@
     } catch (e) { console.warn('speak', e); }
   }
 
+  /* ---- reading speed, choosable right where the speaking happens -------
+     One small button that cycles Slow → Normal → Quick. It writes the choice
+     into settings, so every "Hear it" in the app follows it from then on.
+     The button is bound by delegation — paint the HTML anywhere with
+     U.speedBtn() and it just works, no wiring per screen. */
+  const SPEEDS = [
+    { rate: 0.6,  label: 'Slow' },
+    { rate: 0.85, label: 'Normal' },
+    { rate: 1.15, label: 'Quick' }
+  ];
+  function speedIdx() {
+    const r = (window.Store && Store.db && Store.db.settings.speakRate) || 0.85;
+    let best = 1, gap = 9;
+    SPEEDS.forEach((s, i) => { const g = Math.abs(s.rate - r); if (g < gap) { gap = g; best = i; } });
+    return best;
+  }
+  function speedBtn() {
+    return `<button type="button" class="btn-quiet btn-s" data-rate-toggle
+      title="How fast words are read out">${esc('Voice: ' + SPEEDS[speedIdx()].label)}</button>`;
+  }
+  document.addEventListener('click', e => {
+    const b = e.target && e.target.closest && e.target.closest('[data-rate-toggle]');
+    if (!b) return;
+    const next = SPEEDS[(speedIdx() + 1) % SPEEDS.length];
+    if (window.Store && Store.db) { Store.db.settings.speakRate = next.rate; Store.save(true); }
+    $$('[data-rate-toggle]').forEach(x => { x.textContent = 'Voice: ' + next.label; });
+    speak('The tallest giraffe');           // hear the new speed straight away
+  }, true);
+
+  /* ---- a speaker that reads any text, bound by delegation --------------
+     Paint <button data-say-text="…"> anywhere. Used beside definitions, so a
+     child who cannot read the meaning yet can still hear it — always the
+     school's own words, never invented ones. */
+  document.addEventListener('click', e => {
+    const b = e.target && e.target.closest && e.target.closest('[data-say-text]');
+    if (!b) return;
+    const extra = b.getAttribute('data-say-extra');
+    speak(b.getAttribute('data-say-text'), {
+      rate: 0.9,
+      onend: extra ? () => setTimeout(() => speak('In simple words. ' + extra, { rate: 0.9 }), 300) : null
+    });
+  }, true);
+
+  /** A small speaker button that reads a definition aloud. If the practice
+   *  pack carries a kid-simple version of the same meaning, that follows —
+   *  both come from the sheet's enrichment, neither is made up on the spot. */
+  function sayMeaningBtn(meaning, kidMeaning) {
+    if (!meaning) return '';
+    const extra = (kidMeaning && kidMeaning !== meaning) ? kidMeaning : '';
+    return `<button type="button" class="btn-quiet btn-icon" data-say-text="${esc(meaning)}"
+      ${extra ? `data-say-extra="${esc(extra)}"` : ''}
+      title="Read the meaning out loud" aria-label="Read the meaning out loud">${
+      window.Icon ? Icon.icon('speaker', { size: 16 }) : '🔊'}</button>`;
+  }
+
   /** Say the word, then optionally spell it out slowly, then say it again. */
   function speakWordThen(word, meaning) {
     speak(word, {
@@ -469,6 +524,76 @@
 
   /* The card shown when the check changes gear. Twenty questions of one thing
      is a slog; four short chapters with a breath between them is a game. */
+  /* A second word for every slot — same kind, same probe, same level, so the
+     scoring is identical whichever one a child gets. Two kids sitting the
+     check side by side should not be able to copy, and a re-take should not
+     feel like the same test handed back. */
+  const BASELINE_ALT = [
+    { kind: 'listen', word: 'again', meaning: 'One more time.',
+      probe: 'vowelteam', level: 1 },
+    { kind: 'listen', word: 'animal', meaning: 'A living creature, like a dog or a bird.',
+      probe: 'vowelswap', level: 1 },
+    { kind: 'listen', word: 'suddenly', meaning: 'Quickly, without any warning.',
+      probe: 'doubling', level: 2 },
+    { kind: 'listen', word: 'beginning', meaning: 'The first part of something.',
+      probe: 'doubling', level: 3 },
+    { kind: 'listen', word: 'answer', meaning: 'What you say back when someone asks a question.',
+      probe: 'silent', level: 3 },
+    { kind: 'listen', word: 'embarrass', meaning: 'To make someone feel silly in front of others.',
+      probe: 'doubling', level: 4 },
+
+    { kind: 'spell', word: 'school', meaning: 'The place you go to learn.',
+      probe: 'vowelteam', level: 1 },
+    { kind: 'spell', word: 'favourite', meaning: 'The one you like the most.',
+      probe: 'vowelteam', level: 2 },
+    { kind: 'spell', word: 'definite', meaning: 'Completely certain, with no doubt.',
+      probe: 'vowelswap', level: 3 },
+    { kind: 'spell', word: 'disappoint', meaning: 'To make someone sad because a hope did not come true.',
+      probe: 'doubling', level: 4 },
+
+    { kind: 'spot', word: 'castle', meaning: 'A large old building with strong walls and towers.',
+      probe: 'silent', level: 2, options: ['casle', 'cassle', 'castel'] },
+    { kind: 'spot', word: 'believe', meaning: 'To feel sure that something is true.',
+      probe: 'vowelswap', level: 3, options: ['beleive', 'belive', 'beleave'] },
+    { kind: 'spot', word: 'address', meaning: 'The name of the place where someone lives.',
+      probe: 'doubling', level: 3, options: ['adress', 'addres', 'adres'] },
+    { kind: 'spot', word: 'doubt', meaning: 'The feeling of not being sure.',
+      probe: 'silent', level: 4, options: ['dout', 'dowt', 'doubbt'] },
+    { kind: 'spot', word: 'stomach', meaning: 'The part of your body where food goes.',
+      probe: 'silent', level: 4, options: ['stomack', 'stummach', 'stomache'] },
+
+    { kind: 'meaning', word: 'enormous', meaning: 'Extremely big.',
+      probe: 'vocab', level: 2, options: ['Very quiet and shy.', 'Bright and colourful.', 'Quick to fall asleep.'] },
+    { kind: 'meaning', word: 'furious', meaning: 'Extremely angry.',
+      probe: 'vocab', level: 2, options: ['Very hungry.', 'Full of happiness.', 'Moving in circles.'] },
+    { kind: 'meaning', word: 'transparent', meaning: 'So clear you can see straight through it.',
+      probe: 'vocab', level: 3, options: ['Very heavy to lift.', 'Making a loud noise.', 'Folded many times.'] },
+    { kind: 'meaning', word: 'exhausted', meaning: 'Completely worn out and needing rest.',
+      probe: 'vocab', level: 3, options: ['Very excited.', 'Lost and confused.', 'Extremely wealthy.'] },
+    { kind: 'meaning', word: 'genuine', meaning: 'Real and true — not fake.',
+      probe: 'vocab', level: 4, options: ['Very expensive.', 'Extremely rare.', 'Found in the sea.'] }
+  ];
+
+  /** One fresh 20-question check: every slot flips a coin between its two
+   *  words, then the questions inside each part are shuffled — so no two
+   *  children (and no two sittings) see the same check in the same order,
+   *  while the parts, probes and difficulty stay identical for scoring. */
+  function buildBaseline() {
+    const order = ['listen', 'spell', 'spot', 'meaning'];
+    const out = [];
+    order.forEach(kind => {
+      const a = BASELINE.filter(x => x.kind === kind);
+      const b = BASELINE_ALT.filter(x => x.kind === kind);
+      const picked = a.map((slot, i) => (Math.random() < 0.5 && b[i]) ? b[i] : slot);
+      for (let i = picked.length - 1; i > 0; i--) {          // shuffle inside the part
+        const j = Math.floor(Math.random() * (i + 1));
+        [picked[i], picked[j]] = [picked[j], picked[i]];
+      }
+      out.push(...picked);
+    });
+    return out;
+  }
+
   const BASELINE_KINDS = {
     listen:  { title: 'First: listening ears',
                blurb: 'Ara says a word out loud. Type how you think it’s spelled. Guessing is allowed — guessing is useful!' },
@@ -529,8 +654,9 @@
   w.U = {
     $, $$, el, esc, toast, modal, closeAllModals, confirmBox, promptBox, confetti, floatPoints,
     beep, speak, speakWordThen, spellOut, loadVoices, bestVoice,
+    speedBtn, sayMeaningBtn,
     fmtDate, fmtDay, pct, plural, daysBetween, noAutoCorrect,
     PRONOUNS, pronouns, pronounNote,
-    BASELINE, BASELINE_KINDS, scoreBaseline
+    BASELINE, BASELINE_KINDS, buildBaseline, scoreBaseline
   };
 })(window);

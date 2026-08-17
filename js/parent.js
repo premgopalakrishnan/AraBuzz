@@ -64,6 +64,7 @@
                      : 'Synced safely to your family account')}</p>
         </div>
         <div class="row" style="gap:8px">
+          <span id="syncPill"></span>
           ${admin
             ? `<button class="btn-quiet btn-s" id="goAdmin">${Icon.icon('keys', { size: 15 })} Admin console</button>`
             : ''}
@@ -87,9 +88,33 @@
     const adminBtn = $('#goAdmin');
     if (adminBtn) adminBtn.onclick = () => UI.go('admin');
     window.U.$$('#ptabs button').forEach(b => b.onclick = () => { tab = b.dataset.t; paint(); });
+    paintSyncPill();
 
     ({ about: tabAbout, upload: tabUpload, words: tabWords, progress: tabProgress,
        report: tabReport, settings: tabSettings }[tab] || tabAbout)();
+  }
+
+  /* ------------------------------------------------------------ sync pill
+     The honest answer to "is everything saved?", always visible up here.
+     Green: everything is in the family account. Amber: answers are still on
+     this device, waiting for the internet — closing the browser now would
+     lose them. It re-checks itself while the screen is open. */
+  let syncPillTimer = null;
+  function paintSyncPill() {
+    const el = $('#syncPill');
+    if (!el) { clearInterval(syncPillTimer); syncPillTimer = null; return; }
+    const st = (window.Sync && Sync.status) ? Sync.status() : null;
+    if (!st || !st.live) { el.innerHTML = ''; }
+    else if (st.pending > 0) {
+      el.innerHTML = `<span class="pill honey" title="Still on this device — don't close the browser until this clears">
+        ${window.U.plural(st.pending, 'change')} waiting to sync</span>`;
+    } else {
+      el.innerHTML = `<span class="pill sage" title="Everything is saved in your family account"> All synced</span>`;
+    }
+    if (!syncPillTimer) syncPillTimer = setInterval(() => {
+      if (!$('#syncPill')) { clearInterval(syncPillTimer); syncPillTimer = null; return; }
+      paintSyncPill();
+    }, 8000);
   }
 
   /** The admin console calls this to show the upload flow inside its own
@@ -196,7 +221,7 @@
         <h3>Common questions</h3>
         ${[
           ['Do they need the internet?',
-           'Only now and then. The device connects once to download the latest words and questions, and everything after that — the quizzes, the crosswords, the word searches, the typing game — runs on the device itself. On a plane, in the car, with the wifi off, it all still works. Anything played offline is saved on the device and syncs quietly to your family account the next time it connects.'],
+           'Not all the time. The device needs to connect once to download the latest words and questions — after that, everything runs on the device itself: quizzes, crosswords, word searches, the typing game, all of it, on a plane or in the car with the wifi off. Anything played offline is saved on the device and syncs to your family account the next time it connects. One honest caution: until that sync happens, the new answers exist only on that device — if the browser data is cleared before it reconnects, they are lost. The sync tracker at the top of this screen tells you whether anything is still waiting.'],
           ['Where does the data go?',
            'It stays on the device and in your own private family account — which is what lets progress follow your kid onto any device they sign in on. It is never sold, never shared, and never used to train anything. You can download a copy or delete everything, any time, from Settings.'],
           ['Will they just memorise the quiz?',
@@ -206,7 +231,7 @@
           ['My kid is upset about spelling. Will this make it worse?',
            'It is built the other way round. No timers except in one optional game, no red, no lost points, no leaderboards, and a wrong answer always gets a second try and an explanation. The words they get wrong are described to them as the most useful words in the app — because they are.'],
           ['Can more than one of my kids use it?',
-           'Yes. Kids in the same family can each use AraBuzz — every kid gets their own profile, their own questions and their own badges, all built from the same sheets everyone shares. Just write to us and we will set the extra profile up for you.']
+           'Yes, and you can do it yourself. On the kids\' side of the app, tap the name at the top and choose "Add someone" — the new kid picks their own name and does their own starting check. Every kid gets their own profile, their own questions and their own badges, all built from the same sheets everyone shares.']
         ].map(([q, a]) => `<details style="border-bottom:1px solid var(--line);padding:11px 0">
           <summary style="cursor:pointer;font-weight:600;font-family:var(--font-head)">${esc(q)}</summary>
           <p class="muted small" style="margin:8px 0 0">${esc(a)}</p></details>`).join('')}
@@ -1081,10 +1106,25 @@ Reflex = A quick automatic response"></textarea>
     const att = Store.db.attempts;
     const name = Store.db.profile ? Store.db.profile.name : 'your child';
 
+    /* The starting-point note is promised the moment the first check ends —
+       but it is written over the network, and a dropped connection at that
+       exact minute used to lose it silently, forever. If a baseline exists
+       and its note doesn't, offer to write it now from the same answers. */
+    const bl = Store.db.profile && Store.db.profile.baseline;
+    const missingOnboard = !!bl && !saved.some(r => r.kind === 'onboarding');
+
     box.innerHTML = `
-      <div class="card">
+      ${missingOnboard ? `<div class="card" style="border-color:var(--honey)">
+        <h3 style="margin-top:0">The starting-point note isn't written yet</h3>
+        <p class="muted small">${esc(name)} finished the first check, but the note about it
+           never got written — most likely the connection dropped at that moment. The answers
+           are all still here.</p>
+        <button class="btn-primary btn-s" id="fixOnboard">Write it now</button>
+        <div id="fixOnboardStat"></div>
+      </div>` : ''}
+      <div class="card"${missingOnboard ? ' style="margin-top:14px"' : ''}>
         <h2>Coach Report</h2>
-        <p class="muted">A written report on how ${esc(name)} is really doing — what she's good at,
+        <p class="muted">A written report on how ${esc(name)} is really doing — what they're good at,
            the exact patterns behind their mistakes with their own spellings quoted as evidence, and
            three specific things to do this week. Plain English, not teacher-speak.</p>
         <p class="muted small"><b>Reports are never overwritten.</b> Each one is filed by date and kept,
@@ -1121,6 +1161,18 @@ Reflex = A quick automatic response"></textarea>
 
       <div id="reportOut"></div>`;
 
+    if ($('#fixOnboard')) $('#fixOnboard').onclick = async () => {
+      const btn = $('#fixOnboard'); btn.disabled = true; btn.textContent = 'Writing…';
+      try {
+        await generateOnboardingReport(bl);
+        toast('The starting-point note is ready.', 'good');
+        tabReport();
+      } catch (e) {
+        btn.disabled = false; btn.textContent = 'Write it now';
+        const st = $('#fixOnboardStat');
+        if (st) st.innerHTML = `<p class="small" style="color:var(--coral-deep);margin:8px 0 0">${esc(e.message || e)}</p>`;
+      }
+    };
     $('#genBtn').onclick = generateReport;
     window.U.$$('[data-open]').forEach(b => b.onclick = () => {
       const r = Store.db.reports.find(x => x.id === b.dataset.open);

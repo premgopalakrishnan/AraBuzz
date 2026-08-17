@@ -125,7 +125,12 @@
     navigator.serviceWorker.addEventListener('controllerchange', () => {
       if (!hadController) return;   // first install, not an update — no reload
       window.ARABUZZ_UPDATE = true;
-      const busy = window.UI && (UI.current === 'quiz' || UI.current === 'puzzle' || UI.current === 'result');
+      /* Mid-question is not the only bad moment: a parent halfway through the
+         invitation — reading the agreement, typing a code — must never have
+         the page pulled out from under them either. The update waits for the
+         next quiet screen. */
+      const busy = (window.UI && (UI.current === 'quiz' || UI.current === 'puzzle' || UI.current === 'result'))
+                || document.body.classList.contains('onboarding');
       if (!busy) window.arabuzzTakeUpdate();
     });
 
