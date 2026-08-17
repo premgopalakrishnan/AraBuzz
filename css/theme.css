@@ -1051,6 +1051,36 @@ body.onboarding > .nav { display: none !important; }
   border-color: var(--gold); background: var(--gold-soft); color: var(--gold-deep);
 }
 
+/* While nothing is on screen yet — first paint, buffering, waiting for the
+   network — the maker's mark sits centred like a splash, not stranded at the
+   top of an empty page. The moment any screen becomes active it drops back to
+   being a quiet footer. */
+.app:not(:has(.screen.active)) #madeBy {
+  position: fixed;
+  inset: 0;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  place-content: center;
+  opacity: .85;
+}
+body.onboarding .app #madeBy { display: none; }   /* onboarding has its own branding */
+
+/* While nothing is on screen yet — first paint, buffering, waiting for the
+   network — the maker's mark sits centred like a splash on every device, not
+   stranded at the top of an empty page. The moment any screen becomes active
+   it drops back to being a quiet footer. */
+.app:not(:has(.screen.active)) #madeBy {
+  position: fixed;
+  inset: 0;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  place-content: center;
+  opacity: .85;
+}
+body.onboarding #madeBy { display: none; }   /* onboarding carries its own branding */
+
 /* The one moment the app has nothing to show: a device just signed in on,
    waiting to be told whose it is. */
 .boot-wait {

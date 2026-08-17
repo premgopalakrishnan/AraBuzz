@@ -1484,7 +1484,10 @@
     let el = document.getElementById('bootWait');
     if (el) return;
     el = window.U.el('div', { id: 'bootWait', class: 'boot-wait' },
-      `<span class="loader"></span><p class="muted">Fetching your details…</p>`);
+      `<img src="assets/cokindle-labs.png" alt="CoKindle Labs" style="height:52px;margin:0 auto 4px;display:block;opacity:.85">
+       <div class="tiny faint center-text" style="margin-bottom:18px">AraBuzz — a CoKindle Labs initiative</div>
+       <span class="loader" style="margin:0 auto"></span>
+       <p class="muted center-text">Fetching your details…</p>`);
     document.body.appendChild(el);
   }
   function hideBootWait() {

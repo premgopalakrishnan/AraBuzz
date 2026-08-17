@@ -106,6 +106,12 @@
   if ('serviceWorker' in navigator && location.protocol.startsWith('http')) {
     let reloading = false;
 
+    /* Was this page already governed by a service worker when it loaded?
+       Only then does a takeover mean "a NEW version replaced an old one".
+       On a first visit the worker installs and claims the page — reloading
+       there caused a visible open-flash-reopen. It no longer reloads. */
+    const hadController = !!navigator.serviceWorker.controller;
+
     window.arabuzzTakeUpdate = function () {
       if (reloading || !window.ARABUZZ_UPDATE) return false;
       reloading = true;
@@ -117,6 +123,7 @@
     /* The new service worker has taken over. Everything already loaded into
        this page is the old version, so the page has to be read again. */
     navigator.serviceWorker.addEventListener('controllerchange', () => {
+      if (!hadController) return;   // first install, not an update — no reload
       window.ARABUZZ_UPDATE = true;
       const busy = window.UI && (UI.current === 'quiz' || UI.current === 'puzzle' || UI.current === 'result');
       if (!busy) window.arabuzzTakeUpdate();
