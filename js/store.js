@@ -166,6 +166,15 @@
 
   /** Lightweight summary for the picker, without unpacking each child. */
   function childList() {
+    /* Self-heal: a profile that predates multi-child support lives only in
+       the live fields, with no children[] entry and no activeChildId. Give
+       it one, or the picker shows a nameless "Speller" ghost beside it. */
+    if (db.profile && !db.activeChildId) {
+      const id = uid('c');
+      db.activeChildId = id;
+      db.children.push(packChild(id));
+      save(true);
+    }
     stashActive();
     // The account may know a child's name even when this device's slot lost
     // it — never show "Speller" for a kid the family can name.

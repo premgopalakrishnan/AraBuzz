@@ -648,6 +648,26 @@
       const me = Cloud.whoAmI() || await Cloud.load();
       if (!me || !me.parent) return;
 
+      /* Whose family does the data on this device belong to? If the person
+         now signed in belongs to a DIFFERENT family — a deleted-and-reinvited
+         test family, a fresh start, someone else's phone — everything personal
+         on the device is from a family that no longer owns it. It is wiped
+         before anything is adopted or pushed, or a ghost child from the old
+         family walks straight into the new one. Settings survive; they belong
+         to the device, not the family. */
+      const db0 = S().db;
+      const famId = me.parent.family_id;
+      if (db0.familyId && famId && db0.familyId !== famId) {
+        console.warn('[sync] different family signed in — clearing the old family’s local data');
+        db0.children = []; db0.activeChildId = null; db0.profile = null;
+        db0.progress = {}; db0.attempts = []; db0.sessions = []; db0.reports = [];
+        db0.weeks = []; db0.words = {};
+        db0.game = S().blank().game;
+        outbox = []; saveOutbox(); dirtyProg.clear(); dirtyGame.clear();
+        S().save(true);
+      }
+      if (famId) { db0.familyId = famId; }
+
       adoptChildren(me);
       await pullDecks();
 

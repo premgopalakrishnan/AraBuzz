@@ -8,6 +8,24 @@
 
   const { $, el, esc, toast, modal, confirmBox, promptBox } = window.U;
 
+  /** A model very occasionally hands an array field back as a JSON string
+   *  or a keyed object. Straighten it out rather than crash the whole
+   *  report over it — this is what broke "(r.strengths || []).map". */
+  function toArr(v) {
+    if (Array.isArray(v)) return v;
+    if (typeof v === 'string') {
+      try { const j = JSON.parse(v); if (Array.isArray(j)) return j; } catch (e) {}
+      return [];
+    }
+    if (v && typeof v === 'object') return Object.values(v);
+    return [];
+  }
+  function fixShape(r, arrayKeys) {
+    const out = Object.assign({}, r || {});
+    arrayKeys.forEach(k => { if (out[k] != null && !Array.isArray(out[k])) out[k] = toArr(out[k]); });
+    return out;
+  }
+
   /** Modes where she typed or built the letters herself. */
   const TYPED_MODES = ['spell', 'listen', 'sentence', 'missing', 'jumble', 'crossword', 'rush'];
 
@@ -1076,6 +1094,7 @@ Reflex = A quick automatic response"></textarea>
 
   /** A weekly note arriving as structured data, rendered here. */
   function renderCloudNote(r, pay, row) {
+    r = fixShape(r, ['strengths', 'patterns', 'thisWeek', 'wordsToDrill']);
     const name = Store.db.profile ? Store.db.profile.name : '';
     const inner = `
       <div class="card report">
@@ -1098,62 +1117,54 @@ Reflex = A quick automatic response"></textarea>
     return wrapReportHTML(inner);
   }
 
+  let onboardFixInFlight = false;
+
   function tabReport() {
     const box = $('#ptab');
     // quietly pull anything new from the account, then repaint once
     mergeCloudReports().then(changed => { if (changed && tab === 'report') tabReport(); });
     const saved = (Store.db.reports || []).slice().sort((a, b) => b.ts - a.ts);
-    const att = Store.db.attempts;
     const name = Store.db.profile ? Store.db.profile.name : 'your child';
 
-    /* The starting-point note is promised the moment the first check ends —
-       but it is written over the network, and a dropped connection at that
-       exact minute used to lose it silently, forever. If a baseline exists
-       and its note doesn't, offer to write it now from the same answers. */
+    /* The starting-point note writes itself the moment the first check ends.
+       If the network dropped at that exact minute it never existed — so any
+       visit here quietly writes it from the saved answers. No button, no job
+       for the parent, and it cannot run twice: the moment the note exists the
+       condition is false forever. */
     const bl = Store.db.profile && Store.db.profile.baseline;
     const missingOnboard = !!bl && !saved.some(r => r.kind === 'onboarding');
+    if (missingOnboard && !onboardFixInFlight && API.hasKey()) {
+      onboardFixInFlight = true;
+      generateOnboardingReport(bl)
+        .then(() => { if (tab === 'report') tabReport(); })
+        .catch(e => console.warn('starting-point note retry', e))
+        .finally(() => { onboardFixInFlight = false; });
+    }
 
     box.innerHTML = `
-      ${missingOnboard ? `<div class="card" style="border-color:var(--honey)">
-        <h3 style="margin-top:0">The starting-point note isn't written yet</h3>
-        <p class="muted small">${esc(name)} finished the first check, but the note about it
-           never got written — most likely the connection dropped at that moment. The answers
-           are all still here.</p>
-        <button class="btn-primary btn-s" id="fixOnboard">Write it now</button>
-        <div id="fixOnboardStat"></div>
-      </div>` : ''}
-      <div class="card"${missingOnboard ? ' style="margin-top:14px"' : ''}>
+      <div class="card">
         <h2>Coach Report</h2>
-        <p class="muted">A written report on how ${esc(name)} is really doing — what they're good at,
+        <p class="muted">A written note on how ${esc(name)} is really doing — what they're good at,
            the exact patterns behind their mistakes with their own spellings quoted as evidence, and
            three specific things to do this week. Plain English, not teacher-speak.</p>
-        <p class="muted small"><b>Reports are never overwritten.</b> Each one is filed by date and kept,
+        <p class="muted small"><b>Notes write themselves.</b> The starting-point note arrives right
+           after the first check${missingOnboard ? ' — it is being written now, give it a minute'
+           : ''}, and a fresh note is written about <b>once a week</b>, as long as ${esc(name)} has
+           practised enough since the last one. You get an email when a new one is ready — there is
+           nothing here for you to run.</p>
+        <p class="muted small"><b>Notes are never overwritten.</b> Each one is filed by date and kept,
            so you can open any of them again and watch the shape of their progress change from one to the next.</p>
-        <div class="row wrap" style="gap:10px;margin-top:14px">
-          <select id="rRange" style="width:auto">
-            <option value="14">Last 2 weeks</option>
-            <option value="30" selected>Last month</option>
-            <option value="90">Last 3 months</option>
-            <option value="3650">Everything</option>
-          </select>
-          <button class="btn-primary" id="genBtn" ${att.length < 12 ? 'disabled' : ''}>
-            ${saved.length ? 'Write a new report →' : 'Write the report →'}</button>
-        </div>
-        ${att.length < 12
-          ? `<p class="hint">They need a bit more practice first — about ${12 - att.length} more answers.</p>`
-          : `<p class="hint">One API call, about 30 seconds.${saved.length
-              ? ` The new report will compare itself against ${esc(window.U.fmtDate(saved[0].ts))}.` : ''}</p>`}
         <div id="rStatus"></div>
       </div>
 
       ${saved.length >= 2 ? `<div class="card" style="margin-top:14px">
-        <h3>Progress across your reports</h3>
-        <p class="small muted">Every report you have ever generated, in order.</p>
+        <h3>Progress across the notes</h3>
+        <p class="small muted">Every note so far, in order.</p>
         <div style="margin-top:12px">${reportTrendChart(saved)}</div>
       </div>` : ''}
 
       ${saved.length ? `<div class="card" style="margin-top:14px">
-        <h3>Report archive <span class="pill tiny">${saved.length}</span></h3>
+        <h3>All notes <span class="pill tiny">${saved.length}</span></h3>
         <div id="archive" style="margin-top:10px">
           ${saved.map((r, i) => archiveRow(r, saved[i + 1])).join('')}
         </div>
@@ -1161,19 +1172,7 @@ Reflex = A quick automatic response"></textarea>
 
       <div id="reportOut"></div>`;
 
-    if ($('#fixOnboard')) $('#fixOnboard').onclick = async () => {
-      const btn = $('#fixOnboard'); btn.disabled = true; btn.textContent = 'Writing…';
-      try {
-        await generateOnboardingReport(bl);
-        toast('The starting-point note is ready.', 'good');
-        tabReport();
-      } catch (e) {
-        btn.disabled = false; btn.textContent = 'Write it now';
-        const st = $('#fixOnboardStat');
-        if (st) st.innerHTML = `<p class="small" style="color:var(--coral-deep);margin:8px 0 0">${esc(e.message || e)}</p>`;
-      }
-    };
-    $('#genBtn').onclick = generateReport;
+    if ($('#genBtn')) $('#genBtn').onclick = generateReport;
     window.U.$$('[data-open]').forEach(b => b.onclick = () => {
       const r = Store.db.reports.find(x => x.id === b.dataset.open);
       if (!r) return;
@@ -1501,6 +1500,7 @@ Reflex = A quick automatic response"></textarea>
   }
 
   function renderOnboardReport(r, name) {
+    r = fixShape(r, ['strengths', 'focus']);
     const inner = `
       <div class="card report">
         <div class="kicker">AraBuzz · Starting point · ${esc(window.U.fmtDate(Date.now()))}</div>
@@ -1571,6 +1571,7 @@ Reflex = A quick automatic response"></textarea>
   const SEV = { watch: ['', 'Keep an eye on it', 'plum'], 'work-on': ['', 'Worth working on', 'honey'], urgent: ['', 'Needs attention', 'coral'] };
 
   function renderReport(r, payload, days, extra) {
+    r = fixShape(r, ['strengths', 'patterns', 'thisWeek', 'wordsToDrill']);
     const name = Store.db.profile.name;
     const o = payload.overall, e = payload.engagement;
     const ex = extra || {};

@@ -180,6 +180,7 @@
           </div>
           <button class="btn-go btn-xl btn-block" id="go2">I'm ready</button>
         </div>`;
+      setTimeout(() => { const b = $('#go2'); if (b) b.focus(); }, 80);     // Enter presses it
       $('#go2').onclick = () => {
         setupState.step = 2; setupState.i = 0; setupState.rows = [];
         // A fresh mix every sitting — same parts, same difficulty, different
@@ -211,6 +212,7 @@
           <button class="btn-go btn-xl btn-block" id="kindGo" style="margin-top:14px">Ready →</button>
         </div>`;
       $('#kindGo').onclick = () => { setupState.announced = item.kind; paintSetup(); };
+      setTimeout(() => { const b = $('#kindGo'); if (b) b.focus(); }, 80);   // Enter presses it
       return;
     }
 
@@ -364,13 +366,25 @@
     const prod = baseline.produceScore == null ? null : Math.round(baseline.produceScore * 100);
     const recog = baseline.recogniseScore == null ? null : Math.round(baseline.recogniseScore * 100);
 
+    /* Every branch below is earned by the numbers, never assumed. A child who
+       got everything right must hear that — not a canned line about the words
+       they "missed". */
+    const acc = baseline.total ? baseline.correct / baseline.total : 0;
+    const missed = baseline.total - baseline.correct;
     const insight =
-      baseline.gap === 'recognises-but-cannot-produce'
+      acc === 1
+        ? `Every single one right — all ${baseline.total} of them. That's genuinely rare. The
+           school sheets will bring words that stretch even you, and that's where the fun starts.`
+      : acc >= 0.9
+        ? `${missed === 1 ? 'Only one slipped past you' : 'Only ' + missed + ' slipped past you'} —
+           that's a very strong start. We'll aim the practice at exactly ${missed === 1 ? 'that kind of word' : 'those kinds of words'},
+           and the rest stays out of your way.`
+      : baseline.gap === 'recognises-but-cannot-produce'
         ? `Here's the interesting bit: when I showed you spellings, you picked the right one
            <b>${recog}%</b> of the time — but when you had to write it yourself, <b>${prod}%</b>.
            That means you already <i>know</i> what these words look like. Getting them out of your
            head and onto the page is the part we'll practise.`
-      : phon >= 50
+      : (missed > 0 && phon >= 50)
         ? `Most of the ones you missed, you spelled <b>the way they sound</b> — so your ears are
            excellent. We just need to teach your eyes to remember the shape of the word too.
            That's exactly what I'm for.`
@@ -393,6 +407,7 @@
         <button class="btn-primary btn-xl btn-block" id="done">Take me to AraBuzz →</button>
       </div>`;
     $('#done').onclick = () => { go('journey', { first: true }); confetti(70); };
+    setTimeout(() => { const b = $('#done'); if (b) b.focus(); }, 120);      // Enter presses it
   }
 
   /* ======================================================================
@@ -1489,8 +1504,8 @@
           : `
             <button class="btn-primary btn-xl" id="ldParent">${Icon.icon('lock',{size:18})} Open the grown-ups’ area</button>
             <button class="btn-${hasKids ? 'ghost' : 'quiet'}" id="ldKid">${hasKids
-              ? 'My child will also play on this device'
-              : 'Set up my child on this device'}</button>`}
+              ? 'My kid will also use this device'
+              : 'Set up my kid on this device'}</button>`}
         </div>
         <p class="hint" style="margin-top:14px">${admin
           ? ''
@@ -1499,7 +1514,19 @@
 
     const a = $('#ldAdmin');   if (a) a.onclick = () => go('admin');
     const pa = $('#ldParent'); if (pa) pa.onclick = openParentGate;
-    const k = $('#ldKid');     if (k) k.onclick = () => { startFresh(); };
+    /* A kid who already exists on the account must NOT be created again —
+       fetch them onto this device and carry on. Only a family with no kids
+       yet goes through the welcome. */
+    const k = $('#ldKid');
+    if (k) k.onclick = async () => {
+      if (hasKids && window.Sync) {
+        showBootWait();
+        try { await Sync.pull({ deep: true }); } catch (e) { console.warn(e); }
+        hideBootWait();
+        if (Store.db.profile) { go('home'); return; }
+      }
+      startFresh();
+    };
   }
 
   /* ====================================================================== */
@@ -1535,7 +1562,7 @@
     try {
       // Never redraw the screen she is answering a question on.
       if (current === 'quiz' || current === 'puzzle' || current === 'result') return;
-      if (current === 'setup' && Store.db.profile) { go('home'); return; }
+      if (current === 'setup' && Store.db.profile && setupState.step === 0) { go('home'); return; }
       if (current === 'landing') { if (Store.db.profile) go('home'); else paintLanding(); return; }
       renderHud();
       if (window.Scene) Scene.update(true);
@@ -1627,7 +1654,7 @@
     }
 
     $('#brandLogo').innerHTML = LOGO_SVG;
-    $('#brandBtn').onclick = () => go(Store.db.profile ? 'home' : 'setup');
+    $('#brandBtn').onclick = () => go('home');   // home routes each role to the right place
 
     // Night is the default: the garden is lit, and everything around it steps
     // back so the picture is the brightest thing on the screen.
