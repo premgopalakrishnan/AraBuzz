@@ -358,13 +358,20 @@ itself in the clues. Clues must be solvable, never vague.`;
   };
 
   async function topUp(items) {
-    // items: [{word, meaning, existingClues:[], existingMisspellings:[]}]
+    // items: [{word, meaning, existingClues:[], existingMisspellings:[], childWrote:[]}]
+    // childWrote is THIS child's own wrong attempts at the word — the fresh
+    // material is aimed at exactly what this child confuses, which is as
+    // custom as a question can get without spending a call per child.
     const list = items.map(x =>
-      `- ${x.word} :: ${x.meaning}\n    already used clues: ${(x.existingClues || []).join(' | ') || 'none'}\n    already used misspellings: ${(x.existingMisspellings || []).join(', ') || 'none'}`
+      `- ${x.word} :: ${x.meaning}\n    already used clues: ${(x.existingClues || []).join(' | ') || 'none'}\n    already used misspellings: ${(x.existingMisspellings || []).join(', ') || 'none'}\n    this child's own wrong attempts: ${(x.childWrote || []).join(', ') || 'none recorded'}`
     ).join('\n');
     const content = [{
       type: 'text',
-      text: `These words have run out of fresh practice material. Produce NEW variations that do not repeat what is already listed.\n\n${list}`
+      text: `These words have run out of fresh practice material for one particular child. ` +
+        `Produce NEW variations that do not repeat what is already listed — and where the ` +
+        `child's own wrong attempts are shown, aim at them: new misspelling options should ` +
+        `include the kinds of confusion THIS child actually makes, and at least one new clue ` +
+        `should quietly rehearse the exact spot they get wrong.\n\n${list}`
     }];
     const out = await call('top-up', {
       system: ENRICH_SYSTEM, content, tool: TOPUP_TOOL,

@@ -19,8 +19,8 @@
 
 import { whoIs, askClaude, rpcAsUser, serviceCount, ALLOWED_MODELS, send } from './_lib.js';
 
-const ADMIN_JOBS  = new Set(['read-deck', 'enrich', 'top-up', 'topic-list']);
-const PARENT_JOBS = new Set(['coach-report', 'onboarding-report', 'memory-tricks', 'test']);
+const ADMIN_JOBS  = new Set(['read-deck', 'enrich', 'topic-list']);
+const PARENT_JOBS = new Set(['coach-report', 'onboarding-report', 'memory-tricks', 'top-up', 'test']);
 
 const MAX_TOKENS_CEILING = 24000;
 const FAMILY_CALLS_PER_DAY = 40;

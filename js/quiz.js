@@ -773,11 +773,15 @@
     const need = Engine.needTopUp(pool, 10);
     if (need.length < 3) return;                 // batch it — don't call for one word
     try {
-      const items = need.map(wd => ({
-        word: wd.word, meaning: wd.meaning,
-        existingClues: (wd.clues || []).slice(-4),
-        existingMisspellings: (wd.misspellings || []).slice(-6)
-      }));
+      const items = need.map(wd => {
+        const pr = Store.db.progress[wd.id] || {};
+        return {
+          word: wd.word, meaning: wd.meaning,
+          existingClues: (wd.clues || []).slice(-4),
+          existingMisspellings: (wd.misspellings || []).slice(-6),
+          childWrote: (pr.misspellings || []).slice(-5)   // their own errors, this child only
+        };
+      });
       const packs = await API.topUp(items);
       packs.forEach(p => {
         const wd = Store.allWords().find(x => Store.wordKey(x.word) === Store.wordKey(p.word));
