@@ -144,6 +144,7 @@
   function familyCard(f) {
     const parents = f.parents || [];
     const kids = f.children || [];
+    const mine = parents.some(p => p.role === 'admin');
     return `
       <div class="card" style="margin-top:14px;${f.active ? '' : 'opacity:.6'}">
         <div class="row between wrap" style="gap:8px">
@@ -154,8 +155,10 @@
               ${parents.map(p => esc(p.name) + (p.email ? ` &lt;${esc(p.email)}&gt;` : '')).join(' · ') || 'no parent yet'}
             </p>
           </div>
-          <button class="btn-quiet btn-s" data-toggle-family="${f.id}" data-to="${f.active ? 0 : 1}">
-            ${f.active ? 'Switch off' : 'Switch back on'}</button>
+          ${mine
+            ? '<span class="pill honey">your family</span>'
+            : `<button class="btn-quiet btn-s" data-toggle-family="${f.id}" data-to="${f.active ? 0 : 1}">
+                 ${f.active ? 'Switch off' : 'Switch back on'}</button>`}
         </div>
 
         <div class="row wrap" style="gap:6px;margin:10px 0 4px">
