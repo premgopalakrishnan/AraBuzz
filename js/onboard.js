@@ -493,7 +493,7 @@
      ========================================================================== */
   function askPin() {
     panel(`
-      <h1>Choose a 4-digit PIN</h1>
+      <h1>Choose a PIN</h1>
       <p class="lead">This keeps the grown-ups’ area — the weekly notes and settings —
          out of your child’s hands. It is not your password; it is a lock on a door
          inside the app.</p>

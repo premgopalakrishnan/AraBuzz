@@ -524,7 +524,7 @@ Anything you notice, just message me."></textarea></div>
     /* The PIN first. One PIN — the admin's own — gates looking at ANY child.
        An unattended laptop with the console open must not be enough. */
     const pin = await window.U.promptBox('Your PIN',
-      'Looking at a child\u2019s data needs your PIN, every time.', '\u2022\u2022\u2022\u2022', 'password');
+      'Looking at a child\u2019s data needs your PIN, every time.', '\u2022\u2022\u2022\u2022\u2022\u2022', 'password');
     if (!pin) return;
     let pinOk = false;
     try { pinOk = await Cloud.checkPin(String(pin).trim()); } catch (e) {}

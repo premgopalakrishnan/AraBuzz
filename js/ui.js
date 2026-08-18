@@ -1469,12 +1469,12 @@
     if (!pin) {
       const m = modal(`
         <h2>Grown-ups</h2>
-        <p class="muted">Set a 4-digit PIN so this area stays yours. You'll need it to upload
+        <p class="muted">Set a PIN — 4 to 6 digits — so this area stays yours. You'll need it to upload
            word lists and see the reports.</p>
         <div class="field"><label>Choose a PIN</label>
-          <input type="number" id="p1" inputmode="numeric" placeholder="4 digits" maxlength="6"></div>
+          <input type="password" id="p1" inputmode="numeric" placeholder="••••••" maxlength="6"></div>
         <div class="field"><label>Type it again</label>
-          <input type="number" id="p2" inputmode="numeric" placeholder="4 digits" maxlength="6"></div>
+          <input type="password" id="p2" inputmode="numeric" placeholder="••••••" maxlength="6"></div>
         <div class="row center"><button class="btn-primary btn-block" data-primary id="setPin">Set PIN</button></div>
         <p class="hint">Forgotten it later? It can be cleared from the backup file, so keep that safe.
            Esc or tap outside to cancel.</p>`);
