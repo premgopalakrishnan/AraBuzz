@@ -493,10 +493,10 @@
          inside the app.</p>
       <div class="field"><label for="obPin">PIN</label>
         <input id="obPin" type="password" inputmode="numeric" autocomplete="new-password"
-               maxlength="6" placeholder="••••" class="ob-pin"></div>
+               maxlength="6" placeholder="••••••" class="ob-pin"></div>
       <div class="field"><label for="obPin2">Again, to be sure</label>
         <input id="obPin2" type="password" inputmode="numeric" autocomplete="new-password"
-               maxlength="6" placeholder="••••" class="ob-pin"></div>
+               maxlength="6" placeholder="••••••" class="ob-pin"></div>
       <div id="obErr" class="feedback bad" style="display:none"></div>
       <button class="btn-primary btn-wide" id="obGo" data-label="Set my PIN">Set my PIN</button>
       <p class="hint center-text">Four to six digits. Pick something your child won’t
@@ -575,9 +575,9 @@
             needs to arrive on it.</li>
         <li>It lands straight in, with ${esc(kid)} already set up. No PIN to redo,
             no details to enter again.</li>
-        <li><b>On an iPad, add it to the Home Screen</b> — tap Share, then
-            <b>Add to Home Screen</b>. Safari deletes saved data for sites that only ever
-            live in a tab, so this step is not optional.</li>
+        <li><b>Install it as an app on that device</b> — one tap to open every time,
+            and the saved words stay safe.
+            <a href="#" id="obInstallHow"><b>How to install it \u2192</b></a></li>
       </ol>
       <p class="hint">You can use as many devices as you like. ${p.Cap.their()} progress
          follows ${p.them()}, because it lives in the account rather than the device.</p>
@@ -586,6 +586,79 @@
       { tag: 'Another device' });
     $('#obGo').onclick = () => handOver();
     $('#obBack').onclick = () => askDevice();
+    $('#obInstallHow').onclick = (e) => { e.preventDefault(); installGuide(() => otherDevice(kid, here, p)); };
+  }
+
+  /** How to put AraBuzz on the home screen, browser by browser. Reached from
+   *  the hand-over and other-device screens; `backTo` returns the parent to
+   *  exactly where they were. Where the browser offers a REAL install prompt
+   *  (Chrome, Edge), a one-tap Install button appears above the steps. */
+  function installGuide(backTo) {
+    const here = ((window.CONFIG && CONFIG.APP_URL) || location.origin).replace(/^https?:\/\//, '');
+    const canPrompt = !!window.ARABUZZ_INSTALL;
+    const B = [
+      ['iPhone & iPad — Safari', [
+        `Open <b>${esc(here)}</b> in <b>Safari</b> (it has to be Safari).`,
+        `Tap the <b>Share</b> button — the square with the arrow.`,
+        `Scroll down and tap <b>Add to Home Screen</b>, then <b>Add</b>.`
+      ]],
+      ['Android — Chrome', [
+        `Open <b>${esc(here)}</b> in Chrome.`,
+        `Tap the <b>⋮</b> menu at the top right.`,
+        `Tap <b>Add to Home screen</b> (or <b>Install app</b>), then <b>Install</b>.`
+      ]],
+      ['Android — Samsung Internet', [
+        `Open <b>${esc(here)}</b>.`,
+        `Tap the <b>≡</b> menu, then <b>Add page to</b>.`,
+        `Choose <b>Home screen</b>, then <b>Add</b>.`
+      ]],
+      ['Computer — Chrome', [
+        `Open <b>${esc(here)}</b>.`,
+        `Click the small <b>install icon</b> at the right end of the address bar
+         (a screen with a down arrow), then <b>Install</b>.`,
+        `No icon? Menu <b>⋮</b> → <b>Cast, save and share</b> → <b>Install page as app</b>.`
+      ]],
+      ['Computer — Edge', [
+        `Open <b>${esc(here)}</b>.`,
+        `Menu <b>…</b> at the top right → <b>Apps</b> → <b>Install this site as an app</b>.`
+      ]],
+      ['Firefox', [
+        `On Android: tap the <b>⋮</b> menu, then <b>Install</b> (or <b>Add to Home screen</b>).`,
+        `On a computer, Firefox can't install web apps — use Chrome or Edge for this one step.`
+      ]]
+    ];
+    panel(`
+      <h1>Put AraBuzz on the home screen</h1>
+      <p class="lead">One tap to open, a proper app icon, and the device keeps its saved
+         words safe. Do this on the device your kid will actually use.</p>
+      ${canPrompt ? `
+        <button class="btn-primary btn-wide" id="obInstallNow" data-label="Install AraBuzz on this device">
+          Install AraBuzz on this device</button>
+        <p class="hint center-text">This browser can install it for you — one tap, done.
+           The steps below are for other devices.</p>` : ''}
+      ${B.map(([name, steps]) => `
+        <details style="border-bottom:1px solid var(--line);padding:11px 0">
+          <summary style="cursor:pointer;font-weight:600">${name}</summary>
+          <ol class="ob-steps" style="margin-top:10px">${steps.map(t => `<li>${t}</li>`).join('')}</ol>
+        </details>`).join('')}
+      <p class="hint">Why it matters on an iPad: Safari can delete saved data for sites that
+         only ever live in a browser tab. An installed AraBuzz is safe from that.</p>
+      <button class="btn-quiet btn-wide" id="obBackBtn" style="margin-top:14px">← Back</button>`,
+      { tag: 'Install the app' });
+
+    if (canPrompt) $('#obInstallNow').onclick = async () => {
+      const ev = window.ARABUZZ_INSTALL;
+      if (!ev) return;
+      try {
+        ev.prompt();
+        const r = await ev.userChoice;
+        if (r && r.outcome === 'accepted') {
+          window.ARABUZZ_INSTALL = null;
+          window.U && U.toast && U.toast('Installed — look for the AraBuzz icon.', 'good');
+        }
+      } catch (e) { /* the written steps below still stand */ }
+    };
+    $('#obBackBtn').onclick = () => (backTo || handOver)();
   }
 
   /** The last screen a grown-up sees. Its whole job is the sentence about not
@@ -613,6 +686,13 @@
          with anyone else. And the moment the check finishes, your starting-point note
          is written — it will be waiting behind your PIN, under <b>Coach Report</b>.</p>
 
+      <div class="ob-warn" style="border-color:var(--honey)">
+        <b>One thing worth doing first: install AraBuzz on the kid\u2019s device.</b>
+        <p>It becomes a real app icon — one tap to open every time, no address to type,
+           and the device keeps its saved words safe.
+           <a href="#" id="obInstallHow"><b>How to install it \u2192</b></a></p>
+      </div>
+
       <button class="btn-primary btn-wide" id="obGo" data-label="I’ve handed it over">
         I’ve handed it over</button>
       <button class="btn-quiet btn-wide" id="obBackBtn" style="margin-top:10px">← Back</button>`,
@@ -620,6 +700,7 @@
 
     $('#obGo').onclick = () => finish();
     $('#obBackBtn').onclick = () => askDevice();
+    $('#obInstallHow').onclick = (e) => { e.preventDefault(); installGuide(handOver); };
   }
 
   function finish() {
@@ -804,5 +885,5 @@
   }
 
   w.Onboard = { route, needed, close, CONSENT, askSignIn, askAdminSignIn, askConsent, askPin,
-                askDevice, handOver, onAdminPath };
+                askDevice, handOver, installGuide, onAdminPath };
 })(window);

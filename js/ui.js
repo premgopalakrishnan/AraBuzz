@@ -1443,7 +1443,7 @@
       const m = modal(`
         <h2>Grown-ups only</h2>
         <p class="muted">Enter your PIN.</p>
-        <input type="password" id="pin" data-autofocus inputmode="numeric" placeholder="••••"
+        <input type="password" id="pin" data-autofocus inputmode="numeric" maxlength="6" placeholder="••••••"
                style="text-align:center;font-size:1.6rem;letter-spacing:.4em">
         <div class="row center" style="margin-top:14px">
           <button class="btn-primary btn-block" data-primary id="ok">Unlock</button></div>
@@ -1481,7 +1481,7 @@
       m.box.querySelector('#setPin').onclick = () => {
         const a = m.box.querySelector('#p1').value.trim();
         const b = m.box.querySelector('#p2').value.trim();
-        if (a.length < 4) return toast('Use at least 4 digits');
+        if (!/^[0-9]{4,6}$/.test(a)) return toast('4 to 6 digits, numbers only');
         if (a !== b) return toast('The two PINs don\'t match');
         Store.db.settings.pin = a; Store.save(true);
         m.close(); go('parent');
@@ -1491,7 +1491,7 @@
     const m = modal(`
       <h2>Grown-ups only</h2>
       <p class="muted">Enter your PIN.</p>
-      <input type="password" id="pin" data-autofocus inputmode="numeric" placeholder="••••"
+      <input type="password" id="pin" data-autofocus inputmode="numeric" maxlength="6" placeholder="••••••"
              style="text-align:center;font-size:1.6rem;letter-spacing:.4em">
       <div class="row center" style="margin-top:14px">
         <button class="btn-primary btn-block" data-primary id="ok">Unlock</button></div>

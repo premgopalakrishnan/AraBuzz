@@ -103,6 +103,16 @@
      So now it takes the update itself. The only thing that matters is WHEN:
      never while a child is answering a question. If she is mid-game the new
      version waits, quietly, until she is back on the home screen. */
+  /* Chrome and Edge offer a real "install this app" prompt. Catch it and keep
+     it, so the install guide can offer a genuine one-tap Install button
+     instead of only written steps. Safari never fires this — its steps stay
+     manual. */
+  window.addEventListener('beforeinstallprompt', function (e) {
+    e.preventDefault();
+    window.ARABUZZ_INSTALL = e;
+  });
+  window.addEventListener('appinstalled', function () { window.ARABUZZ_INSTALL = null; });
+
   if ('serviceWorker' in navigator && location.protocol.startsWith('http')) {
     let reloading = false;
 

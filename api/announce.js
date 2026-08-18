@@ -11,7 +11,7 @@
    with no markup interpreted, so nothing pasted in can break the email.
    ========================================================================== */
 
-import { whoIs, serviceGet, emailOf, sendEmail, emailShell, send } from './_lib.js';
+import { whoIs, serviceGet, serviceWrite, emailOf, sendEmail, emailShell, send } from './_lib.js';
 
 const escHtml = t => String(t)
   .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
@@ -62,6 +62,14 @@ export default async function handler(req, res) {
       failed.push({ id: p.id, name: p.full_name, error: e.message || String(e) });
     }
   }
+
+  /* Into the record book, so the Message tab shows the history instead of a
+     toast that evaporates. Never fatal — the emails are already out. */
+  try {
+    await serviceWrite('announcements', {
+      subject, message, sent_to: sent, sent_count: sent.length, failed
+    });
+  } catch (e) { console.warn('announcement not recorded', e.message); }
 
   return send(res, 200, { ok: failed.length === 0, sentCount: sent.length, sent, failed });
 }

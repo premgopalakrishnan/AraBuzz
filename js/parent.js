@@ -72,7 +72,7 @@
     // Words are added in the admin console now; progress and reports need a
     // child, which the admin account deliberately does not have.
     if (!admin && (tab === 'upload' || tab === 'words')) tab = 'about';
-    if (admin && (tab === 'progress' || tab === 'report')) tab = 'about';
+    if (admin && (tab === 'progress' || tab === 'report' || tab === 'usage')) tab = 'about';
     if (tab === 'storage' || tab === 'upload') tab = admin ? 'words' : 'settings';
     // First visit — or nothing set up yet — opens on the explainer.
     if (!tab) tab = admin ? 'words'
@@ -103,7 +103,7 @@
              ['settings', 'gear', 'Settings']]
           : [['about', 'sparkle', 'Start here'],
              ['progress', 'chart', 'Progress'], ['report', 'doc', 'Coach Report'],
-             ['settings', 'gear', 'Settings']])
+             ['usage', 'chart', 'Usage'], ['settings', 'gear', 'Settings']])
           .map(([k, i, t]) => `<button data-t="${k}" class="${tab === k ? 'on' : ''}">
              ${Icon.icon(i, { size: 16 })} ${t}</button>`).join('')}
       </div>
@@ -124,7 +124,7 @@
     paintSyncPill();
 
     ({ about: tabAbout, upload: tabUpload, words: tabWords, progress: tabProgress,
-       report: tabReport, settings: tabSettings }[tab] || tabAbout)();
+       report: tabReport, usage: tabUsage, settings: tabSettings }[tab] || tabAbout)();
   }
 
   /* ------------------------------------------------------------ sync pill
@@ -1889,6 +1889,109 @@ th,td{padding:10px 12px;border:1px solid #E5DDD1;text-align:left}th{background:#
     };
   }
 
+  /* ======================================================================
+     USAGE — what this family's AraBuzz has actually cost, and how.
+     The split is the one agreed at the start: building a week's practice
+     material happens ONCE, for everybody, and that cost is divided evenly
+     across every active kid. A kid's own notes and fresh questions are
+     theirs alone. The numbers come from the account's ledger — the same
+     rows the admin console reads — filtered by the database to this family.
+     ====================================================================== */
+  const SHARED_KINDS = new Set(['read-deck', 'enrich', 'topic-list']);
+  const KIND_LABELS = {
+    'read-deck': 'Reading the week\u2019s sheet', 'enrich': 'Building practice material',
+    'topic-list': 'A topic word list', 'coach-report': 'A coach note',
+    'onboarding-report': 'The starting-point note', 'top-up': 'Fresh question variety',
+    'memory-tricks': 'Memory tricks', 'test': 'Connection test'
+  };
+  const usd = n => '$' + (Math.round((+n || 0) * 10000) / 10000).toFixed(4).replace(/0+$/, '').replace(/\.$/, '.00');
+
+  async function tabUsage() {
+    const box = $('#ptab');
+    if (!window.Cloud || !Cloud.signedIn()) {
+      box.innerHTML = '<div class="card center-text muted">Sign in to see your usage.</div>';
+      return;
+    }
+    box.innerHTML = `<div class="loading-box" style="margin:40px auto">
+      <span class="loader"></span><p class="muted small">Reading your family\u2019s ledger\u2026</p></div>`;
+
+    let rows = [];
+    try {
+      const { data, error } = await Cloud.from('api_usage_shares')
+        .select('ts, kind, share_cost, share_in_tok, share_out_tok, child_id')
+        .order('ts', { ascending: false }).limit(500);
+      if (error) throw error;
+      rows = data || [];
+    } catch (e) {
+      box.innerHTML = `<div class="card center-text muted">Could not read the ledger \u2014 ${esc(e.message || e)}</div>`;
+      return;
+    }
+    if (tab !== 'usage') return;   // the parent moved on while we fetched
+
+    const me = Cloud.whoAmI() || {};
+    const kidName = id => {
+      const k = (me.children || []).find(x => x.id === id);
+      if (k) return k.name;
+      const c = (Store.db.children || []).find(x => x.id === id);
+      return (c && c.profile && c.profile.name) || 'A kid';
+    };
+
+    const monthStart = new Date(); monthStart.setDate(1); monthStart.setHours(0, 0, 0, 0);
+    let total = 0, month = 0;
+    const byKid = {};
+    rows.forEach(r => {
+      const c = +r.share_cost || 0;
+      total += c;
+      if (Date.parse(r.ts) >= monthStart.getTime()) month += c;
+      const b = byKid[r.child_id] = byKid[r.child_id] || { shared: 0, own: 0 };
+      if (SHARED_KINDS.has(r.kind)) b.shared += c; else b.own += c;
+    });
+
+    box.innerHTML = `
+      <div class="card">
+        <h2>What your family\u2019s AraBuzz costs</h2>
+        <p class="muted small">The week\u2019s practice material is built <b>once, for everybody</b>,
+           and that cost is split evenly across every active kid. Each kid\u2019s own notes and
+           fresh questions are counted to them alone. These numbers come straight from the
+           account\u2019s ledger \u2014 only your family\u2019s share is shown, and there is
+           nothing to pay: this is simply the honest view of what your corner of AraBuzz uses.</p>
+        <div class="grid grid-3" style="margin-top:12px">
+          ${[['All time', usd(total)], ['This month', usd(month)],
+             ['Entries', String(rows.length)]]
+            .map(([t, v]) => `<div class="card flat pad-s center-text" style="background:var(--paper-2);border:none">
+              <div style="font-family:var(--font-head);font-size:1.35rem;font-weight:800">${v}</div>
+              <div class="tiny faint">${t}</div></div>`).join('')}
+        </div>
+      </div>
+
+      ${Object.keys(byKid).length ? `<div class="card" style="margin-top:14px">
+        <h3>By kid</h3>
+        <table class="data" style="margin-top:8px">
+          <thead><tr><th>Kid</th><th>Share of the weekly material</th><th>Their own notes &amp; questions</th><th>Total</th></tr></thead>
+          <tbody>${Object.keys(byKid).map(id => `<tr>
+            <td><b>${esc(kidName(id))}</b></td>
+            <td>${usd(byKid[id].shared)}</td>
+            <td>${usd(byKid[id].own)}</td>
+            <td><b>${usd(byKid[id].shared + byKid[id].own)}</b></td>
+          </tr>`).join('')}</tbody>
+        </table>
+      </div>` : ''}
+
+      ${rows.length ? `<div class="card" style="margin-top:14px">
+        <h3>Recent entries</h3>
+        <table class="data" style="margin-top:8px"><tbody>
+          ${rows.slice(0, 25).map(r => `<tr>
+            <td class="small">${esc(window.U.fmtDate(Date.parse(r.ts)))}</td>
+            <td class="small">${esc(KIND_LABELS[r.kind] || r.kind)}</td>
+            <td class="small">${esc(kidName(r.child_id))}</td>
+            <td class="small tiny faint">${SHARED_KINDS.has(r.kind) ? 'shared' : 'own'}</td>
+            <td class="small">${usd(r.share_cost)}</td>
+          </tr>`).join('')}
+        </tbody></table>
+        ${rows.length > 25 ? `<p class="hint">Showing the latest 25 of ${rows.length}.</p>` : ''}
+      </div>` : `<div class="card center-text muted" style="margin-top:14px">Nothing in the ledger yet.</div>`}`;
+  }
+
   /* ====================================================================== */
   /*  6. SETTINGS                                                           */
   /* ====================================================================== */
@@ -2118,10 +2221,10 @@ th,td{padding:10px 12px;border:1px solid #E5DDD1;text-align:left}th{background:#
     if ($('#kidName')) $('#kidName').onchange = e => { Store.db.profile.name = e.target.value.trim() || 'Speller'; Store.save(true); UI.syncVault(); };
 
     if ($('#changePin')) $('#changePin').onclick = async () => {
-      const p = await promptBox('New PIN', 'At least 4 digits.', '••••', 'number');
+      const p = await promptBox('New PIN', '4 to 6 digits.', '••••••', 'number');
       if (p === null) return;
       const pin = String(p).trim();
-      if (pin.length < 4) return toast('Needs at least 4 digits.');
+      if (!/^[0-9]{4,6}$/.test(pin)) return toast('4 to 6 digits, numbers only.');
       try {
         // The PIN lives in the family account, so it opens this area on every
         // device at once. Only a device that has never signed in keeps it locally.

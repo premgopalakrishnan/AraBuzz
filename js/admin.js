@@ -182,7 +182,14 @@ Anything you notice, just message me."></textarea></div>
       <div class="row" style="gap:10px;margin-top:14px">
         <button class="btn-primary" id="msgSend" ${parents.length ? '' : 'disabled'}>Send it</button>
       </div>
-      <div id="msgStatus" style="margin-top:12px"></div>`;
+      <div id="msgStatus" style="margin-top:12px"></div>
+
+      <div class="card" style="margin-top:14px">
+        <h3>Sent messages</h3>
+        <div id="msgHistory"><p class="muted small"><span class="loader"></span> Loading…</p></div>
+      </div>`;
+
+    paintMessageHistory();
 
     const all = $('#msgAll'), list = $('#msgList');
     if (all) all.onchange = () => {
@@ -190,6 +197,55 @@ Anything you notice, just message me."></textarea></div>
       list.style.pointerEvents = all.checked ? 'none' : 'auto';
       if (all.checked) $$('#msgList [data-parent]').forEach(c => { c.checked = true; });
     };
+
+    /* Every update ever sent, grouped by month, folded away until asked.
+       The newest month starts open; everything else is a single quiet line. */
+    async function paintMessageHistory() {
+      const box = $('#msgHistory');
+      if (!box) return;
+      let rows = [];
+      try {
+        const { data: h, error } = await Cloud.from('announcements')
+          .select('ts, subject, message, sent_to, sent_count, failed')
+          .order('ts', { ascending: false }).limit(300);
+        if (error) throw error;
+        rows = h || [];
+      } catch (e) {
+        box.innerHTML = `<p class="muted small">Could not load the history — ${esc(e.message || e)}</p>`;
+        return;
+      }
+      if (!box.isConnected) return;
+      if (!rows.length) {
+        box.innerHTML = '<p class="muted small">Nothing sent yet. The first update you send will be kept here.</p>';
+        return;
+      }
+      const months = {};
+      rows.forEach(r => {
+        const d = new Date(r.ts);
+        const key = d.toLocaleDateString('en-GB', { month: 'long', year: 'numeric' });
+        (months[key] = months[key] || []).push(r);
+      });
+      box.innerHTML = Object.keys(months).map((mk, i) => `
+        <details ${i === 0 ? 'open' : ''} style="border-bottom:1px solid var(--line);padding:8px 0">
+          <summary style="cursor:pointer;font-weight:600;font-family:var(--font-head)">
+            ${esc(mk)} <span class="pill tiny">${months[mk].length}</span></summary>
+          ${months[mk].map(r => {
+            const names = (r.sent_to || []).map(x => x.name).filter(Boolean);
+            const fails = (r.failed || []);
+            return `
+            <details style="margin:8px 0 8px 14px;border-left:2px solid var(--line);padding-left:12px">
+              <summary style="cursor:pointer">
+                <b>${esc(r.subject)}</b>
+                <span class="faint small"> · ${esc(window.U.fmtDate(Date.parse(r.ts)))} ·
+                  to ${window.U.plural(r.sent_count || 0, 'parent')}${fails.length ? ` · <span style="color:var(--coral-deep)">${fails.length} failed</span>` : ''}</span>
+              </summary>
+              <p class="small" style="white-space:pre-wrap;margin:8px 0 4px">${esc(r.message)}</p>
+              <p class="tiny faint" style="margin:0 0 6px">Sent to: ${names.length ? esc(names.join(', ')) : '—'}${fails.length
+                ? ` · could not reach: ${esc(fails.map(f => f.name).join(', '))}` : ''}</p>
+            </details>`;
+          }).join('')}
+        </details>`).join('');
+    }
 
     $('#msgSend').onclick = async () => {
       const subject = $('#msgSubject').value.trim();
@@ -229,6 +285,7 @@ Anything you notice, just message me."></textarea></div>
             ${j.failed.map(f => esc(f.name) + ' (' + esc(f.error) + ')').join(', ')}</p>` : ''}</div>`;
         if (!(j.failed || []).length) { $('#msgSubject').value = ''; $('#msgBody').value = ''; }
         toast('Update sent.', 'good');
+        paintMessageHistory();   // it appears in the record straight away
       } catch (e) {
         st.innerHTML = `<div class="feedback bad"><b>Didn't send.</b>
           <p class="small" style="margin:6px 0 0">${esc(e.message || e)}</p></div>`;
