@@ -109,6 +109,7 @@
 
       <div class="tabs" id="atabs" style="margin-top:16px">
         ${[['families', 'home', 'Families'], ['invite', 'mail', 'Invite'],
+           ['message', 'doc', 'Message'],
            ['upload', 'upload', 'Add words'], ['sheets', 'book', 'Sheets'],
            ['words', 'spell', 'Word lists'],
            ['spend', 'chart', 'Usage'], ['settings', 'gear', 'Settings']]
@@ -128,10 +129,112 @@
       e.target.disabled = true; data = null; await paint(); };
     $$('#atabs button').forEach(b => b.onclick = () => { tab = b.dataset.t; paint(); });
 
-    ({ families: tabFamilies, invite: tabInvite, upload: () => hostParentTab('upload'),
+    ({ families: tabFamilies, invite: tabInvite, message: tabMessage,
+       upload: () => hostParentTab('upload'),
        words: () => hostParentTab('words'), settings: () => hostParentTab('settings'),
        sheets: tabSheets, spend: tabSpend }[tab] || tabFamilies)();
     watch();
+  }
+
+  /* ======================================================================
+     MESSAGE — one update, written once, landing in parents' inboxes.
+     Everyone, a chosen few, or a single parent — the choice is right here.
+     ====================================================================== */
+  function tabMessage() {
+    const parents = families()
+      .filter(f => f.active !== false)
+      .flatMap(f => (f.parents || [])
+        .filter(p => p.role === 'parent')
+        .map(p => ({ id: p.id, name: p.name, email: p.email || '', family: f.name })));
+
+    $('#atab').innerHTML = `
+      <div class="card">
+        <h2>Send an update to the parents</h2>
+        <p class="muted small">It arrives as a normal AraBuzz email, opening with each
+           parent's own name. A blank line starts a new paragraph — nothing else is
+           needed.</p>
+
+        <div class="field"><label>Subject</label>
+          <input id="msgSubject" maxlength="140" placeholder="e.g. This week's sheet is up"></div>
+        <div class="field"><label>Message</label>
+          <textarea id="msgBody" rows="8" placeholder="Hi all — the new Spell Buzz sheet is in the app.
+
+Anything you notice, just message me."></textarea></div>
+      </div>
+
+      <div class="card" style="margin-top:14px">
+        <h3>Who gets it</h3>
+        ${parents.length ? `
+        <label class="ob-agree" for="msgAll" style="margin-bottom:10px">
+          <input type="checkbox" id="msgAll" checked>
+          <span><b>Everyone</b> — ${window.U.plural(parents.length, 'parent')}</span></label>
+        <div id="msgList" style="opacity:.45;pointer-events:none">
+          ${parents.map(p => `
+            <label class="ob-agree" for="mp-${p.id}" style="padding:7px 0;border-bottom:1px solid var(--line)">
+              <input type="checkbox" id="mp-${p.id}" data-parent="${p.id}" checked>
+              <span>${esc(p.name)} <span class="faint small">${esc(p.email)}${p.family ? ' · ' + esc(p.family) : ''}</span></span>
+            </label>`).join('')}
+        </div>
+        <p class="hint">Untick <b>Everyone</b> to pick people by hand — down to a single parent.</p>`
+        : `<p class="muted small">No parents to write to yet — invite a family first.</p>`}
+      </div>
+
+      <div class="row" style="gap:10px;margin-top:14px">
+        <button class="btn-primary" id="msgSend" ${parents.length ? '' : 'disabled'}>Send it</button>
+      </div>
+      <div id="msgStatus" style="margin-top:12px"></div>`;
+
+    const all = $('#msgAll'), list = $('#msgList');
+    if (all) all.onchange = () => {
+      list.style.opacity = all.checked ? '.45' : '1';
+      list.style.pointerEvents = all.checked ? 'none' : 'auto';
+      if (all.checked) $$('#msgList [data-parent]').forEach(c => { c.checked = true; });
+    };
+
+    $('#msgSend').onclick = async () => {
+      const subject = $('#msgSubject').value.trim();
+      const messageText = $('#msgBody').value.trim();
+      const chosen = all && all.checked
+        ? parents
+        : parents.filter(p => { const c = $('#mp-' + p.id); return c && c.checked; });
+
+      if (!subject) return toast('Give it a subject line first.');
+      if (!messageText) return toast('The message is empty.');
+      if (!chosen.length) return toast('Pick at least one parent.');
+
+      const who = chosen.length === parents.length
+        ? `all ${window.U.plural(parents.length, 'parent')}`
+        : chosen.length === 1 ? `<b>${esc(chosen[0].name)}</b> only`
+        : `${window.U.plural(chosen.length, 'chosen parent')}`;
+      const yes = await window.U.confirmBox('Send this update?',
+        `“${esc(subject)}” goes to ${who}, by email, now.`, 'Send it');
+      if (!yes) return;
+
+      const btn = $('#msgSend'); btn.disabled = true; btn.innerHTML = '<span class="loader"></span> Sending';
+      const st = $('#msgStatus');
+      try {
+        const res = await fetch('/api/announce', {
+          method: 'POST',
+          headers: { 'content-type': 'application/json', authorization: 'Bearer ' + Cloud.token },
+          body: JSON.stringify({
+            subject, message: messageText,
+            parentIds: chosen.length === parents.length ? null : chosen.map(p => p.id)
+          })
+        });
+        const j = await res.json().catch(() => ({}));
+        if (!res.ok) throw new Error(j.error || ('Sending failed (' + res.status + ')'));
+        st.innerHTML = `<div class="feedback ${j.failed && j.failed.length ? '' : 'good'}">
+          <b>Sent to ${window.U.plural(j.sentCount || 0, 'parent')}.</b>
+          ${(j.failed || []).length ? `<p class="small" style="margin:6px 0 0">Could not reach:
+            ${j.failed.map(f => esc(f.name) + ' (' + esc(f.error) + ')').join(', ')}</p>` : ''}</div>`;
+        if (!(j.failed || []).length) { $('#msgSubject').value = ''; $('#msgBody').value = ''; }
+        toast('Update sent.', 'good');
+      } catch (e) {
+        st.innerHTML = `<div class="feedback bad"><b>Didn't send.</b>
+          <p class="small" style="margin:6px 0 0">${esc(e.message || e)}</p></div>`;
+      }
+      btn.disabled = false; btn.textContent = 'Send it';
+    };
   }
 
   /** Adding sheets, managing word lists and settings all live in the console
@@ -155,8 +258,8 @@
     if (document.hidden) return false;
     if (!window.UI || UI.current !== 'admin') return false;
     // Never repaint over a sheet being read, checked or published — or over
-    // settings being typed into. That work-in-progress would be lost.
-    if (tab === 'upload' || tab === 'words' || tab === 'settings') return false;
+    // settings, or a message being written. That work would be lost.
+    if (tab === 'upload' || tab === 'words' || tab === 'settings' || tab === 'message') return false;
     if (document.querySelector('.modal-bg')) return false;
     const a = document.activeElement;
     if (a && (a.tagName === 'INPUT' || a.tagName === 'TEXTAREA' || a.tagName === 'SELECT')
