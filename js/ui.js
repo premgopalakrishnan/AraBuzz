@@ -86,7 +86,10 @@
     const pb = $('#parentBtn');
     if (pb) pb.onclick = openParentGate;
     const wb = $('#whoBtn');
-    if (wb) wb.onclick = () => go('who');
+    // Switching from inside the grown-ups area means switching GROWN-UPS
+    // context: pick the kid, prove the PIN again, land in THAT kid's
+    // grown-ups pages — never dropped onto the kids' screens.
+    if (wb) wb.onclick = () => go('who', { from: current === 'parent' ? 'parent' : null });
   }
 
   function renderNav() {
@@ -431,14 +434,16 @@
   /* ======================================================================
      WHO'S PLAYING — the child picker
      ====================================================================== */
-  function paintWho() {
+  function paintWho(opts) {
     const s = $('#scr-who');
+    const from = (opts && opts.from) || null;
     const kids = Store.childList();
     s.innerHTML = `
       <div class="center-text" style="padding:14px 0 4px">
-        <h1 style="margin-bottom:4px">Who's playing?</h1>
-        <p class="muted">Everyone has their own points, streak, tree and reports.
-           The word lists are shared.</p>
+        <h1 style="margin-bottom:4px">${from === 'parent' ? 'Whose pages?' : "Who's playing?"}</h1>
+        <p class="muted">${from === 'parent'
+          ? 'Pick a kid — your PIN opens their grown-ups pages.'
+          : 'Everyone has their own points, streak, tree and reports. The word lists are shared.'}</p>
       </div>
       <div class="who-grid">
         ${kids.map(k => `
@@ -463,12 +468,13 @@
       if (id !== Store.db.activeChildId) {
         Store.switchChild(id);
         syncVault(true);
-        toast(`Hello again, ${Store.db.profile.name}!`, 'good');
       }
+      if (from === 'parent') { openParentGate(); return; }   // PIN, then that kid's grown-ups
+      toast(`Hello again, ${Store.db.profile.name}!`, 'good');
       go('home');
     });
     $('#addKid').onclick = addChildFlow;
-    $('#whoBack').onclick = () => go('home');
+    $('#whoBack').onclick = () => go(from === 'parent' ? 'parent' : 'home');
   }
 
   /* ====================================================================== */
@@ -728,7 +734,13 @@
     $('#back').onclick = () => go('home');
 
     const paintWeeks = () => {
-      $('#weekPick').innerHTML = db.weeks.map(wk => {
+      /* Six tiles is a choice; twenty is wallpaper. The six most recent
+         sheets — plus anything already ticked — get tiles; everything older
+         waits inside one quiet dropdown until it is asked for. */
+      const RECENT = 6;
+      const shown = db.weeks.filter((wk, i) => i < RECENT || playPick.weekIds.includes(wk.id));
+      const older = db.weeks.filter((wk, i) => i >= RECENT && !playPick.weekIds.includes(wk.id));
+      $('#weekPick').innerHTML = (shown.map(wk => {
         const on = playPick.weekIds.includes(wk.id);
         const words = Store.weekWords(wk.id);
         const grown = words.filter(x => Game.plantFor(x.id).grown).length;
@@ -737,13 +749,26 @@
             <span style="color:${on ? 'var(--jade)' : 'var(--ink-faint)'}">${Icon.icon(on ? 'check' : 'plus', { size: 17 })}</span></div>
           <p>${words.length} words · ${grown} grown${wk.assessedOn ? ' · ' + window.U.fmtDay(wk.assessedOn) : ''}</p>
         </div>`;
-      }).join('') || '<p class="muted">No weeks added yet.</p>';
-      window.U.$$('#weekPick .tile').forEach(t => t.onclick = () => {
+      }).join('') || '<p class="muted">No weeks added yet.</p>')
+      + (older.length ? `
+        <div class="tile" style="display:flex;align-items:center">
+          <select id="olderWeeks" style="width:100%">
+            <option value="">Older sheets (${older.length})…</option>
+            ${older.map(wk => `<option value="${wk.id}">${Store.weekTag(wk)} · ${esc(wk.topic || wk.title)}${wk.assessedOn ? ' · ' + window.U.fmtDay(wk.assessedOn) : ''}</option>`).join('')}
+          </select>
+        </div>` : '');
+      window.U.$$('#weekPick .tile[data-wk]').forEach(t => t.onclick = () => {
         const id = t.dataset.wk;
         const at = playPick.weekIds.indexOf(id);
         if (at >= 0) playPick.weekIds.splice(at, 1); else playPick.weekIds.push(id);
         paintWeeks(); paintStart();
       });
+      const ow = $('#olderWeeks');
+      if (ow) ow.onchange = () => {
+        if (!ow.value) return;
+        playPick.weekIds.push(ow.value);   // ticked — it now appears as a tile
+        paintWeeks(); paintStart();
+      };
     };
 
     const paintStart = () => {

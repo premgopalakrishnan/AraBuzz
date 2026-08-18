@@ -541,12 +541,24 @@
         <h3>${esc(Ara.say('wrong'))}</h3>
         ${!isChoice ? `<p class="small muted" style="margin:0">You wrote:</p>
           <div class="diff">${Phonics.diffHTML(wd.word, given)}</div>` : ''}
-        <p class="small muted" style="margin:10px 0 0">The word is:</p>
-        <div class="diff">${isChoice ? esc(wd.word) : Phonics.highlightCorrect(wd.word, given)}</div>
-        ${res.analysis && res.analysis.soundsRight
+        ${(() => {
+          /* The right answer, described in the language of THIS question.
+             A meaning question ends with the meaning — not "the word is",
+             which belongs to the spelling games. */
+          if (isChoice && q.mode === 'meaning') return `
+            <p class="small muted" style="margin:10px 0 0"><b>${esc(wd.word)}</b> means:</p>
+            <div class="diff" style="font-size:1rem">${esc(String(q.answer || wd.kidMeaning || wd.meaning || ''))}</div>`;
+          if (isChoice) return `
+            <p class="small muted" style="margin:10px 0 0">The right ${q.mode === 'spot' ? 'spelling' : 'word'} is:</p>
+            <div class="diff">${esc(wd.word)}</div>`;
+          return `
+            <p class="small muted" style="margin:10px 0 0">The word is:</p>
+            <div class="diff">${Phonics.highlightCorrect(wd.word, given)}</div>`;
+        })()}
+        ${(q.mode !== 'meaning' && res.analysis && res.analysis.soundsRight)
           ? `<p class="small" style="margin:8px 0 0">Good ears! That's exactly how it <i>sounds</i> — English just spells it differently.</p>` : ''}
-        ${wd.trickyBit ? `<p class="small" style="margin:8px 0 0"><b>Remember:</b> ${esc(wd.trickyBit)}</p>` : ''}
-        ${wd.memoryTrick ? `<p class="small ichip" style="margin:6px 0 0">${Icon.icon('sparkle',{size:15})}<span>${esc(wd.memoryTrick)}</span></p>` : ''}
+        ${(q.mode !== 'meaning' && wd.trickyBit) ? `<p class="small" style="margin:8px 0 0"><b>Remember:</b> ${esc(wd.trickyBit)}</p>` : ''}
+        ${(q.mode !== 'meaning' && wd.memoryTrick) ? `<p class="small ichip" style="margin:6px 0 0">${Icon.icon('sparkle',{size:15})}<span>${esc(wd.memoryTrick)}</span></p>` : ''}
       </div>`;
 
     const actions = $('#qactions');

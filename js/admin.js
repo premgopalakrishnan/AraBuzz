@@ -703,10 +703,22 @@ Anything you notice, just message me."></textarea></div>
      A sheet is read, checked and enriched in the ordinary "Add words" tab —
      on this device, where the PDF is. This tab is only about who gets it.
      ====================================================================== */
+  /** A date like 2026-08-20 shown as "20 Aug 2026". */
+  function niceDate(v) {
+    if (!v) return null;
+    try {
+      return new Date(v + 'T00:00:00').toLocaleDateString('en-GB',
+        { day: '2-digit', month: 'short', year: 'numeric' });
+    } catch (e) { return v; }
+  }
+
   function tabSheets() {
     const decks = (data && data.decks) || [];
-    const published = decks.filter(d => d.status === 'published');
-    const drafts = decks.filter(d => d.status !== 'published');
+    // Listed and NUMBERED by test date — sheet 01 is the earliest test, which
+    // is the order the school year actually runs in. Undated sheets go last.
+    const byTest = (a, b) => (a.assessed_on || '9999') < (b.assessed_on || '9999') ? -1 : 1;
+    const published = decks.filter(d => d.status === 'published').sort(byTest);
+    const drafts = decks.filter(d => d.status !== 'published').sort(byTest);
     const local = (Store.db.weeks || []).filter(k => !decks.some(d => d.id === k.id));
 
     $('#atab').innerHTML = `
@@ -719,7 +731,10 @@ Anything you notice, just message me."></textarea></div>
           <div class="card flat" style="margin-top:10px">
             <div class="row between wrap" style="gap:8px">
               <div><b>${esc(k.title)}</b> <span class="faint small">${Store.weekTag(k)}</span>
-                <p class="muted small" style="margin:2px 0 0">${window.U.plural((k.wordIds || []).length, 'word')}${k.topic ? ' · ' + esc(k.topic) : ''}</p></div>
+                <p class="muted small" style="margin:2px 0 0">${window.U.plural((k.wordIds || []).length, 'word')}${k.topic ? ' · ' + esc(k.topic) : ''}</p>
+                <p class="muted small" style="margin:2px 0 0">
+                  ${k.sentOn ? `Sent <b>${esc(niceDate(k.sentOn))}</b>` : 'No sent date'} ·
+                  ${k.assessedOn ? `Test <b>${esc(niceDate(k.assessedOn))}</b>` : 'No test date'}</p></div>
               <button class="btn-primary btn-s" data-publish="${k.id}">Publish</button>
             </div>
           </div>`).join('')}
@@ -727,13 +742,13 @@ Anything you notice, just message me."></textarea></div>
 
       <div class="card" style="margin-top:14px">
         <h3 style="margin-top:0">Published (${published.length})</h3>
-        ${published.length ? published.map(deckRow).join('') : '<p class="muted small">Nothing published yet.</p>'}
+        ${published.length ? published.map((d, i) => deckRow(d, i + 1)).join('') : '<p class="muted small">Nothing published yet.</p>'}
       </div>
 
       ${drafts.length ? `<div class="card" style="margin-top:14px">
         <h3 style="margin-top:0">Withdrawn (${drafts.length})</h3>
         <p class="muted small">Nobody can see these. Their practice history is untouched.</p>
-        ${drafts.map(deckRow).join('')}
+        ${drafts.map((d, i) => deckRow(d, published.length + i + 1)).join('')}
       </div>` : ''}`;
 
     $$('#atab [data-publish]').forEach(b => b.onclick = () => publishWeek(b.dataset.publish, b));
@@ -767,16 +782,22 @@ Anything you notice, just message me."></textarea></div>
     }
   }
 
-  function deckRow(d) {
+  function deckRow(d, ordinal) {
     const who = d.audience === 'all' ? 'everyone'
       : `${window.U.plural((d.assigned_to || []).length, 'family', 'families')}`;
+    const sent = niceDate(d.sent_on), test = niceDate(d.assessed_on);
     return `
       <div class="card flat" style="margin-top:10px">
         <div class="row between wrap" style="gap:8px">
-          <div><b>${esc(d.title)}</b> <span class="faint small">${d.no < 10 ? '0' + d.no : d.no}</span>
-            <p class="muted small" style="margin:2px 0 0">
+          <div>
+            <span class="pill tiny honey" style="margin-right:6px">Sheet ${ordinal < 10 ? '0' + ordinal : ordinal}</span>
+            <b>${esc(d.title)}</b>
+            <p class="muted small" style="margin:4px 0 0">
               ${window.U.plural(d.word_count, 'word')}${d.topic ? ' · ' + esc(d.topic) : ''} ·
-              goes to <b>${esc(who)}</b>${d.assessed_on ? ' · test ' + esc(d.assessed_on) : ''}</p></div>
+              goes to <b>${esc(who)}</b></p>
+            <p class="muted small" style="margin:2px 0 0">
+              ${sent ? `Sent <b>${esc(sent)}</b>` : 'No sent date'} ·
+              ${test ? `Test <b>${esc(test)}</b>` : 'No test date'}</p></div>
           <div class="row" style="gap:6px">
             <button class="btn-quiet btn-s" data-audience="${d.id}">Who gets it</button>
             ${d.status === 'published'

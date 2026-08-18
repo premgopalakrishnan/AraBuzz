@@ -17,7 +17,10 @@
       try { const j = JSON.parse(v); if (Array.isArray(j)) return j; } catch (e) {}
       return [];
     }
-    if (v && typeof v === 'object') return Object.values(v);
+    if (v && typeof v === 'object') {
+      const vals = Object.values(v);
+      return vals.length && vals.every(x => x && typeof x === 'object') ? vals : [v];
+    }
     return [];
   }
   function fixShape(r, arrayKeys) {
@@ -1084,14 +1087,26 @@ Reflex = A quick automatic response"></textarea>
         .select('id, ts, payload, html, range_from, range_to')
         .eq('child_id', childId).order('ts', { ascending: false }).limit(40);
       if (error || !data) return false;
+      /* The family may have switched profiles while this was fetching. File
+         everything under the child it was FETCHED FOR — live fields if they
+         are still active, their parked slot if not. */
+      const stillActive = Store.db.activeChildId === childId;
+      const bag = stillActive
+        ? Store.db
+        : (Store.db.children || []).find(c => c.id === childId);
+      if (!bag) return false;
+      bag.reports = bag.reports || [];
       let added = 0;
       data.forEach(row => {
-        if ((Store.db.reports || []).some(r => r.cloudId === row.id)) return;
+        if (bag.reports.some(r => r.cloudId === row.id)) return;
         const pay = row.payload || {};
         const res = pay.result || null;
-        const html = row.html || (res ? renderCloudNote(res, pay, row) : null);
+        const kidName = stillActive
+          ? (Store.db.profile && Store.db.profile.name)
+          : (bag.profile && bag.profile.name);
+        const html = row.html || (res ? renderCloudNote(res, pay, row, kidName) : null);
         if (!html) return;
-        Store.db.reports.push({
+        bag.reports.push({
           id: Store.uid('r'), cloudId: row.id,
           ts: Date.parse(row.ts) || Date.now(),
           html,
@@ -1104,7 +1119,7 @@ Reflex = A quick automatic response"></textarea>
         added++;
       });
       if (added) Store.save(true);
-      return added > 0;
+      return added > 0 && stillActive;
     } catch (e) { return false; }
   }
 
@@ -1158,9 +1173,9 @@ Reflex = A quick automatic response"></textarea>
          A round's score counts only real test questions — copying practice never inflates it.</p>` : ''}`;
   }
 
-  function renderCloudNote(r, pay, row) {
+  function renderCloudNote(r, pay, row, kidName) {
     r = fixShape(r, ['strengths', 'patterns', 'thisWeek', 'wordsToDrill']);
-    const name = Store.db.profile ? Store.db.profile.name : '';
+    const name = kidName || (Store.db.profile ? Store.db.profile.name : '');
     const inner = `
       <div class="card report">
         <style>${window.Charts ? Charts.CSS : ''}</style>
@@ -1169,15 +1184,18 @@ Reflex = A quick automatic response"></textarea>
         <blockquote><b>${esc(r.headline || '')}</b></blockquote>
         ${String(r.whereTheyAre || '').split(/\n{2,}|\n/).filter(Boolean).map(t => `<p>${esc(t)}</p>`).join('')}
         ${evidenceHTML(pay && pay.evidence, name)}
+        ${(r.strengths || []).filter(x => x && (x.title || x.detail)).length ? `
         <h2>Going well</h2>
-        <ul>${(r.strengths || []).map(x => `<li><b>${esc(x.title)}</b> — ${esc(x.detail)}</li>`).join('')}</ul>
+        <ul>${r.strengths.filter(x => x && (x.title || x.detail)).map(x =>
+          `<li><b>${esc(x.title || '')}</b>${x.title && x.detail ? ' — ' : ''}${esc(x.detail || '')}</li>`).join('')}</ul>` : ''}
         ${(r.patterns || []).length ? `<h2>Patterns worth knowing</h2>
         <ul>${r.patterns.map(x => `<li><b>${esc(x.pattern)}</b> — ${esc(x.meaning)}${x.example ? ` <span class="muted small">(${esc(x.example)})</span>` : ''}</li>`).join('')}</ul>` : ''}
+        ${(r.thisWeek || []).filter(x => x && x.action).length ? `
         <h2>This week, if you have ten minutes</h2>
-        <ol>${(r.thisWeek || []).map(x => `<li><b>${esc(x.action)}</b> — ${esc(x.why)} <span class="pill tiny">${x.minutes} min</span></li>`).join('')}</ol>
+        <ol>${r.thisWeek.filter(x => x && x.action).map(x => `<li><b>${esc(x.action)}</b>${x.why ? ' — ' + esc(x.why) : ''}${x.minutes ? ` <span class="pill tiny">${x.minutes} min</span>` : ''}</li>`).join('')}</ol>` : ''}
         ${(r.wordsToDrill || []).length ? `<h2>Words to practise before the next test</h2>
         <p>${r.wordsToDrill.map(wd => `<span class="pill honey">${esc(wd)}</span>`).join(' ')}</p>` : ''}
-        <h2>Since the last note</h2><p>${esc(r.sinceLastReport || '')}</p>
+        ${r.sinceLastReport ? `<h2>Since the last note</h2><p>${esc(r.sinceLastReport)}</p>` : ''}
         <p>${esc(r.motivation || '')}</p>
         ${r.sayToThem ? `<blockquote>Something worth saying:<br><b>“${esc(r.sayToThem)}”</b></blockquote>` : ''}
       </div>`;
@@ -1188,25 +1206,30 @@ Reflex = A quick automatic response"></textarea>
 
   function tabReport() {
     const box = $('#ptab');
-    // quietly pull anything new from the account, then repaint once
-    mergeCloudReports().then(changed => { if (changed && tab === 'report') tabReport(); });
+    const forChildId = Store.db.activeChildId;
+
+    /* First bring down anything the account already has, THEN — and only
+       then — consider rewriting a missing starting-point note. Healing
+       before the merge finished is how a note that existed in the account
+       got written a second time. */
+    mergeCloudReports().then(changed => {
+      if (tab !== 'report' || Store.db.activeChildId !== forChildId) return;
+      if (changed) { tabReport(); return; }
+      const bl2 = Store.db.profile && Store.db.profile.baseline;
+      const still = !!bl2 && !(Store.db.reports || []).some(x => x.kind === 'onboarding');
+      if (still && !onboardFixInFlight && API.hasKey()) {
+        onboardFixInFlight = true;
+        generateOnboardingReport(bl2)
+          .then(() => { if (tab === 'report' && Store.db.activeChildId === forChildId) tabReport(); })
+          .catch(e => console.warn('starting-point note retry', e))
+          .finally(() => { onboardFixInFlight = false; });
+      }
+    });
+
     const saved = (Store.db.reports || []).slice().sort((a, b) => b.ts - a.ts);
     const name = Store.db.profile ? Store.db.profile.name : 'your child';
-
-    /* The starting-point note writes itself the moment the first check ends.
-       If the network dropped at that exact minute it never existed — so any
-       visit here quietly writes it from the saved answers. No button, no job
-       for the parent, and it cannot run twice: the moment the note exists the
-       condition is false forever. */
     const bl = Store.db.profile && Store.db.profile.baseline;
     const missingOnboard = !!bl && !saved.some(r => r.kind === 'onboarding');
-    if (missingOnboard && !onboardFixInFlight && API.hasKey()) {
-      onboardFixInFlight = true;
-      generateOnboardingReport(bl)
-        .then(() => { if (tab === 'report') tabReport(); })
-        .catch(e => console.warn('starting-point note retry', e))
-        .finally(() => { onboardFixInFlight = false; });
-    }
 
     box.innerHTML = `
       <div class="card">
@@ -1258,6 +1281,9 @@ Reflex = A quick automatic response"></textarea>
 
   /** One row in the archive: date-tagged, with what changed since the one before. */
   function archiveRow(r, prev) {
+    // A starting point IS the start — comparing it "vs previous" invites
+    // nonsense like one kid's first check judged against another note.
+    if (r.kind === 'onboarding') prev = null;
     const m = r.metrics || {};
     const pm = (prev && prev.metrics) || null;
     const d = (a, b) => (a == null || b == null) ? null : Math.round((a - b) * 100);
@@ -1307,7 +1333,7 @@ Reflex = A quick automatic response"></textarea>
     return Charts.line(
       rows.map(r => ({ label: window.U.fmtDay(r.ts), v: Math.round(r.metrics.accuracy * 100), n: r.metrics.answers })),
       { title: 'Accuracy at each report', suffix: '%', max: 100, min: 0,
-        sub: 'One point per report you have generated.' }
+        sub: 'One point per note, oldest to newest.' }
     );
   }
 
@@ -1519,10 +1545,28 @@ Reflex = A quick automatic response"></textarea>
      parent next opens the grown-ups' area, their starting-point note is
      sitting at the top of the Coach Report archive.
      ====================================================================== */
+  /** Write the note into the RIGHT child's records — the child it is about,
+   *  captured now, not whoever happens to be active when the (slow) AI call
+   *  comes back. This was how Aadhya's note ended up filed under Aradhana:
+   *  the family switched profiles while the note was still being written. */
+  function fileReportFor(childId, rec) {
+    const db = Store.db;
+    if (db.activeChildId === childId) {
+      db.reports.push(rec);
+    } else {
+      const slot = (db.children || []).find(c => c.id === childId);
+      if (slot) (slot.reports = slot.reports || []).push(rec);
+      else db.reports.push(rec);   // single-profile device — live fields are the child
+    }
+    Store.save(true);
+  }
+
   async function generateOnboardingReport(baseline) {
     if (!API.hasKey() || !baseline) return null;
     const db = Store.db;
     const p = db.profile || {};
+    /* Pin down WHO this note is about before anything asynchronous happens. */
+    const forChildId = db.activeChildId;
 
     const payload = {
       kind: 'onboarding',
@@ -1550,14 +1594,14 @@ Reflex = A quick automatic response"></textarea>
       metrics: { answers: baseline.total, accuracy: baseline.correct / baseline.total,
                  phoneticShare: baseline.phoneticShare, wordsMastered: 0 }
     };
-    db.reports.push(rec);
-    Store.save(true);
+    fileReportFor(forChildId, rec);
 
-    // …and into the account, so it is on whichever device the parent opens.
+    // …and into the account, so it is on whichever device the parent opens —
+    // under the child it belongs to, never whoever is active right now.
     try {
-      if (window.Sync && Sync.isDbId(db.activeChildId) && window.Cloud && Cloud.signedIn()) {
+      if (window.Sync && Sync.isDbId(forChildId) && window.Cloud && Cloud.signedIn()) {
         await Cloud.from('reports').insert({
-          child_id: db.activeChildId,
+          child_id: forChildId,
           payload: { kind: 'onboarding', result: r, metrics: rec.metrics },
           html
         });
@@ -1575,15 +1619,18 @@ Reflex = A quick automatic response"></textarea>
         <blockquote><b>${esc(r.headline || '')}</b></blockquote>
         ${String(r.startingPoint || '').split(/\n{2,}|\n/).filter(Boolean)
           .map(t => `<p>${esc(t)}</p>`).join('')}
+        ${(r.strengths || []).filter(x => x && (x.title || x.detail)).length ? `
         <h2>What ${esc(name)} already brings</h2>
-        <ul>${(r.strengths || []).map(x =>
-          `<li><b>${esc(x.title)}</b> — ${esc(x.detail)}</li>`).join('')}</ul>
+        <ul>${r.strengths.filter(x => x && (x.title || x.detail)).map(x =>
+          `<li><b>${esc(x.title || '')}</b>${x.title && x.detail ? ' — ' : ''}${esc(x.detail || '')}</li>`).join('')}</ul>` : ''}
+        ${(r.focus || []).filter(x => x && (x.pattern || x.why)).length ? `
         <h2>What practice will focus on first</h2>
-        <ul>${(r.focus || []).map(x =>
-          `<li><b>${esc(x.pattern)}</b> — ${esc(x.why)}${x.example
-            ? ` <span class="muted small">(${esc(x.example)})</span>` : ''}</li>`).join('')}</ul>
+        <ul>${r.focus.filter(x => x && (x.pattern || x.why)).map(x =>
+          `<li><b>${esc(x.pattern || '')}</b>${x.pattern && x.why ? ' — ' : ''}${esc(x.why || '')}${x.example
+            ? ` <span class="muted small">(${esc(x.example)})</span>` : ''}</li>`).join('')}</ul>` : ''}
+        ${r.firstFortnight ? `
         <h2>The first fortnight</h2>
-        <p>${esc(r.firstFortnight || '')}</p>
+        <p>${esc(r.firstFortnight)}</p>` : ''}
         ${r.sayToThem ? `<blockquote>Something worth saying tonight:<br><b>“${esc(r.sayToThem)}”</b></blockquote>` : ''}
         <p class="small muted">Written from the twenty answers of the first check — a strong
            starting sketch that daily practice now sharpens. The weekly notes take it from here.</p>
