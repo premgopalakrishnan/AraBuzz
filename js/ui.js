@@ -633,6 +633,7 @@
     // it is everything combined, including a small crossword, so it reads as the
     // real thing to work up to.
     const modes = [
+      { k: 'quest', ic: 'trophy', t: 'Spell Quest', d: 'Ara gives you a clue, you type the spelling — the whole list, one at a time, until you beat it.', ribbon: 'NEW' },
       { k: 'spellbuzz', ic: 'pencil', t: 'Spell Buzz', d: 'Read the clue, spell the word. Just like the test at school.', ribbon: 'START HERE' },
       { k: 'rush', ic: 'keys', t: 'Word Rush', d: 'Typing game. Copy it, watch it vanish, then type it from memory.' },
       { k: 'listen', ic: 'ear', t: 'Listen & Spell', d: 'I say the word out loud. You spell it.' },
@@ -640,13 +641,28 @@
       { k: 'puzzles', ic: 'puzzle', t: 'Puzzles', d: 'Crossword or word search — you choose.' },
       { k: 'mixed', ic: 'dice', t: 'Mixed Buzz', d: 'Everything at once, with a mini crossword thrown in. The real test.', ribbon: 'BOSS' }
     ];
-    $('#modes').innerHTML = modes.map(m => `
-      <div class="tile" data-mode="${m.k}">
+    /* The order is HERS. A kid who lives in Word Rush should not have to
+       scroll past five tiles to reach it, so the tiles can be dragged into
+       whatever order she likes and the app remembers. Unknown or new games
+       (like a freshly shipped one) join at the front so they get noticed. */
+    const saved = (db.game.tileOrder || []).filter(k => modes.some(m => m.k === k));
+    const ordered = modes.slice().sort((a, b) => {
+      const ia = saved.indexOf(a.k), ib = saved.indexOf(b.k);
+      if (ia < 0 && ib < 0) return 0;
+      if (ia < 0) return -1;
+      if (ib < 0) return 1;
+      return ia - ib;
+    });
+    $('#modes').innerHTML = ordered.map(m => `
+      <div class="tile" data-mode="${m.k}" style="touch-action:none">
         ${m.ribbon ? `<span class="ribbon">${m.ribbon}</span>` : ''}
         <span class="tile-ic">${Icon.icon(m.ic, { size: 30, stroke: 1.5 })}</span>
         <h3>${m.t}</h3><p>${m.d}</p>
       </div>`).join('');
-    window.U.$$('#modes .tile').forEach(t => t.onclick = () => go('play', { mode: t.dataset.mode }));
+    makeTilesDraggable($('#modes'), order => {
+      Store.db.game.tileOrder = order;
+      Store.save(true);
+    }, key => go('play', { mode: key }));
 
     if ($('#heroSlot')) $('#heroSlot').onclick = () => go('journey');
     if ($('#meetBtn') && meetWk) $('#meetBtn').onclick = () => startMeet(meetWk.id);
@@ -654,6 +670,79 @@
     if ($('#weekQuiz')) $('#weekQuiz').onclick = () => go('play', { mode: 'spellbuzz', weekIds: [latest.id] });
     if ($('#studyBtn')) $('#studyBtn').onclick = () => go('learn', { weekId: latest.id });
     if ($('#trickyBtn')) $('#trickyBtn').onclick = () => Quiz.start({ preset: 'mixed', pool: Engine.trickyWords(40), label: 'Tricky Words', count: 10 });
+  }
+
+  /* ======================================================================
+     DRAG THE TILES INTO YOUR OWN ORDER
+     Pointer events, not HTML5 drag-and-drop, because this has to work with a
+     finger on an iPad as well as a mouse. A short hold (or a deliberate
+     drag) picks a tile up; a quick tap still just opens the game.
+     ====================================================================== */
+  function makeTilesDraggable(box, onOrder, onTap) {
+    if (!box) return;
+    let held = null, from = 0, startX = 0, startY = 0, moved = false, holdTimer = null;
+
+    const tiles = () => Array.from(box.querySelectorAll('.tile'));
+    const finish = (commit) => {
+      clearTimeout(holdTimer);
+      if (held) {
+        held.classList.remove('dragging');
+        held.style.transform = '';
+        box.classList.remove('rearranging');
+        if (commit) onOrder(tiles().map(t => t.dataset.mode));
+      }
+      held = null; moved = false;
+    };
+
+    box.addEventListener('pointerdown', e => {
+      const t = e.target.closest('.tile');
+      if (!t || e.button > 0) return;
+      startX = e.clientX; startY = e.clientY; moved = false;
+      from = tiles().indexOf(t);
+      holdTimer = setTimeout(() => {          // held long enough — pick it up
+        held = t;
+        t.classList.add('dragging');
+        box.classList.add('rearranging');
+        try { t.setPointerCapture(e.pointerId); } catch (err) {}
+        window.U.beep('tick');
+      }, 220);
+    });
+
+    box.addEventListener('pointermove', e => {
+      const dx = e.clientX - startX, dy = e.clientY - startY;
+      if (!held) {
+        // a real scroll or a decisive sideways drag cancels the hold
+        if (Math.abs(dx) > 10 || Math.abs(dy) > 10) clearTimeout(holdTimer);
+        return;
+      }
+      e.preventDefault();
+      moved = true;
+      held.style.transform = `translate(${dx}px, ${dy}px) scale(1.04)`;
+
+      // whichever tile the finger is over swaps places with the held one
+      const over = document.elementFromPoint(e.clientX, e.clientY);
+      const target = over && over.closest ? over.closest('.tile') : null;
+      if (target && target !== held && box.contains(target)) {
+        const list = tiles();
+        const ai = list.indexOf(held), bi = list.indexOf(target);
+        if (ai > -1 && bi > -1) {
+          box.insertBefore(held, ai < bi ? target.nextSibling : target);
+          startX = e.clientX; startY = e.clientY;
+          held.style.transform = 'scale(1.04)';
+        }
+      }
+    });
+
+    const up = e => {
+      const wasHeld = held, didMove = moved;
+      const t = e.target && e.target.closest ? e.target.closest('.tile') : null;
+      finish(wasHeld && didMove);
+      if (!wasHeld && t && Math.abs(e.clientX - startX) < 10 && Math.abs(e.clientY - startY) < 10) {
+        onTap(t.dataset.mode);        // an ordinary tap: play the game
+      }
+    };
+    box.addEventListener('pointerup', up);
+    box.addEventListener('pointercancel', () => finish(false));
   }
 
   function howItWorksCard() {
@@ -678,9 +767,9 @@
     if (o.weekIds) playPick.weekIds = o.weekIds.slice();
     if (!playPick.weekIds.length && db.weeks.length) playPick.weekIds = [db.weeks[0].id];
 
-    const isPuzzle = ['crossword', 'wordsearch', 'rush', 'puzzles'].includes(playPick.mode);
+    const isPuzzle = ['crossword', 'wordsearch', 'rush', 'puzzles', 'quest'].includes(playPick.mode);
     const titles = {
-      spellbuzz: 'Spell Buzz', listen: 'Listen & Spell', meanings: 'Word Meanings',
+      quest: 'Spell Quest', spellbuzz: 'Spell Buzz', listen: 'Listen & Spell', meanings: 'Word Meanings',
       mixed: 'Mixed Buzz', buzzer: 'Speed Round', crossword: 'Crossword',
       wordsearch: 'Word Search', championship: 'The Big Test', rush: 'Word Rush',
       puzzles: 'Puzzles'
@@ -800,6 +889,10 @@
       if (playPick.mode === 'crossword') { Quiz.startCrossword(pool); return; }
       if (playPick.mode === 'wordsearch') { Quiz.startWordSearch(pool); return; }
       if (playPick.mode === 'rush') { Quiz.startRush(pool, { count: 6 }); return; }
+      if (playPick.mode === 'quest') {
+        Quiz.startQuest(pool, { weekIds: playPick.weekIds === 'tricky' ? [] : playPick.weekIds });
+        return;
+      }
       const preset = (playPick.mode === 'meanings' && playPick.timed) ? 'buzzer'
                    : (playPick.mode === 'mixed' && playPick.bigTest) ? 'championship'
                    : playPick.mode;

@@ -909,6 +909,7 @@ Reflex = A quick automatic response"></textarea>
 
       ${adaptCard()}
 
+      ${playStyleCard(90)}
       ${db.profile.baseline ? baselineCard(db.profile.baseline) : ''}`;
 
     const rb = $('#rebuildPreview');
@@ -1031,7 +1032,8 @@ Reflex = A quick automatic response"></textarea>
     const L = { spell: ' Spell it', listen: ' Listen & spell', sentence: 'Fill the gap',
       meaning: ' Meanings', reverse: ' Which word', missing: ' Missing letters',
       jumble: ' Jumbled', spot: ' Spot the spelling', crossword: ' Crossword',
-      wordsearch: ' Word search', rush: '⌨ Word Rush (from memory)' };
+      wordsearch: ' Word search', rush: '⌨ Word Rush (from memory)',
+      quest: ' Spell Quest (clue → type it)' };
     const by = {};
     rows.forEach(a => { by[a.mode] = by[a.mode] || { n: 0, ok: 0 }; by[a.mode].n++; if (a.ok) by[a.mode].ok++; });
     return Object.keys(by).filter(k => by[k].n >= 3)
@@ -1413,6 +1415,20 @@ Reflex = A quick automatic response"></textarea>
         }))
       },
       byGameType: modeBreakdown(att).map(m => ({ game: m.label, answers: m.n, accuracy: +m.pct.toFixed(2) })),
+      /* How they play, not just how they score — which games they choose,
+         when, for how long, and whether they try again after a miss. Worth
+         a sentence in the note when it is telling us something. */
+      playStyle: (() => {
+        const p = playStyle(days);
+        return {
+          gamesChosen: p.games.map(g => ({ game: g.name, plays: g.plays, minutes: g.minutes })),
+          averageSittingMinutes: p.avgSessionMin,
+          typicalThinkingSeconds: p.medianSeconds,
+          triesPerWord: p.triesPerWord,
+          triedAgainAfterAMissRate: p.stickWithIt == null ? null : +p.stickWithIt.toFixed(2),
+          whenTheyPlay: p.slots
+        };
+      })(),
       byTopic: countAccuracyByWeek(att),
       wordsStruggling: wordRows.filter(x => x.accuracy < 0.8).slice(0, 20),
       wordsSolid: wordRows.filter(x => x.accuracy >= 0.9 && x.tries >= 3).slice(0, 12).map(x => x.word),
@@ -1887,6 +1903,129 @@ th,td{padding:10px 12px;border:1px solid #E5DDD1;text-align:left}th{background:#
       a.download = `AraBuzz-Coach-Report-${new Date().toISOString().slice(0, 10)}.html`;
       a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 1500);
     };
+  }
+
+  /* ======================================================================
+     HOW THEY PLAY — the shape of a child's own habit.
+
+     Not another accuracy chart. This answers the questions you can only
+     answer by watching: which game do they CHOOSE, when do they play, how
+     long do they stay, and — the one that matters most — what do they do
+     when a word beats them? A child who tries again after a miss is
+     learning; a child who bails is telling us something about the game, not
+     about their spelling.
+
+     Every number here comes from answers and sessions already recorded, so
+     it costs nothing and works offline.
+     ====================================================================== */
+  const GAME_NAMES = {
+    quest: 'Spell Quest', spellbuzz: 'Spell Buzz', listen: 'Listen & Spell',
+    meanings: 'Word Meanings', mixed: 'Mixed Buzz', buzzer: 'Speed Round',
+    championship: 'The Big Test', rush: 'Word Rush', crossword: 'Crossword',
+    wordsearch: 'Word Search', quiz: 'Practice'
+  };
+
+  function playStyle(days) {
+    const since = Date.now() - (days || 90) * 864e5;
+    const db = Store.db;
+    const sess = (db.sessions || []).filter(x => x.ts >= since);
+    const att = (db.attempts || []).filter(a => a.ts >= since);
+
+    // which games they actually choose, by sessions AND by minutes spent
+    const byGame = {};
+    sess.forEach(x => {
+      const key = x.preset || x.kind || 'quiz';
+      const g = byGame[key] = byGame[key] || { plays: 0, ms: 0, correct: 0, total: 0 };
+      g.plays++; g.ms += x.ms || 0; g.correct += x.correct || 0; g.total += x.total || 0;
+    });
+    const games = Object.keys(byGame).map(k => ({
+      key: k, name: GAME_NAMES[k] || k,
+      plays: byGame[k].plays,
+      minutes: Math.round(byGame[k].ms / 60000),
+      accuracy: byGame[k].total ? byGame[k].correct / byGame[k].total : null
+    })).sort((a, b) => b.plays - a.plays);
+
+    // when in the day — morning / afternoon / evening
+    const slots = { morning: 0, afternoon: 0, evening: 0 };
+    sess.forEach(x => {
+      const h = new Date(x.ts).getHours();
+      slots[h < 12 ? 'morning' : h < 17 ? 'afternoon' : 'evening']++;
+    });
+
+    // persistence: after a miss, do they come back and get it?
+    const byWordSession = {};
+    att.forEach(a => {
+      const k = (a.sessionId || '') + '|' + a.wordId;
+      (byWordSession[k] = byWordSession[k] || []).push(a);
+    });
+    let struggled = 0, recovered = 0, tries = 0, groups = 0;
+    Object.keys(byWordSession).forEach(k => {
+      const list = byWordSession[k].sort((x, y) => x.ts - y.ts);
+      groups++; tries += list.length;
+      if (list[0] && !list[0].ok) { struggled++; if (list.some(x => x.ok)) recovered++; }
+    });
+
+    const typed = att.filter(a => TYPED_MODES.includes(a.mode) || a.mode === 'quest');
+    const times = typed.map(a => a.ms).filter(x => x > 300 && x < 120000).sort((a, b) => a - b);
+    const median = times.length ? times[Math.floor(times.length / 2)] : null;
+
+    return {
+      sessions: sess.length,
+      answers: att.length,
+      minutes: Math.round(sess.reduce((n, x) => n + (x.ms || 0), 0) / 60000),
+      avgSessionMin: sess.length ? +(sess.reduce((n, x) => n + (x.ms || 0), 0) / 60000 / sess.length).toFixed(1) : 0,
+      games, slots,
+      firstTryRate: att.length ? att.filter(a => a.firstTry && a.ok).length / att.length : null,
+      triesPerWord: groups ? +(tries / groups).toFixed(2) : null,
+      stickWithIt: struggled ? recovered / struggled : null,
+      struggled,
+      medianSeconds: median ? +(median / 1000).toFixed(1) : null
+    };
+  }
+
+  /** The card the parent (and Prem, viewing as them) actually reads. */
+  function playStyleCard(days) {
+    const p = playStyle(days);
+    const name = Store.db.profile ? Store.db.profile.name : 'They';
+    if (!p.sessions) return '';
+    const pct = v => v == null ? '—' : Math.round(v * 100) + '%';
+    const top = p.games[0];
+    const slotName = Object.keys(p.slots).sort((a, b) => p.slots[b] - p.slots[a])[0];
+
+    return `
+      <div class="card" style="margin-top:14px">
+        <h3>How ${esc(name)} likes to play</h3>
+        <p class="muted small">Which games they choose, when they play, and what they do when a
+           word beats them. This is about habit, not marks.</p>
+        ${window.Charts ? Charts.tiles([
+          { value: String(p.sessions), label: 'Games played' },
+          { value: p.minutes + ' min', label: 'Time spent' },
+          { value: p.avgSessionMin + ' min', label: 'Average sitting' },
+          { value: pct(p.firstTryRate), label: 'Right first time' },
+          { value: p.stickWithIt == null ? '—' : pct(p.stickWithIt), label: 'Tried again after a miss' },
+          { value: p.medianSeconds == null ? '—' : p.medianSeconds + 's', label: 'Typical thinking time' }
+        ]) : ''}
+
+        <h4 style="margin:16px 0 6px">Games they choose</h4>
+        <table class="data"><thead><tr><th>Game</th><th style="width:20%">Played</th>
+          <th style="width:22%">Minutes</th><th style="width:22%">Got right</th></tr></thead>
+          <tbody>${p.games.map(g => `<tr>
+            <td><b>${esc(g.name)}</b></td>
+            <td>${g.plays}</td>
+            <td>${g.minutes}</td>
+            <td>${g.accuracy == null ? '—' : Math.round(g.accuracy * 100) + '%'}</td>
+          </tr>`).join('')}</tbody></table>
+
+        <p class="hint" style="margin-top:10px">
+          ${top ? `<b>${esc(name)} reaches for ${esc(top.name)} most.</b> ` : ''}
+          ${slotName && p.slots[slotName] ? `Usually in the <b>${slotName}</b>. ` : ''}
+          ${p.stickWithIt != null && p.struggled >= 3
+            ? (p.stickWithIt >= 0.7
+              ? `And when a word beats them they come back and get it <b>${pct(p.stickWithIt)}</b> of the time — that persistence is worth more than any score here.`
+              : `When a word beats them they come back and get it ${pct(p.stickWithIt)} of the time. Sitting beside them for one round is the single most useful thing you can do.`)
+            : ''}
+        </p>
+      </div>`;
   }
 
   /* ======================================================================

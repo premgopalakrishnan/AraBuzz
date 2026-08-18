@@ -156,6 +156,7 @@
     return { spell: 'Spell it', listen: 'Listen & spell', sentence: 'Fill the gap',
       meaning: 'What does it mean?', reverse: 'Which word?', missing: 'Missing letters',
       jumble: 'Jumbled up', spot: 'Spot the spelling',
+      quest: 'Spell Quest',
       mini: 'Bonus mini crossword' }[m] || 'Question';
   }
 
@@ -1494,5 +1495,342 @@
                         levelUp: after > before, level: after, res });
   }
 
-  w.Quiz = { start, startCrossword, startWordSearch, startRush, get active() { return !!s; } };
+
+  /* ======================================================================
+     SPELL QUEST — the one Aradhana asked for.
+
+     Before AraBuzz existed she was practising by asking ChatGPT for a clue
+     and typing the spelling back into the chat, one word at a time, watching
+     a score climb to 14/14. She liked THAT. This is that game, built
+     properly: a conversation with Ara that walks the whole week's list, one
+     clue at a time, never moving on until the word is right.
+
+     Three things make it different from the other games, and all three are
+     deliberate:
+
+       · It is a CONVERSATION, not a form. Her answer appears as her message.
+       · It covers the WHOLE list, in order, and ends with "MASTERED" — a
+         finish line, not a sample of ten questions.
+       · It never gives up on a word. Wrong answers earn a bigger hint and
+         another go; a word that beats her three times is parked and comes
+         back at the end, which is exactly how her ChatGPT session went.
+
+     Everything else is ordinary AraBuzz underneath: every answer goes through
+     Engine.record, so the Leitner boxes, her own misspellings, the tricky-word
+     list and the coach note all learn from it exactly as they do from Spell
+     Buzz. Points, streak, badges and sync are the same too.
+     ====================================================================== */
+  let quest = null;
+
+  function startQuest(pool, opts) {
+    const o = opts || {};
+    if (!pool || !pool.length) { toast('No words to quest with yet.'); return; }
+
+    /* The whole list, in the order the sheet gave them — that is what makes
+       it feel like finishing the week rather than sampling it. A very long
+       pool (all weeks at once) is trimmed to a sitting that stays a game. */
+    const MAX = 20;
+    let words = pool.slice();
+    if (words.length > MAX) words = Engine.pickWords(pool, MAX, { confidenceShare: 0.3 });
+
+    quest = {
+      pool,
+      words,
+      i: 0,
+      tries: 0,
+      correct: 0,
+      points: 0,
+      parked: [],            // words that beat her — they come back at the end
+      round: 1,              // 1 = the list, 2 = the parked words
+      log: [],               // the whole conversation
+      started: Date.now(),
+      qStart: Date.now(),
+      sessionId: (window.Sync ? Sync.uuid() : Store.uid('s')),
+      weekIds: o.weekIds && o.weekIds !== 'tricky' ? o.weekIds : [],
+      title: o.title || questTitle(o, words)
+    };
+
+    UI.go('puzzle');
+    say(`<b>🏆 ${esc(quest.title)}</b>`);
+    say(`Here is how it works: I give you a clue, you type the spelling. ` +
+        `Get it and you earn a star ⭐. Miss it and I give you a hint, then you try ` +
+        `again — I never just hand you the answer. 😉`);
+    say(`<b>${words.length} words.</b> Ready? Here we go! 👇`);
+    paintQuest();
+    setTimeout(askClue, 260);
+  }
+
+  /** "The Blood Quest!" — named after the sheet, the way she named hers. */
+  function questTitle(o, words) {
+    const wk = (o.weekIds && o.weekIds.length === 1)
+      ? (Store.db.weeks || []).find(k => k.id === o.weekIds[0]) : null;
+    const topic = wk && (wk.topic || wk.title);
+    if (topic) {
+      const t = String(topic).replace(/\s*(spell\s*buzz|week\s*\d+)\s*/ig, '').trim();
+      if (t) return `The ${t} Quest!`;
+    }
+    return 'Spell Quest!';
+  }
+
+  const say = (html, cls) => { if (quest) quest.log.push({ who: 'ara', html, cls: cls || '' }); };
+  const heard = text => { if (quest) quest.log.push({ who: 'kid', html: esc(text) }); };
+  const pick = list => list[Math.floor(Math.random() * list.length)];
+
+  /* ---- Ara's voice in the quest -------------------------------------
+     The thing Aradhana actually liked was being TALKED TO: praised for the
+     specific thing she did, teased gently when a word beat her, and never
+     told she was "wrong". So nothing here is a fixed string — every reaction
+     is picked from a handful, and the ones that matter are earned:
+     first-try, fought-for, a streak, a genuinely hard word. */
+  const CHEER_FIRST = ['🎉 Correct!', '⭐ Yes!', '✨ Spot on!', '🎯 Nailed it!', '🙌 Correct!'];
+  const CHEER_FOUGHT = ['💪 Got it!', '👏 There it is!', '🎉 Yes — you found it!', '🔓 Cracked it!'];
+  const PRAISE_FIRST = ['perfectly spelled!', 'first time, no hesitation!', 'straight in!',
+                        'not a letter out of place!', 'exactly right!'];
+  const PRAISE_FOUGHT = ['and you worked it out yourself. 👏', 'that one made you think — even better. 🧠',
+                         'you fixed it without being told. That is the good kind of hard. 💪',
+                         'second time lucky? No — second time <i>earned</i>. 😄'];
+  const NEARLY = ['So close! 🤏', 'Nearly!', 'Ooh, almost.', 'Good try — not quite yet. 💪',
+                  'Close enough to taste it. 😄'];
+  const STREAK = { 3: '🔥 Three in a row!', 5: '🔥🔥 Five in a row — you are on fire!',
+                   8: '⚡ Eight in a row! Ara can barely keep up.',
+                   10: '🏅 TEN in a row. That is showing off (keep going).' };
+
+  function questWord() {
+    if (!quest) return null;
+    return quest.round === 1 ? quest.words[quest.i] : quest.parked[quest.i];
+  }
+  function questTotal() { return quest ? quest.words.length : 0; }
+
+  /** One clue, in her own game's voice. */
+  function askClue() {
+    if (!quest) return;
+    const wd = questWord();
+    if (!wd) return finishQuest();
+    quest.tries = 0;
+    quest.qStart = Date.now();
+
+    const clues = (wd.clues || []).filter(Boolean);
+    const clue = clues.length
+      ? clues[Math.floor(Math.random() * clues.length)]
+      : (wd.kidMeaning || wd.meaning || 'Spell this week’s word.');
+    const n = quest.round === 1 ? (quest.i + 1) : (quest.words.length + quest.i + 1);
+
+    say(`<span class="q-kicker">🧩 CLUE ${n}${quest.round === 2 ? ' · one more try' : ''}</span>` +
+        `<p style="margin:6px 0 0">${esc(clue)}</p>` +
+        `<p class="q-ask">⌨️ Type the spelling below</p>`);
+    paintQuest();
+  }
+
+  /** Her answer, checked letter by letter — the heart of the game. */
+  function answerQuest(raw) {
+    if (!quest) return;
+    const given = String(raw || '').trim();
+    if (!given) return;
+    const wd = questWord();
+    if (!wd) return;
+
+    heard(given);
+    quest.tries++;
+    const ms = Date.now() - quest.qStart;
+    const q = { wordId: wd.id, word: wd.word, mode: 'quest', kind: 'type', answer: wd.word, meta: {} };
+    const ok = Phonics.analyse(wd.word, given).ok;
+
+    /* Every answer counts, right or wrong, first try or fifth — this is what
+       feeds the boxes, the tricky list and the parent's note. */
+    Engine.record(q, given, ok, quest.tries === 1, ms, quest.sessionId);
+
+    if (ok) {
+      const pts = quest.tries === 1 ? Game.POINTS.first
+                : quest.tries === 2 ? Game.POINTS.second : Game.POINTS.hinted;
+      quest.points += pts;
+      quest.correct++;
+      quest.run = quest.tries === 1 ? (quest.run || 0) + 1 : 0;
+      window.U.beep('great');
+      window.U.speak(wd.word);
+
+      const firstGo = quest.tries === 1;
+      const long = wd.word.replace(/\s/g, '').length >= 10;
+      say(`<b>${pick(firstGo ? CHEER_FIRST : CHEER_FOUGHT)}</b> ` +
+          `<span class="q-word">${esc(wd.word)}</span> — ${pick(firstGo ? PRAISE_FIRST : PRAISE_FOUGHT)}` +
+          (firstGo && long ? `<p style="margin:6px 0 0">And that was a <b>long</b> one — ${wd.word.replace(/\s/g, '').length} letters, no wobble. 😮</p>` : '') +
+          (STREAK[quest.run] ? `<p style="margin:6px 0 0">${STREAK[quest.run]}</p>` : '') +
+          `<p class="q-score">⭐ ${quest.correct}/${questTotal()} · +${pts} points</p>`, 'good');
+      nextQuest();
+      return;
+    }
+
+    /* Wrong. The hints get bigger, never the answer — until the third try,
+       when the word is shown and parked for the end. */
+    window.U.beep('bad');
+    quest.run = 0;
+    const an = Phonics.analyse(wd.word, given);
+    if (quest.tries === 1) {
+      const letters = wd.word.replace(/\s/g, '').length;
+      /* Notice what she actually did. Spelling it the way it sounds is a
+         real skill, not a failure, and being told so is the difference
+         between "I got it wrong" and "I nearly had it". */
+      const kind = an && an.soundsRight
+        ? `That is <b>exactly how it sounds</b> — your ears are right, English is just being English. 🙃`
+        : pick(NEARLY);
+      say(`${kind}<br><b>Hint:</b> it has <b>${letters}</b> letters and starts with ` +
+          `<b>${esc(wd.word[0].toUpperCase())}</b>. Have another go! 👇`, 'hint');
+    } else if (quest.tries === 2) {
+      say(`You are nearly there — look at what you wrote:` +
+          `<div class="diff" style="margin:8px 0">${Phonics.diffHTML(wd.word, given)}</div>` +
+          `${wd.trickyBit ? `<b>The bit that catches everyone:</b> ${esc(wd.trickyBit)}<br>` : ''}` +
+          `${pick(['One more go — you have got this. 👇', 'Fix that bit and it is yours. 👇',
+                   'So close I can hear it. One more. 👇'])}`, 'hint');
+    } else {
+      say(`${pick(['This one is a tricky customer! 🦜', 'Right — this word is being difficult. 😤',
+                   'That word is putting up a fight!'])} Here it is: ` +
+          `<span class="q-word">${esc(wd.word)}</span>` +
+          `${wd.memoryTrick ? `<p style="margin:6px 0 0">💡 ${esc(wd.memoryTrick)}</p>` : ''}` +
+          `<p style="margin:6px 0 0">${quest.round === 1
+            ? 'Say it out loud once, and we will come back to it at the end. 😉'
+            : 'It got away this time — it will be back in your next game. 😉'}</p>`, 'hint');
+      window.U.speak(wd.word);
+      if (quest.round === 1) quest.parked.push(wd);
+      nextQuest();
+      return;
+    }
+    paintQuest();
+  }
+
+  function nextQuest() {
+    if (!quest) return;
+    quest.i++;
+    const done = quest.round === 1
+      ? quest.i >= quest.words.length
+      : quest.i >= quest.parked.length;
+    paintQuest();
+
+    if (!done) { setTimeout(askClue, 700); return; }
+
+    // The list is finished. Anything parked comes back for one last go.
+    if (quest.round === 1 && quest.parked.length) {
+      quest.round = 2; quest.i = 0;
+      const names = quest.parked.map(x => x.word);
+      setTimeout(() => {
+        say(`<b>That's the whole list! 🎊</b> ${quest.correct}/${questTotal()} first time round.`);
+        say(names.length === 1
+          ? `Now only <b>${esc(names[0])}</b> needs one more try. 😉`
+          : `Now these need one more try: <b>${esc(names.join(', '))}</b> 😉`);
+        paintQuest();
+        setTimeout(askClue, 500);
+      }, 700);
+      return;
+    }
+    setTimeout(finishQuest, 800);
+  }
+
+  function finishQuest() {
+    if (!quest) return;
+    const q = quest;
+    const total = q.words.length;
+    const pct = total ? q.correct / total : 0;
+    const stars = q.correct === total ? 3 : Engine.stars(pct);
+    const bonus = stars * 12;
+    const points = q.points + bonus;
+
+    const before = Game.levelFor(Store.db.game.points);
+    Game.awardPoints(points);
+    const after = Game.levelFor(Store.db.game.points);
+
+    /* The same finish line as every other game: session recorded, streak
+       touched, badges checked, everything synced. */
+    const res = Game.finishSession({
+      kind: 'quest', preset: 'quest', label: q.title,
+      total, correct: q.correct, points, stars,
+      ms: Date.now() - q.started, weekIds: q.weekIds,
+      complete: q.correct === total
+    });
+    Store.save(true); UI.checkpointVault();
+
+    const perfect = q.correct === total;
+    say(`<b>🏆 FINAL SCORE: ${q.correct}/${total}</b> ${'🌟'.repeat(Math.max(1, stars))}` +
+        `<p class="q-score">+${points} points${bonus ? ` (${bonus} bonus for ${stars} star${stars > 1 ? 's' : ''})` : ''}</p>` +
+        (perfect
+          ? `<p style="margin:8px 0 0"><b>${esc(q.title.replace(/!$/, ''))} = MASTERED!</b> 🎉 Every single word right. That is the whole list, beaten.</p>`
+          : `<p style="margin:8px 0 0">Well played! The words that got away will come back in your next game — that is how they stick.</p>`) +
+        (after > before ? `<p style="margin:8px 0 0">🎈 <b>Level ${after}!</b> Ara just grew.</p>` : '') +
+        ((res.badges || []).length
+          ? `<p style="margin:8px 0 0">🏅 New badge: <b>${res.badges.map(b => esc(b.name)).join(', ')}</b></p>` : ''),
+      'final');
+
+    quest = Object.assign({}, q, { over: true, log: q.log });
+    paintQuest();
+    confetti(perfect ? 110 : 60);
+    window.U.beep('great');
+  }
+
+  function paintQuest() {
+    const scr = $('#scr-puzzle');
+    if (!quest) return;
+    const over = !!quest.over;
+    const total = questTotal();
+
+    scr.innerHTML = `
+      <div class="row between" style="margin-bottom:6px">
+        <button class="btn-quiet btn-s" id="quit">← Stop</button>
+        <div class="row" style="gap:6px">
+          <span class="pill honey">${Icon.icon('star', { size: 14 })} <b>${quest.correct}</b>/${total}</span>
+          ${quest.points ? `<span class="pill sky">+${quest.points}</span>` : ''}
+        </div>
+      </div>
+
+      <div class="qbar" style="margin-bottom:10px">${quest.words.map((_, k) => {
+        const done = quest.round === 2 || k < quest.i;
+        return `<span class="${done ? 'done' : (quest.round === 1 && k === quest.i ? 'now' : '')}"></span>`;
+      }).join('')}</div>
+
+      <div class="quest-log" id="qlog">
+        ${quest.log.map(m => m.who === 'ara'
+          ? `<div class="q-row"><div class="q-ara">${Ara.svg({ level: Game.levelFor(Store.db.game.points), width: 34, mood: 'happy', plain: true })}</div>
+               <div class="q-bubble ${m.cls}">${m.html}</div></div>`
+          : `<div class="q-row mine"><div class="q-bubble mine">${m.html}</div></div>`).join('')}
+      </div>
+
+      ${over ? `
+        <div class="row center wrap" style="gap:10px;margin-top:16px">
+          <button class="btn-ghost" id="qHome">${Icon.icon('home', { size: 17 })} Home</button>
+          <button class="btn-go btn-xl" id="qAgain">Play again →</button>
+        </div>`
+      : `
+        <div class="quest-compose">
+          <input type="text" id="qIn" class="quest-input" placeholder="type the spelling…"
+                 autocomplete="off" autocapitalize="off" spellcheck="false" enterkeyhint="send">
+          <button class="btn-primary" id="qSend">Send</button>
+        </div>
+        <p class="hint center-text" style="margin-top:8px">No rush — spelling it yourself is the whole point.</p>`}`;
+
+    const log = $('#qlog');
+    if (log) log.scrollTop = log.scrollHeight;
+
+    const el = sel => scr.querySelector(sel);
+    el('#quit').onclick = confirmQuitQuest;
+
+    if (over) {
+      el('#qHome').onclick = () => { quest = null; UI.go('home'); };
+      el('#qAgain').onclick = () => { const p = quest.pool, w = quest.weekIds; quest = null; startQuest(p, { weekIds: w }); };
+      return;
+    }
+
+    const inp = el('#qIn');
+    const send = () => { const v = inp.value; inp.value = ''; answerQuest(v); };
+    el('#qSend').onclick = send;
+    inp.onkeydown = e => { if (e.key === 'Enter') { e.preventDefault(); send(); } };
+    window.U.noAutoCorrect(inp);
+    setTimeout(() => { try { inp.focus({ preventScroll: true }); } catch (e) { inp.focus(); } }, 80);
+  }
+
+  async function confirmQuitQuest() {
+    const yes = await window.U.confirmBox('Stop the quest?',
+      'Every word you got right still counts, and Ara keeps what you practised.', 'Yes, stop');
+    if (!yes) return;
+    if (quest && quest.correct > 0) finishQuest();
+    else { quest = null; UI.go('home'); }
+  }
+
+  w.Quiz = { start, startCrossword, startWordSearch, startRush, startQuest,
+              get active() { return !!s || !!quest; } };
 })(window);

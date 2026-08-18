@@ -87,7 +87,8 @@
     { id: 'comeback', ic: 'star', name: 'Welcome Back',    ds: 'Come back after a break' },
     { id: 'earlybird', ic: 'sparkle', name: 'Early Bird',      ds: 'Practise before 8 in the morning' },
     { id: 'nightowl', ic: 'macaw', name: 'Night Owl',       ds: 'Practise after 8 at night' },
-    { id: 'century', ic: 'medal', name: 'Century',         ds: 'Answer 100 questions altogether' }
+    { id: 'century', ic: 'medal', name: 'Century',         ds: 'Answer 100 questions altogether' },
+    { id: 'quest', ic: 'trophy', name: 'Quest Master',    ds: 'Finish a Spell Quest with every word right' }
   ];
 
   function has(id) { return S().db.game.badges.indexOf(id) >= 0; }
@@ -124,6 +125,7 @@
 
     if (ctx && ctx.preset === 'buzzer' && ctx.total >= 8 && ctx.correct / ctx.total >= 0.9) add('speedster');
     if (ctx && ctx.preset === 'championship' && ctx.total >= 8 && ctx.correct / ctx.total >= 0.9) add('champion');
+    if (ctx && ctx.kind === 'quest' && ctx.complete && ctx.total >= 5) add('quest');
     if (ctx && ctx.kind === 'crossword' && ctx.complete) add('crossword');
     if (ctx && ctx.kind === 'wordsearch' && ctx.complete) add('wordsearch');
 
