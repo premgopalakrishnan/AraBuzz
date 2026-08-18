@@ -658,7 +658,7 @@
       const db0 = S().db;
       const famId = me.parent.family_id;
       if (db0.familyId && famId && db0.familyId !== famId) {
-        console.warn('[sync] different family signed in — clearing the old family’s local data');
+        console.warn('[sync] a different family signed in — starting this device fresh for them');
         db0.children = []; db0.activeChildId = null; db0.profile = null;
         db0.progress = {}; db0.attempts = []; db0.sessions = []; db0.reports = [];
         db0.weeks = []; db0.words = {};

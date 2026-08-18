@@ -11,9 +11,13 @@
 
   /* ------------------------------------------------------------- routing  */
   function go(name, opts) {
-    /* A newer AraBuzz arrived while she was playing. She is back on the home
-       screen now, so this is the moment to take it — not mid-question. */
-    if (name === 'home' && window.ARABUZZ_UPDATE && window.arabuzzTakeUpdate) {
+    /* A newer AraBuzz arrived while something was mid-flight. The moment the
+       person navigates ANYWHERE quiet, the update is taken — so a version
+       refreshed on one screen can never sit stale on the next. Only the three
+       mid-question screens, and onboarding, are allowed to hold it off. */
+    const holdUpdate = name === 'quiz' || name === 'puzzle' || name === 'result'
+      || document.body.classList.contains('onboarding');
+    if (!holdUpdate && window.ARABUZZ_UPDATE && window.arabuzzTakeUpdate) {
       if (window.arabuzzTakeUpdate()) return;
     }
     const scr = $('#scr-' + name);
@@ -1482,51 +1486,81 @@
   function paintLanding() {
     const s = $('#scr-landing');
     const me = (window.Cloud && Cloud.whoAmI()) || {};
-    const who = (me.parent && me.parent.full_name) || 'there';
-    const admin = !!me.isAdmin;
-    const hasKids = !!(me.children && me.children.length);
 
+    // The admin never lands here — the console is their whole app.
+    if (me.isAdmin) { go('admin'); return; }
+
+    const kids = Store.childList().filter(k => k.name);
+    const accountKids = (me.children || []);
+
+    /* The account has kids the device hasn't adopted yet — fetch them rather
+       than showing an empty launcher or, worse, offering to create them again. */
+    if (!kids.length && accountKids.length && window.Sync && !paintLanding._pulling) {
+      paintLanding._pulling = true;
+      showBootWait();
+      Sync.pull({ deep: true })
+        .catch(e => console.warn(e))
+        .finally(() => {
+          paintLanding._pulling = false;
+          hideBootWait();
+          if (current === 'landing') paintLanding();
+        });
+      return;
+    }
+
+    if (kids.length) {
+      /* The launcher. Open the app, see your name, tap it, play — the same
+         one-tap ritual as the TV. Grown-ups have their own door underneath. */
+      s.innerHTML = `
+        <div class="center-text" style="padding:22px 0 4px">
+          <div class="ara-stage ara-bob">${Ara.svg({ level: 3, width: 116, mood: 'happy' })}</div>
+          <h1 style="margin-bottom:4px">Who\u2019s playing today?</h1>
+          <p class="muted">Tap your name to start.</p>
+        </div>
+        <div class="who-grid">
+          ${kids.map(k => `
+            <button class="who-card ${k.active ? 'on' : ''}" data-kid="${k.id}" style="--who:${k.colour}">
+              <span class="who-ava">${k.emoji}</span>
+              <span class="who-name">${esc(k.name)}</span>
+              <span class="who-meta">Level ${Game.levelFor(k.points)} \u00b7 ${k.points} pts${k.streak ? ` \u00b7 ${k.streak} day streak` : ''}</span>
+            </button>`).join('')}
+          <button class="who-card add" id="ldAdd">
+            <span class="who-ava">\uFF0B</span>
+            <span class="who-name">Add someone</span>
+            <span class="who-meta">A brother or sister</span>
+          </button>
+        </div>
+        <div class="center-text" style="margin:30px auto 0;max-width:440px;border-top:1px solid var(--line);padding-top:20px">
+          <button class="btn-quiet" id="ldParent">${Icon.icon('lock',{size:16})} Grown-ups \u2014 enter your PIN</button>
+          <p class="tiny faint" style="margin-top:8px">Progress, notes and settings live behind the PIN.</p>
+        </div>`;
+
+      window.U.$$('#scr-landing [data-kid]').forEach(b => b.onclick = () => {
+        const id = b.dataset.kid;
+        if (id !== Store.db.activeChildId) { Store.switchChild(id); syncVault(true); }
+        if (Store.db.profile) toast(`Hello, ${Store.db.profile.name}!`, 'good');
+        go('home');
+      });
+      $('#ldParent').onclick = openParentGate;
+      $('#ldAdd').onclick = addChildFlow;
+      return;
+    }
+
+    // No kids yet — the family is brand new on every device.
+    const who = (me.parent && me.parent.full_name) || 'there';
     s.innerHTML = `
       <div class="card glow" style="max-width:560px;margin:26px auto;text-align:center">
         <div class="ara-stage ara-bob">${Ara.svg({ level: 1, width: 140, mood: 'happy' })}</div>
         <h1>Hello, ${esc(who)}</h1>
-        <p class="muted">${admin
-          ? 'You’re signed in as the AraBuzz admin.'
-          : hasKids
-            ? 'You’re signed in. Your child is set up on another device — from here you can read your notes and check progress.'
-            : 'You’re signed in. No child is set up on this device yet.'}</p>
-
+        <p class="muted">You\u2019re signed in. No kid is set up yet.</p>
         <div class="col" style="gap:10px;margin-top:18px;align-items:stretch">
-          ${admin ? `
-            <button class="btn-primary btn-xl" id="ldAdmin">${Icon.icon('keys',{size:18})} Open the admin console</button>
-            <button class="btn-quiet" id="ldParent">${Icon.icon('lock',{size:16})} The grown-ups’ area</button>
-            <button class="btn-ghost" id="ldKid">Set up a child to play on this device</button>`
-          : `
-            <button class="btn-primary btn-xl" id="ldParent">${Icon.icon('lock',{size:18})} Open the grown-ups’ area</button>
-            <button class="btn-${hasKids ? 'ghost' : 'quiet'}" id="ldKid">${hasKids
-              ? 'My kid will also use this device'
-              : 'Set up my kid on this device'}</button>`}
+          <button class="btn-primary btn-xl" id="ldKid">Set up my kid on this device</button>
+          <button class="btn-quiet" id="ldParent">${Icon.icon('lock',{size:16})} Open the grown-ups\u2019 area</button>
         </div>
-        <p class="hint" style="margin-top:14px">${admin
-          ? ''
-          : 'The grown-ups’ area asks for your PIN — the weekly notes live behind it.'}</p>
+        <p class="hint" style="margin-top:14px">The grown-ups\u2019 area asks for your PIN \u2014 the weekly notes live behind it.</p>
       </div>`;
-
-    const a = $('#ldAdmin');   if (a) a.onclick = () => go('admin');
-    const pa = $('#ldParent'); if (pa) pa.onclick = openParentGate;
-    /* A kid who already exists on the account must NOT be created again —
-       fetch them onto this device and carry on. Only a family with no kids
-       yet goes through the welcome. */
-    const k = $('#ldKid');
-    if (k) k.onclick = async () => {
-      if (hasKids && window.Sync) {
-        showBootWait();
-        try { await Sync.pull({ deep: true }); } catch (e) { console.warn(e); }
-        hideBootWait();
-        if (Store.db.profile) { go('home'); return; }
-      }
-      startFresh();
-    };
+    $('#ldParent').onclick = openParentGate;
+    $('#ldKid').onclick = () => startFresh();
   }
 
   /* ====================================================================== */
@@ -1563,7 +1597,7 @@
       // Never redraw the screen she is answering a question on.
       if (current === 'quiz' || current === 'puzzle' || current === 'result') return;
       if (current === 'setup' && Store.db.profile && setupState.step === 0) { go('home'); return; }
-      if (current === 'landing') { if (Store.db.profile) go('home'); else paintLanding(); return; }
+      if (current === 'landing') { paintLanding(); return; }
       renderHud();
       if (window.Scene) Scene.update(true);
       if (REPAINTABLE.includes(current)) go(current);
@@ -1576,14 +1610,19 @@
    *  into "What should I call you?" unless they chose to set up a child. */
   function arrive() {
     const me = window.Cloud && Cloud.whoAmI();
-    if (me && me.isAdmin && window.Onboard && Onboard.onAdminPath && Onboard.onAdminPath()) {
-      history.replaceState({}, '', '/');
+    if (me && me.isAdmin) {
+      // The admin is an admin, not a family — the console is the whole app.
+      if (window.Onboard && Onboard.onAdminPath && Onboard.onAdminPath()) {
+        history.replaceState({}, '', '/');
+      }
       go('admin');
       return;
     }
-    if (Store.db.profile) { go('home'); return; }
+    // A signed-in family always opens on the launcher: every kid a tile,
+    // one tap to play, the grown-ups' door underneath.
     if (me && me.parent) { go('landing'); return; }
-    go('setup');   // offline / local-only: the original single-device flow
+    if (Store.db.profile) { go('home'); return; }   // offline device: straight in
+    go('setup');   // local-only: the original single-device flow
   }
 
   /** Called by Onboard once the grown-up has joined, agreed and set a PIN. */

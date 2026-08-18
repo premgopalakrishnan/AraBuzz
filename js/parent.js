@@ -45,21 +45,25 @@
     return !!(me && me.isAdmin);
   }
 
-  /** Repaint whatever currently hosts the upload flow. Called after every
-   *  step of reading, reviewing and publishing a sheet. */
+  let hostedTab = null;   // which tab the console is hosting right now
+
+  /** Repaint whichever screen currently hosts the tab being shown. Called
+   *  after every step of a flow that redraws itself. */
   function repaintHere(opts) {
-    if (host === 'admin' && window.Admin && window.UI && UI.current === 'admin') {
+    if (host === 'admin' && hostedTab && window.Admin && window.UI && UI.current === 'admin') {
       const at = $('#atab');
       if (at) {
         at.innerHTML = '<div id="ptab"></div>';
-        return draft ? paintDraft() : tabUpload();
+        if (hostedTab === 'upload') return draft ? paintDraft() : tabUpload();
+        if (hostedTab === 'words') return tabWords();
+        if (hostedTab === 'settings') return tabSettings();
       }
     }
     paint(opts);
   }
 
   function paint(opts) {
-    host = 'parent';
+    host = 'parent'; hostedTab = null;
     if (opts && opts.tab) tab = opts.tab;
     const admin = isAdmin();
     // Words are added in the admin console now; progress and reports need a
@@ -86,7 +90,7 @@
           ${admin
             ? `<button class="btn-quiet btn-s" id="goAdmin">${Icon.icon('keys', { size: 15 })} Admin console</button>`
             : ''}
-          <button class="btn-ghost btn-s" id="exitParent">← Back to ${esc(kidName || 'the app')}</button>
+          <button class="btn-ghost btn-s" id="exitParent">← Back</button>
         </div>
       </div>
 
@@ -102,7 +106,15 @@
       </div>
       <div id="ptab"></div>`;
 
-    $('#exitParent').onclick = () => UI.go('home');
+    $('#exitParent').onclick = () => {
+      // A signed-in family's home base is the who's-playing launcher; the
+      // admin's is the console. Only an offline single-device setup goes
+      // straight back into the kid's screens.
+      const me = window.Cloud && Cloud.whoAmI();
+      if (me && me.isAdmin) return UI.go('admin');
+      if (me && me.parent) return UI.go('landing');
+      UI.go('home');
+    };
     const adminBtn = $('#goAdmin');
     if (adminBtn) adminBtn.onclick = () => UI.go('admin');
     window.U.$$('#ptabs button').forEach(b => b.onclick = () => { tab = b.dataset.t; paint(); });
@@ -135,17 +147,21 @@
     }, 8000);
   }
 
-  /** The admin console calls this to show the upload flow inside its own
-   *  "Add words" tab. The grown-ups screen keeps a stale #ptab in its DOM,
-   *  which would shadow the admin's one — so it is emptied first. */
-  function openUpload() {
-    host = 'admin';
+  /** The admin console calls this to host a grown-ups tab inside its own
+   *  tab bar — Add words, Word lists or Settings. The grown-ups screen
+   *  keeps a stale #ptab in its DOM, which would shadow the console's one,
+   *  so it is emptied first. */
+  function hostTab(which) {
+    host = 'admin'; hostedTab = which;
     const sp = $('#scr-parent'); if (sp) sp.innerHTML = '';
     const at = $('#atab');
     if (!at) return;
     at.innerHTML = '<div id="ptab"></div>';
-    if (draft) paintDraft(); else tabUpload();
+    if (which === 'upload') { if (draft) paintDraft(); else tabUpload(); }
+    else if (which === 'words') tabWords();
+    else if (which === 'settings') tabSettings();
   }
+  function openUpload() { hostTab('upload'); }
 
   /* ======================================================================
      0. START HERE — what this is, in plain English, for a parent who has
@@ -748,7 +764,7 @@ Reflex = A quick automatic response"></textarea>
       const wk = Store.db.weeks.find(x => x.id === b.dataset.del);
       const yes = await confirmBox('Delete this list?',
         `"${esc(wk.title)}" will be removed. The scores for those words stay in the history.`, 'Delete');
-      if (yes) { Store.deleteWeek(b.dataset.del); UI.checkpointVault(); paint(); }
+      if (yes) { Store.deleteWeek(b.dataset.del); UI.checkpointVault(); repaintHere(); }
     });
     window.U.$$('[data-enrich]').forEach(b => b.onclick = () => enrichWeek(b.dataset.enrich, b));
   }
@@ -768,7 +784,7 @@ Reflex = A quick automatic response"></textarea>
       });
       Store.save(true); UI.checkpointVault();
       toast('Practice material ready.', 'good');
-      paint();
+      repaintHere();
     } catch (e) {
       toast('Failed: ' + (e.message || e), 'bad');
       btn.innerHTML = 'Build material'; btn.disabled = false;
@@ -1953,13 +1969,13 @@ th,td{padding:10px 12px;border:1px solid #E5DDD1;text-align:left}th{background:#
       s.apiBase = ($('#apiBase') && $('#apiBase').value.trim()) || '';
       s.warnCallsPerWeek = +$('#warnCalls').value || 40;
       Store.save(true); UI.syncVault(true);
-      toast('Saved.', 'good'); paint();
+      toast('Saved.', 'good'); repaintHere();
     };
     if ($('#resetKey')) $('#resetKey').onclick = async () => {
       const yes = await confirmBox('Use the built-in key again?',
         'Your own key will be removed from this device.', 'Use built-in');
       if (!yes) return;
-      s.apiKey = ''; Store.save(true); toast('Back to the built-in key.', 'good'); paint();
+      s.apiKey = ''; Store.save(true); toast('Back to the built-in key.', 'good'); repaintHere();
     };
     if ($('#testKey')) $('#testKey').onclick = async () => {
       s.apiKey = $('#apiKey').value.trim();
@@ -1978,7 +1994,7 @@ th,td{padding:10px 12px;border:1px solid #E5DDD1;text-align:left}th{background:#
     };
 
     window.U.$$('[data-policy]').forEach(t => t.onclick = () => {
-      s.modelPolicy = t.dataset.policy; Store.save(true); UI.syncVault(); paint();
+      s.modelPolicy = t.dataset.policy; Store.save(true); UI.syncVault(); repaintHere();
       toast(C.POLICIES[s.modelPolicy].label.trim() + ' selected.', 'good');
     });
     window.U.$$('[data-job]').forEach(sel => sel.onchange = () => {
@@ -2085,5 +2101,5 @@ th,td{padding:10px 12px;border:1px solid #E5DDD1;text-align:left}th{background:#
     UI.startFresh();
   }
 
-  w.Parent = { paint, openUpload, buildReportPayload, renderReport, wrapReportHTML, generateOnboardingReport };
+  w.Parent = { paint, openUpload, hostTab, buildReportPayload, renderReport, wrapReportHTML, generateOnboardingReport };
 })(window);

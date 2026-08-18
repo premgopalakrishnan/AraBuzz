@@ -103,33 +103,43 @@
         </div>
         <div class="row" style="gap:8px">
           <button class="btn-quiet btn-s" id="adRefresh">${Icon.icon('swap', { size: 15 })} Refresh</button>
-          <button class="btn-ghost btn-s" id="adExit">← Back to the app</button>
+          <button class="btn-ghost btn-s" id="adExit">Sign out</button>
         </div>
       </div>
 
       <div class="tabs" id="atabs" style="margin-top:16px">
         ${[['families', 'home', 'Families'], ['invite', 'mail', 'Invite'],
            ['upload', 'upload', 'Add words'], ['sheets', 'book', 'Sheets'],
-           ['spend', 'chart', 'Usage']]
+           ['words', 'spell', 'Word lists'],
+           ['spend', 'chart', 'Usage'], ['settings', 'gear', 'Settings']]
           .map(([k, i, t]) => `<button data-t="${k}" class="${tab === k ? 'on' : ''}">
              ${Icon.icon(i, { size: 16 })} ${t}</button>`).join('')}
       </div>
       <div id="atab"></div>`;
 
-    $('#adExit').onclick = () => UI.go('home');
+    $('#adExit').onclick = async () => {
+      const yes = await window.U.confirmBox('Sign out of the admin console?',
+        'You come back in at /admin with your email and password.', 'Sign out');
+      if (!yes) return;
+      try { await Cloud.signOut(); } catch (e) {}
+      location.replace('/admin');
+    };
     $('#adRefresh').onclick = async (e) => {
       e.target.disabled = true; data = null; await paint(); };
     $$('#atabs button').forEach(b => b.onclick = () => { tab = b.dataset.t; paint(); });
 
-    ({ families: tabFamilies, invite: tabInvite, upload: tabUploadHere,
+    ({ families: tabFamilies, invite: tabInvite, upload: () => hostParentTab('upload'),
+       words: () => hostParentTab('words'), settings: () => hostParentTab('settings'),
        sheets: tabSheets, spend: tabSpend }[tab] || tabFamilies)();
     watch();
   }
 
-  /** Adding a sheet lives here now — the same flow parent.js has always had,
-   *  painted into this console instead of the grown-ups screen. */
-  function tabUploadHere() {
-    if (window.Parent && Parent.openUpload) Parent.openUpload();
+  /** Adding sheets, managing word lists and settings all live in the console
+   *  now — the admin account never needs the grown-ups screen or the kids'
+   *  side of the app. The flows themselves still live in parent.js; they are
+   *  simply painted in here. */
+  function hostParentTab(which) {
+    if (window.Parent && Parent.hostTab) Parent.hostTab(which);
     else $('#atab').innerHTML = '<p class="muted">Not available.</p>';
   }
 
@@ -144,9 +154,9 @@
   function safeToRepaint() {
     if (document.hidden) return false;
     if (!window.UI || UI.current !== 'admin') return false;
-    // Never repaint over a sheet being read, checked or published — that
-    // work-in-progress lives only on this screen and would be lost.
-    if (tab === 'upload') return false;
+    // Never repaint over a sheet being read, checked or published — or over
+    // settings being typed into. That work-in-progress would be lost.
+    if (tab === 'upload' || tab === 'words' || tab === 'settings') return false;
     if (document.querySelector('.modal-bg')) return false;
     const a = document.activeElement;
     if (a && (a.tagName === 'INPUT' || a.tagName === 'TEXTAREA' || a.tagName === 'SELECT')
