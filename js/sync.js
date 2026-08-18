@@ -466,6 +466,30 @@
     const { data: decks, error: e1 } = await Cloud.from('decks')
       .select('*').eq('status', 'published').order('no');
     if (e1) throw e1;
+
+    /* A sheet Prem has deleted — or withdrawn — leaves this device too: the
+       week, its words (unless another week still uses them), and their
+       progress rows. Devices used to keep local copies of sheets that no
+       longer existed anywhere, which is why "delete and start from scratch"
+       never quite finished the job. Practice history is untouched: every
+       recorded answer carries its own copy of the word it was about. */
+    {
+      const dbx = S().db;
+      const liveIds = new Set((decks || []).map(d => d.id));
+      const gone = (dbx.weeks || []).filter(k => k.fromCloud && !liveIds.has(k.id));
+      if (gone.length) {
+        const goneIds = new Set(gone.map(k => k.id));
+        dbx.weeks = dbx.weeks.filter(k => !goneIds.has(k.id));
+        const used = new Set();
+        dbx.weeks.forEach(k => (k.wordIds || []).forEach(id => used.add(id)));
+        Object.keys(dbx.words).forEach(id => { if (!used.has(id)) delete dbx.words[id]; });
+        const sweep = bag => { if (bag) Object.keys(bag).forEach(id => { if (!used.has(id)) delete bag[id]; }); };
+        sweep(dbx.progress);
+        (dbx.children || []).forEach(c => sweep(c.progress));
+        S().save(true);
+      }
+    }
+
     if (!decks || !decks.length) return 0;
 
     const ids = decks.map(d => d.id);
