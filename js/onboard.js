@@ -256,7 +256,7 @@
       try {
         await Cloud.sendLink(email, location.origin + '?join=' + encodeURIComponent(code));
         sessionStorage.setItem('arabuzz.joining', code);
-        askCode(email);
+        askCode(email, () => showInvite(code));
       } catch (e) {
         busy(go, false);
         oops(e.message || 'That didn’t send. Try again in a moment.');
@@ -273,7 +273,7 @@
      sitting open on the child's iPad. Reading six digits across the room
      beats forwarding a link.
      ========================================================================== */
-  function askCode(email) {
+  function askCode(email, back) {
     panel(`
       <div class="ob-tick">${window.Icon ? Icon.icon('mail', { size: 40, stroke: 1.4 }) : '✉'}</div>
       <h1>Check your email</h1>
@@ -285,8 +285,10 @@
       <div id="obErr" class="feedback bad" style="display:none"></div>
       <button class="btn-primary btn-wide" id="obGo" data-label="Sign me in">Sign me in</button>
       <p class="hint center-text">The email also has a link — tapping that works too.
-         Nothing in a minute? Check spam, or <a href="#" id="obAgain">send another code</a>.</p>`,
+         Nothing in a minute? Check spam, or <a href="#" id="obAgain">send another code</a>.</p>
+      <button class="btn-quiet btn-wide" id="obBackBtn" style="margin-top:10px">← Back</button>`,
       { tag: 'Almost there' });
+    $('#obBackBtn').onclick = () => (back || askSignIn)();
 
     const go = $('#obGo');
     const verify = async () => {
@@ -580,7 +582,7 @@
       <p class="hint">You can use as many devices as you like. ${p.Cap.their()} progress
          follows ${p.them()}, because it lives in the account rather than the device.</p>
       <button class="btn-primary btn-wide" id="obGo" data-label="Done — carry on">Done — carry on</button>
-      <button class="btn-quiet btn-wide" id="obBack" style="margin-top:10px">← Back — I tapped this by mistake</button>`,
+      <button class="btn-quiet btn-wide" id="obBack" style="margin-top:10px">← Back</button>`,
       { tag: 'Another device' });
     $('#obGo').onclick = () => handOver();
     $('#obBack').onclick = () => askDevice();
@@ -612,10 +614,12 @@
          is written — it will be waiting behind your PIN, under <b>Coach Report</b>.</p>
 
       <button class="btn-primary btn-wide" id="obGo" data-label="I’ve handed it over">
-        I’ve handed it over</button>`,
+        I’ve handed it over</button>
+      <button class="btn-quiet btn-wide" id="obBackBtn" style="margin-top:10px">← Back</button>`,
       { tag: 'Over to them' });
 
     $('#obGo').onclick = () => finish();
+    $('#obBackBtn').onclick = () => askDevice();
   }
 
   function finish() {
@@ -653,7 +657,7 @@
       const email = $('#obEmail').value.trim();
       if (!/^\S+@\S+\.\S+$/.test(email)) return oops('That doesn’t look like an email address.');
       busy(go, true, 'Sending');
-      try { await Cloud.sendLink(email, location.origin); askCode(email); }
+      try { await Cloud.sendLink(email, location.origin); askCode(email, askSignIn); }
       catch (e) { busy(go, false); oops(e.message || 'That didn’t send.'); }
     };
     go.onclick = send;

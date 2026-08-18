@@ -138,8 +138,17 @@
             </div>
           </div>
           <button class="btn-primary btn-xl btn-block" id="go1">Let's go →</button>
+          ${((window.Cloud && Cloud.whoAmI() && Cloud.whoAmI().parent) || (Store.db.children || []).length)
+            ? `<button class="btn-quiet btn-block" id="setupBack" style="margin-top:10px">← Back</button>` : ''}
           <p class="hint" style="margin-top:14px">Grown-up setting things up? You can add words after this.</p>
         </div>`;
+      const sb = $('#setupBack');
+      if (sb) sb.onclick = () => {
+        const me = window.Cloud && Cloud.whoAmI();
+        if (me && me.parent) return go('landing');
+        if ((Store.db.children || []).length) return go('who');
+        go('home');
+      };
       const nm = $('#nm'); setTimeout(() => nm.focus(), 200);
       let ava = 0;
       let pronoun = setupState.pronoun || 'they';
@@ -183,8 +192,13 @@
             <span class="pill plum">${Icon.icon('lock',{size:15})} Just for us</span>
           </div>
           <button class="btn-go btn-xl btn-block" id="go2">I'm ready</button>
+          <button class="btn-quiet btn-block" id="setupBack1" style="margin-top:10px">← Back</button>
         </div>`;
       setTimeout(() => { const b = $('#go2'); if (b) b.focus(); }, 80);     // Enter presses it
+      $('#setupBack1').onclick = () => {
+        if (setupState.mode === 'retake' && Store.db.profile) return go('home');
+        setupState.step = 0; paintSetup();
+      };
       $('#go2').onclick = () => {
         setupState.step = 2; setupState.i = 0; setupState.rows = [];
         // A fresh mix every sitting — same parts, same difficulty, different
