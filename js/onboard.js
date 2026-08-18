@@ -252,6 +252,12 @@
     const send = async () => {
       const email = $('#obEmail').value.trim();
       if (!/^\S+@\S+\.\S+$/.test(email)) return oops('That doesn’t look like an email address.');
+      // The invitation is addressed. A different email typed here would only
+      // fail later at the join, so say it now, kindly.
+      if (inv && inv.email && email.toLowerCase() !== String(inv.email).trim().toLowerCase()) {
+        return oops('This invitation was sent to ' + inv.email + ' — please use that address. ' +
+                    'If you’d rather use a different one, ask Prem to send a fresh invitation there.');
+      }
       busy(go, true, 'Sending');
       try {
         await Cloud.sendLink(email, location.origin + '?join=' + encodeURIComponent(code));
@@ -849,6 +855,42 @@
     }
 
     const me = Cloud.whoAmI() || await Cloud.load();
+
+    /* An invitation belongs to the address it was sent to. If this browser is
+       signed in as somebody ELSE — a leftover session, another family member,
+       the admin's own account — say so plainly and offer the way out, instead
+       of quietly building the family under the wrong account. The database
+       refuses the mismatch too; this screen just makes it friendly. */
+    if (code && (!me || !me.parent)) {
+      try {
+        const inv = await Cloud.peekInvite(code);
+        const mine = String(Cloud.myEmail() || '').toLowerCase();
+        const invited = String((inv && inv.email) || '').trim().toLowerCase();
+        if (invited && mine && invited !== mine) {
+          panel(`
+            <h1>This invitation isn’t for this account</h1>
+            <p class="lead">The invitation was sent to <b>${esc(inv.email)}</b>, but this
+               browser is signed in as <b>${esc(Cloud.myEmail())}</b>.</p>
+            <p class="muted small">Sign out, then open the invitation link again and sign in
+               with <b>${esc(inv.email)}</b> — the code arrives in that inbox.</p>
+            <button class="btn-primary btn-wide" id="obSwitch" data-label="Sign out and start over">
+              Sign out and start over</button>
+            <button class="btn-quiet btn-wide" id="obStay" style="margin-top:10px">← Back</button>`,
+            { tag: 'Wrong account' });
+          $('#obSwitch').onclick = async () => {
+            try { await Cloud.signOut(); } catch (e) {}
+            location.reload();      // the ?join code survives; sign-in starts clean
+          };
+          $('#obStay').onclick = () => {
+            if (location.search) history.replaceState({}, '', location.pathname);
+            sessionStorage.removeItem('arabuzz.joining');
+            close();
+            if (w.UI && UI.afterOnboard) UI.afterOnboard();
+          };
+          return;
+        }
+      } catch (e) { /* peek failed — the database check still guards the join */ }
+    }
 
     if (!me || !me.parent) {
       // Nobody should type their details into something they haven't read.
