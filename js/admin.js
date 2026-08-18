@@ -320,14 +320,22 @@ Anything you notice, just message me."></textarea></div>
    *  through choosing a fresh one, exactly like onboarding did. */
   async function resetParentPin(parentId, pname) {
     const yes = await window.U.confirmBox(`Reset ${esc(pname)}'s PIN?`,
-      `Their old PIN stops working immediately. The next time they open AraBuzz,
-       it asks them to choose a new one — nothing else about their family changes.`,
+      `Their old PIN stops working immediately, and ${esc(pname)} gets an email
+       saying so. The next time they open AraBuzz, it asks them to choose a new
+       one — nothing else about their family changes.`,
       'Reset the PIN');
     if (!yes) return;
     try {
-      const { error } = await Cloud.rpc('admin_reset_pin', { p_parent_id: parentId });
-      if (error) throw error;
-      toast(pname + ' will choose a new PIN on their next visit.', 'good');
+      const res = await fetch('/api/reset-pin', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json', authorization: 'Bearer ' + Cloud.token },
+        body: JSON.stringify({ parentId })
+      });
+      const j = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(j.error || ('Reset failed (' + res.status + ')'));
+      toast(j.emailed
+        ? pname + '\u2019s PIN is reset — they\u2019ve been emailed.'
+        : pname + '\u2019s PIN is reset (no email on file to notify).', 'good', 3200);
       data = null; await paint();
     } catch (e) {
       toast('Could not reset — ' + (e.message || e), 'bad');
