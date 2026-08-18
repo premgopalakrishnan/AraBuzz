@@ -579,9 +579,11 @@
       </ol>
       <p class="hint">You can use as many devices as you like. ${p.Cap.their()} progress
          follows ${p.them()}, because it lives in the account rather than the device.</p>
-      <button class="btn-primary btn-wide" id="obGo" data-label="Done — carry on">Done — carry on</button>`,
+      <button class="btn-primary btn-wide" id="obGo" data-label="Done — carry on">Done — carry on</button>
+      <button class="btn-quiet btn-wide" id="obBack" style="margin-top:10px">← Back — I tapped this by mistake</button>`,
       { tag: 'Another device' });
     $('#obGo').onclick = () => handOver();
+    $('#obBack').onclick = () => askDevice();
   }
 
   /** The last screen a grown-up sees. Its whole job is the sentence about not
