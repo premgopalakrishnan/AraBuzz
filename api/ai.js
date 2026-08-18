@@ -31,8 +31,11 @@ const escHtml = t => String(t == null ? '' : t)
 async function emailOnboardingReady(who, childId) {
   let kidName = 'your kid';
   try {
-    if (childId) {
-      const rows = await serviceGet(`children?id=eq.${childId}&select=name`);
+    if (childId && who.parent && who.parent.family_id) {
+      // constrained to the caller's own family — a childId from anywhere
+      // else simply finds nothing, and the email says "your kid"
+      const rows = await serviceGet(
+        `children?id=eq.${childId}&family_id=eq.${who.parent.family_id}&select=name`);
       if (rows && rows[0] && rows[0].name) kidName = rows[0].name;
     }
   } catch (e) { /* the name is a nicety, not a requirement */ }

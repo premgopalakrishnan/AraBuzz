@@ -1109,15 +1109,66 @@ Reflex = A quick automatic response"></textarea>
   }
 
   /** A weekly note arriving as structured data, rendered here. */
+  /** The receipts behind a weekly note: every practice round with its exact
+   *  moment (shown in IST, and saying so), its score, and the period totals —
+   *  drawn as tiles and bars so a parent takes it in at a glance. */
+  function evidenceHTML(ev, name) {
+    if (!ev || !ev.totals) return '';
+    const t = ev.totals;
+    const pctRight = t.answers ? Math.round(t.right / t.answers * 100) : 0;
+    const ist = ts => {
+      try {
+        return new Date(ts).toLocaleString('en-IN', {
+          timeZone: 'Asia/Kolkata', day: '2-digit', month: 'short',
+          hour: 'numeric', minute: '2-digit', hour12: true
+        }) + ' IST';
+      } catch (e) { return new Date(ts).toLocaleString(); }
+    };
+    const bar = (correct, total) => {
+      const pct = total ? Math.round(correct / total * 100) : 0;
+      return `<div style="background:#F0E9DC;border-radius:99px;height:10px;min-width:90px;overflow:hidden">
+        <div style="width:${pct}%;height:100%;background:${pct >= 70 ? '#6B9080' : pct >= 40 ? '#E8A33D' : '#E07A5F'}"></div></div>`;
+    };
+    const sess = (ev.sessions || []).slice().sort((a, b) => Date.parse(a.ts) - Date.parse(b.ts));
+    return `
+      <h2>The week in numbers</h2>
+      <p class="viz-sub" style="margin:0 0 10px">Everything below is counted straight from
+         ${esc(name)}'s recorded answers — this note is written from these facts and no others.</p>
+      ${window.Charts ? Charts.tiles([
+        { value: String(t.sessions), label: 'Practice rounds' },
+        { value: String(t.answers),  label: 'Answers given' },
+        { value: String(t.right),    label: 'Right' },
+        { value: String(t.wrong),    label: 'Wrong', higherIsBetter: false },
+        { value: pctRight + '%',     label: 'Answers correct' }
+      ]) : ''}
+      ${sess.length ? `
+      <table>
+        <thead><tr><th style="width:34%">When (IST)</th><th>Game</th>
+          <th style="width:14%">Score</th><th style="width:26%"></th></tr></thead>
+        <tbody>
+          ${sess.map(x => `<tr>
+            <td style="white-space:nowrap">${esc(ist(x.ts))}</td>
+            <td>${esc(x.label)}</td>
+            <td><b>${x.correct}/${x.total}</b></td>
+            <td>${bar(x.correct, x.total)}</td>
+          </tr>`).join('')}
+        </tbody>
+      </table>
+      <p class="viz-note" style="margin-top:4px">Times are shown in Indian Standard Time.
+         A round's score counts only real test questions — copying practice never inflates it.</p>` : ''}`;
+  }
+
   function renderCloudNote(r, pay, row) {
     r = fixShape(r, ['strengths', 'patterns', 'thisWeek', 'wordsToDrill']);
     const name = Store.db.profile ? Store.db.profile.name : '';
     const inner = `
       <div class="card report">
+        <style>${window.Charts ? Charts.CSS : ''}</style>
         <div class="kicker">AraBuzz · Weekly note · ${esc(window.U.fmtDate(Date.parse(row.ts)))}</div>
         <h1>${esc(name)}'s week</h1>
         <blockquote><b>${esc(r.headline || '')}</b></blockquote>
         ${String(r.whereTheyAre || '').split(/\n{2,}|\n/).filter(Boolean).map(t => `<p>${esc(t)}</p>`).join('')}
+        ${evidenceHTML(pay && pay.evidence, name)}
         <h2>Going well</h2>
         <ul>${(r.strengths || []).map(x => `<li><b>${esc(x.title)}</b> — ${esc(x.detail)}</li>`).join('')}</ul>
         ${(r.patterns || []).length ? `<h2>Patterns worth knowing</h2>

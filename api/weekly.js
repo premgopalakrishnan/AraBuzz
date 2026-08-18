@@ -83,6 +83,11 @@ async function maybeWriteNote(kid) {
     `attempts?child_id=eq.${kid.id}&ts=gte.${since}&select=id`);
   if (answers < MIN_ANSWERS) return `only ${answers} answer(s)`;
 
+  /* Exact right/wrong counts for the evidence panel — counted in the
+     database, not sampled, so the note can show its working. */
+  const rightCount = await serviceCount(
+    `attempts?child_id=eq.${kid.id}&ts=gte.${since}&ok=is.true&select=id`);
+
   /* ---- gather what the note is built from ---- */
   const [attempts, progress, sessRows] = await Promise.all([
     serviceGet(`attempts?child_id=eq.${kid.id}&ts=gte.${since}` +
@@ -113,7 +118,21 @@ async function maybeWriteNote(kid) {
 
   await serviceWrite('reports', {
     child_id: kid.id,
-    payload: { kind: 'weekly', result, metrics: payload.overall, period: payload.period },
+    payload: {
+      kind: 'weekly', result, metrics: payload.overall, period: payload.period,
+      /* The receipts. Every practice round in the period, with its exact
+         moment and score, plus the totals the note was written from — so a
+         parent never has to take the prose on faith. */
+      evidence: {
+        from: sinceIso,
+        to: new Date().toISOString(),
+        totals: { sessions, answers, right: rightCount, wrong: answers - rightCount },
+        sessions: sessRows.slice(0, 40).map(x => ({
+          ts: x.ts, label: x.label || x.kind || 'Practice',
+          total: x.total || 0, correct: x.correct || 0
+        }))
+      }
+    },
     model: MODEL,
     range_from: sinceIso.slice(0, 10),
     range_to: new Date().toISOString().slice(0, 10)
@@ -128,9 +147,12 @@ async function maybeWriteNote(kid) {
     });
   } catch (e) { console.warn('usage not recorded', e.message); }
 
-  /* ---- one short email; the note itself stays in the app ---- */
+  /* ---- one short email; the note itself stays in the app ----
+     Recipients are looked up by THIS child's family_id, taken from the
+     database row of the child the note was just written for — never from a
+     list, never "everyone". A different family cannot receive it. */
   const parents = await serviceGet(
-    `parents?family_id=eq.${kid.family_id}&active=is.true&select=id,full_name`);
+    `parents?family_id=eq.${kid.family_id}&role=eq.parent&active=is.true&select=id,full_name`);
   for (const p of parents) {
     const email = await emailOf(p.id);
     if (!email) continue;
