@@ -312,6 +312,26 @@ Anything you notice, just message me."></textarea></div>
     $$('#atab [data-toggle-family]').forEach(b => b.onclick = () => toggleFamily(b.dataset.toggleFamily, b.dataset.to === '1'));
     $$('#atab [data-toggle-child]').forEach(b => b.onclick = () => toggleChild(b.dataset.toggleChild, b.dataset.to === '1'));
     $$('#atab [data-delete-family]').forEach(b => b.onclick = () => deleteFamily(b.dataset.deleteFamily, b.dataset.fname));
+    $$('#atab [data-resetpin]').forEach(b => b.onclick = () => resetParentPin(b.dataset.resetpin, b.dataset.pname));
+  }
+
+  /** A parent forgot their PIN and asked for help. No temporary PIN exists —
+   *  the old one simply stops working, and their next visit walks them
+   *  through choosing a fresh one, exactly like onboarding did. */
+  async function resetParentPin(parentId, pname) {
+    const yes = await window.U.confirmBox(`Reset ${esc(pname)}'s PIN?`,
+      `Their old PIN stops working immediately. The next time they open AraBuzz,
+       it asks them to choose a new one — nothing else about their family changes.`,
+      'Reset the PIN');
+    if (!yes) return;
+    try {
+      const { error } = await Cloud.rpc('admin_reset_pin', { p_parent_id: parentId });
+      if (error) throw error;
+      toast(pname + ' will choose a new PIN on their next visit.', 'good');
+      data = null; await paint();
+    } catch (e) {
+      toast('Could not reset — ' + (e.message || e), 'bad');
+    }
   }
 
   /** Remove a family completely, so a fresh invitation can start it over.
@@ -366,7 +386,9 @@ Anything you notice, just message me."></textarea></div>
           ${parents.map(p => `
             <span class="pill ${p.consented ? 'sage' : ''}">${p.consented ? 'agreed' : 'not yet agreed'}</span>
             <span class="pill ${p.pin_set ? 'sage' : ''}">${p.pin_set ? 'PIN set' : 'no PIN'}</span>
-            ${p.role === 'admin' ? '<span class="pill honey">admin</span>' : ''}`).join('')}
+            ${p.role === 'admin' ? '<span class="pill honey">admin</span>'
+              : p.pin_set ? `<button class="btn-quiet btn-s" data-resetpin="${p.id}"
+                  data-pname="${esc(p.name)}">Reset PIN…</button>` : ''}`).join('')}
         </div>
 
         ${kids.length ? kids.map(c => childRow(c, f)).join('') : `
@@ -716,7 +738,11 @@ Anything you notice, just message me."></textarea></div>
     const decks = (data && data.decks) || [];
     // Listed and NUMBERED by test date — sheet 01 is the earliest test, which
     // is the order the school year actually runs in. Undated sheets go last.
-    const byTest = (a, b) => (a.assessed_on || '9999') < (b.assessed_on || '9999') ? -1 : 1;
+    const byTest = (a, b) => {
+      const ka = (a.assessed_on || '9999') + '·' + String(a.no || 0).padStart(4, '0');
+      const kb = (b.assessed_on || '9999') + '·' + String(b.no || 0).padStart(4, '0');
+      return ka < kb ? -1 : 1;
+    };
     const published = decks.filter(d => d.status === 'published').sort(byTest);
     const drafts = decks.filter(d => d.status !== 'published').sort(byTest);
     const local = (Store.db.weeks || []).filter(k => !decks.some(d => d.id === k.id));

@@ -286,10 +286,17 @@
     db.weekSeq = n;
   }
 
-  /** "03" — the set's number, zero-padded, for showing next to its title. */
+  /** "03" — the sheet's number, zero-padded. Computed fresh from the TEST
+   *  dates every time, so every sheet — including ones uploaded long ago —
+   *  is numbered in the order the school year actually runs, and the number
+   *  a kid sees matches the number the console shows. Sheets without a test
+   *  date fall to the end; ties keep their upload order. */
   function weekTag(wk) {
-    const n = wk && wk.no;
-    return n ? (n < 10 ? '0' + n : String(n)) : '';
+    if (!wk) return '';
+    const key = k => (k.assessedOn || '9999') + '·' + String(k.no || 0).padStart(4, '0');
+    const ordered = (db.weeks || []).slice().sort((a, b) => key(a) < key(b) ? -1 : 1);
+    const n = ordered.findIndex(k => k.id === wk.id) + 1;
+    return n > 0 ? (n < 10 ? '0' + n : String(n)) : '';
   }
 
   function addWeek(meta, packs) {
