@@ -1905,6 +1905,13 @@ th,td{padding:10px 12px;border:1px solid #E5DDD1;text-align:left}th{background:#
     'memory-tricks': 'Memory tricks', 'test': 'Connection test'
   };
   const usd = n => '$' + (Math.round((+n || 0) * 10000) / 10000).toFixed(4).replace(/0+$/, '').replace(/\.$/, '.00');
+  /** 1234 → "1.2k", 2500000 → "2.5M" — tokens, readable at a glance. */
+  const tok = n => {
+    n = +n || 0;
+    if (n >= 1e6) return (n / 1e6).toFixed(1).replace(/\.0$/, '') + 'M';
+    if (n >= 1e3) return (n / 1e3).toFixed(1).replace(/\.0$/, '') + 'k';
+    return String(n);
+  };
 
   async function tabUsage() {
     const box = $('#ptab');
@@ -1937,13 +1944,15 @@ th,td{padding:10px 12px;border:1px solid #E5DDD1;text-align:left}th{background:#
     };
 
     const monthStart = new Date(); monthStart.setDate(1); monthStart.setHours(0, 0, 0, 0);
-    let total = 0, month = 0;
+    let total = 0, month = 0, tokIn = 0, tokOut = 0;
     const byKid = {};
     rows.forEach(r => {
       const c = +r.share_cost || 0;
-      total += c;
+      const ti = +r.share_in_tok || 0, to = +r.share_out_tok || 0;
+      total += c; tokIn += ti; tokOut += to;
       if (Date.parse(r.ts) >= monthStart.getTime()) month += c;
-      const b = byKid[r.child_id] = byKid[r.child_id] || { shared: 0, own: 0 };
+      const b = byKid[r.child_id] = byKid[r.child_id] || { shared: 0, own: 0, tokens: 0 };
+      b.tokens += ti + to;
       if (SHARED_KINDS.has(r.kind)) b.shared += c; else b.own += c;
     });
 
@@ -1957,21 +1966,27 @@ th,td{padding:10px 12px;border:1px solid #E5DDD1;text-align:left}th{background:#
            nothing to pay: this is simply the honest view of what your corner of AraBuzz uses.</p>
         <div class="grid grid-3" style="margin-top:12px">
           ${[['All time', usd(total)], ['This month', usd(month)],
-             ['Entries', String(rows.length)]]
+             ['AI calls', String(rows.length)],
+             ['Tokens read', tok(tokIn)], ['Tokens written', tok(tokOut)],
+             ['Tokens total', tok(tokIn + tokOut)]]
             .map(([t, v]) => `<div class="card flat pad-s center-text" style="background:var(--paper-2);border:none">
               <div style="font-family:var(--font-head);font-size:1.35rem;font-weight:800">${v}</div>
               <div class="tiny faint">${t}</div></div>`).join('')}
         </div>
+        <p class="hint">Tokens are the units AI models read and write in — roughly three-quarters
+           of a word each. "Read" is what the model was given (the sheet, the answers);
+           "written" is what it produced (the questions, the notes).</p>
       </div>
 
       ${Object.keys(byKid).length ? `<div class="card" style="margin-top:14px">
         <h3>By kid</h3>
         <table class="data" style="margin-top:8px">
-          <thead><tr><th>Kid</th><th>Share of the weekly material</th><th>Their own notes &amp; questions</th><th>Total</th></tr></thead>
+          <thead><tr><th>Kid</th><th>Share of the weekly material</th><th>Their own notes &amp; questions</th><th>Tokens</th><th>Total</th></tr></thead>
           <tbody>${Object.keys(byKid).map(id => `<tr>
             <td><b>${esc(kidName(id))}</b></td>
             <td>${usd(byKid[id].shared)}</td>
             <td>${usd(byKid[id].own)}</td>
+            <td>${tok(byKid[id].tokens)}</td>
             <td><b>${usd(byKid[id].shared + byKid[id].own)}</b></td>
           </tr>`).join('')}</tbody>
         </table>
@@ -1985,6 +2000,7 @@ th,td{padding:10px 12px;border:1px solid #E5DDD1;text-align:left}th{background:#
             <td class="small">${esc(KIND_LABELS[r.kind] || r.kind)}</td>
             <td class="small">${esc(kidName(r.child_id))}</td>
             <td class="small tiny faint">${SHARED_KINDS.has(r.kind) ? 'shared' : 'own'}</td>
+            <td class="small tiny faint">${tok(r.share_in_tok)} \u2192 ${tok(r.share_out_tok)}</td>
             <td class="small">${usd(r.share_cost)}</td>
           </tr>`).join('')}
         </tbody></table>
