@@ -266,17 +266,27 @@
       answer: wd.word, kind: 'type', prompt: '', sub: '', options: null, meta: {}
     };
 
-    const meaning = wd.kidMeaning || wd.meaning || '';
+    /* THE SCHOOL'S OWN WORDS COME FIRST.
+       The consent screen promises parents "we use them exactly as the school
+       wrote them; we never invent a definition". For a while this line read
+       kidMeaning first — the AI's tidier rewrite — and Aradhana spotted it
+       immediately: the app was asking her about words using language her
+       sheet never used. The sheet's definition is the definition. The AI's
+       simpler wording is a support act, used only where the sheet gave us
+       nothing, and the riddle clues are an optional extra hint she can ask
+       for — never a replacement. */
+    const meaning = wd.meaning || wd.kidMeaning || '';
     const clue = nextVariant(wd.id, 'clue', wd.clues);
 
     switch (mode) {
       case 'spell': {
         q.kind = 'type';
-        // Alternate between the riddle clue and the plain meaning.
-        const useClue = clue.text && Math.random() < 0.6;
-        q.prompt = useClue ? clue.text : meaning;
-        q.sub = useClue ? 'Which word is it? Spell it.' : 'Spell the word that means this.';
+        // The sheet's definition, as the sheet wrote it. A riddle clue, when
+        // we have one, waits behind the hint button instead of replacing it.
+        q.prompt = meaning || clue.text || '';
+        q.sub = meaning ? 'Spell the word that means this.' : 'Which word is it? Spell it.';
         q.meta.hintSyllables = wd.syllables || '';
+        if (meaning && clue.text) q.meta.extraClue = clue.text;
         break;
       }
       case 'listen': {

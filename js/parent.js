@@ -1268,9 +1268,12 @@ Reflex = A quick automatic response"></textarea>
     window.U.$$('[data-open]').forEach(b => b.onclick = () => {
       const r = Store.db.reports.find(x => x.id === b.dataset.open);
       if (!r) return;
-      $('#reportOut').innerHTML = r.html;
-      wireReport();
-      $('#reportOut').scrollIntoView({ behavior: 'smooth', block: 'start' });
+      const out = $('#reportOut');
+      out.innerHTML = `<div class="card" style="margin-top:14px">
+          ${reportToolbar(r.range || 'Note')}
+        </div>${r.html}`;
+      wireReport(out);
+      out.scrollIntoView({ behavior: 'smooth', block: 'start' });
     });
     window.U.$$('[data-rdel]').forEach(b => b.onclick = async () => {
       const yes = await confirmBox('Delete this report?',
@@ -1688,7 +1691,7 @@ Reflex = A quick automatic response"></textarea>
       UI.checkpointVault();
       st.innerHTML = '';
       $('#reportOut').innerHTML = html;
-      wireReport(html);
+      wireReport($('#reportOut'));
       window.scrollTo({ top: 340, behavior: 'smooth' });
     } catch (e) {
       console.error(e);
@@ -1761,13 +1764,7 @@ Reflex = A quick automatic response"></textarea>
     return `
     <div class="card report" id="theReport" style="margin-top:18px">
       <style>${Charts.CSS}</style>
-      <div class="row between wrap no-print" style="margin-bottom:8px">
-        <span class="pill sky">${esc(rangeLabel(days))}</span>
-        <div class="row">
-          <button class="btn-ghost btn-s" id="printRep">Print / Save as PDF</button>
-          <button class="btn-ghost btn-s" id="dlRep">Save file</button>
-        </div>
-      </div>
+      ${reportToolbar(rangeLabel(days))}
 
       <div style="text-align:center;padding:6px 0 14px;border-bottom:2px solid var(--honey)">
         <div style="font-family:var(--font-head);font-size:.75rem;letter-spacing:.2em;text-transform:uppercase;color:var(--ink-faint)">AraBuzz Coach Report</div>
@@ -1864,6 +1861,41 @@ Reflex = A quick automatic response"></textarea>
       .map(p => `<p>${esc(p.trim())}</p>`).join('');
   }
 
+  /* ======================================================================
+     THE DISCLAIMER
+     A note that leaves the app — printed, saved as a PDF, forwarded to a
+     grandparent or, one day, handed to a teacher — travels without any of
+     the context the app gives it. So the document carries its own honesty
+     with it, in a box nobody can skim past. The words match the promises
+     made on the consent screen, deliberately.
+     ====================================================================== */
+  function disclaimerHTML() {
+    return `
+    <div class="ab-disclaimer">
+      <h3>Please read this before sharing or acting on this note</h3>
+      <p><b>This is an observation, not an assessment.</b> It was written from the
+         answers one child typed into a spelling game at home. It is a coach's
+         note about practice — nothing more.</p>
+      <ul>
+        <li><b>It is not clinical.</b> It is not a diagnosis, a screening, or an
+            assessment of any learning difficulty, and it must not be used as one.</li>
+        <li><b>It is not a formal or educational assessment</b>, and it is not connected
+            with, endorsed by, or affiliated with any school.</li>
+        <li><b>Please do not use it for decisions</b> — choosing a school, arranging
+            tutoring, or anything medical. If something here worries you, treat it as a
+            good reason to talk to your child's teacher or a qualified professional,
+            never as an answer in itself.</li>
+        <li><b>It is generated automatically</b>, in part by AI, from a small amount of
+            practice data. It can be wrong, and it says nothing about your child's
+            intelligence, effort or worth.</li>
+        <li><b>It is private.</b> It was written for one family. Please share it only
+            with people that family would choose.</li>
+      </ul>
+      <p class="ab-disc-foot">AraBuzz — a CoKindle Labs initiative. A practice tool made by a
+         parent for a small circle of friends, not a business and not an education service.</p>
+    </div>`;
+  }
+
   function wrapReportHTML(inner) {
     return `<!DOCTYPE html><html><head><meta charset="utf-8"><title>AraBuzz Coach Report</title>
 <style>
@@ -1885,22 +1917,60 @@ th,td{padding:10px 12px;border:1px solid #E5DDD1;text-align:left}th{background:#
 .kicker{font-family:'Baloo 2',sans-serif;font-size:.72rem;letter-spacing:.14em;text-transform:uppercase;color:#8697A0}
 .no-print{display:none}
 @media print{body{background:#fff;padding:0}.report{box-shadow:none;padding:0;max-width:none}}
-</style></head><body>${inner.replace(/class="card report"/, 'class="report"')}</body></html>`;
+.ab-disclaimer{margin:34px 0 0;padding:20px 22px;border:2px solid #C25F45;border-radius:14px;
+  background:#FDF3EF;page-break-inside:avoid;break-inside:avoid;text-align:left}
+.ab-disclaimer h3{margin:0 0 10px;color:#A8452C;font-size:1.05rem;border:none;padding:0}
+.ab-disclaimer p{margin:0 0 10px;font-size:.9rem;line-height:1.6}
+.ab-disclaimer ul{margin:0 0 10px;padding-left:20px}
+.ab-disclaimer li{font-size:.88rem;line-height:1.55;margin-bottom:6px}
+.ab-disc-foot{font-size:.78rem;color:#7A5B50;margin:12px 0 0 !important;border-top:1px solid #E8CFC6;padding-top:10px}
+@media print{.ab-disclaimer{border-color:#A8452C}}
+</style></head><body>${inner.replace(/class="card report"/, 'class="report"')}
+${disclaimerHTML()}</body></html>`;
   }
 
-  function wireReport(html) {
-    const p = $('#printRep'), d = $('#dlRep');
-    if (p) p.onclick = () => {
+  /** The bar that sits above any note on screen. Every note gets it — the
+   *  starting-point note, this week's, and every archived one written before
+   *  this existed — because the disclaimer is added at the moment of export,
+   *  not baked into the stored copy. */
+  function reportToolbar(label) {
+    return `<div class="row between wrap no-print" style="margin-bottom:8px">
+      ${label ? `<span class="pill sky">${esc(label)}</span>` : '<span></span>'}
+      <div class="row">
+        <button class="btn-primary btn-s" data-pdf>${Icon.icon('doc', { size: 15 })} Download as PDF</button>
+        <button class="btn-ghost btn-s" data-savefile>Save file</button>
+      </div>
+    </div>`;
+  }
+
+  /** Whatever note is on screen right now, as a standalone document. */
+  function exportableHTML(scope) {
+    const node = (scope || document).querySelector('#theReport, .report, .card.report');
+    return wrapReportHTML(node ? node.outerHTML : (scope || document).innerHTML);
+  }
+
+  function wireReport(scope) {
+    const box = scope && scope.querySelector ? scope : document;
+    const pdf = box.querySelector('[data-pdf]') || $('#printRep');
+    const file = box.querySelector('[data-savefile]') || $('#dlRep');
+    const name = (Store.db.profile && Store.db.profile.name) || 'AraBuzz';
+
+    if (pdf) pdf.onclick = () => {
       const win = window.open('', '_blank');
-      win.document.write(wrapReportHTML($('#theReport').outerHTML));
+      if (!win) return toast('Your browser blocked the new window — allow pop-ups and try again.', 'bad');
+      win.document.write(exportableHTML(box));
       win.document.close();
-      setTimeout(() => win.print(), 700);
+      // The print dialog is also how a phone or an iPad saves a PDF:
+      // Share → Print → Save to Files, or "Save as PDF" on a computer.
+      setTimeout(() => { try { win.focus(); win.print(); } catch (e) {} }, 700);
+      toast('Choose “Save as PDF” in the print window.', '', 4000);
     };
-    if (d) d.onclick = () => {
-      const blob = new Blob([wrapReportHTML($('#theReport').outerHTML)], { type: 'text/html' });
+
+    if (file) file.onclick = () => {
+      const blob = new Blob([exportableHTML(box)], { type: 'text/html' });
       const a = document.createElement('a');
       a.href = URL.createObjectURL(blob);
-      a.download = `AraBuzz-Coach-Report-${new Date().toISOString().slice(0, 10)}.html`;
+      a.download = `AraBuzz-note-${name.replace(/\s+/g, '-')}-${new Date().toISOString().slice(0, 10)}.html`;
       a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 1500);
     };
   }

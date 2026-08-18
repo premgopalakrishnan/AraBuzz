@@ -208,8 +208,21 @@
     bits.push(`<b>${esc(wd.word[0].toUpperCase())}</b> …${wd.word.replace(/[a-z]/gi, '_').length} letters`);
     if (wd.syllables) bits.push(esc(wd.syllables));
     if (wd.trickyBit) bits.push('Watch out for ' + esc(wd.trickyBit));
+    /* The question itself always quotes the school's definition. A child who
+       is still stuck can ask for AraBuzz's own way of describing it — here,
+       as help, rather than in place of the sheet's words. */
+    const extra = q.meta && q.meta.extraClue;
+    const line = bits.join(' · ');
     box.innerHTML = `<div class="feedback" style="background:var(--honey-soft);border:2px solid var(--honey)">
-      <b class="ichip">${Icon.icon('sparkle',{size:16})}<span>Hint</span></b><p style="margin:6px 0 0">${bits.join(' · ')}</p></div>`;
+      <b class="ichip">${Icon.icon('sparkle',{size:16})}<span>Hint</span></b>
+      <p style="margin:6px 0 0">${line}
+        <button type="button" class="btn-quiet btn-icon" data-say-text="${esc(line.replace(/<[^>]*>/g, ''))}"
+          title="Read the hint to me">${Icon.icon('speaker',{size:15})}</button></p>
+      ${extra ? `<p class="small" style="margin:8px 0 0">💡 Another way to think about it:
+        <i>${esc(extra)}</i>
+        <button type="button" class="btn-quiet btn-icon" data-say-text="${esc(extra)}"
+          title="Read this to me">${Icon.icon('speaker',{size:15})}</button></p>` : ''}</div>`;
+    window.U.speak(line.replace(/<[^>]*>/g, '') + (extra ? '. ' + extra : ''));
     window.U.beep('tick');
   }
 
@@ -569,6 +582,14 @@
       <button class="btn-${ok ? 'go' : 'primary'} btn-xl" id="nextQ">${s.i + 1 >= s.qs.length && !s.timed ? 'See my score →' : 'Next →'}</button>`;
     if ($('#sayIt')) $('#sayIt').onclick = () => window.U.speak(wd.word);
     if ($('#spellIt')) $('#spellIt').onclick = () => window.U.spellOut(wd.word);
+    /* A correction should reach her ears as well as her eyes: the word,
+       slowly, then the one thing worth remembering about it. */
+    if (!ok) setTimeout(() => {
+      window.U.speak(wd.word, { rate: 0.65, onend: () => {
+        const tip = wd.trickyBit || '';
+        if (tip) setTimeout(() => window.U.speak(tip, { rate: 0.9 }), 260);
+      } });
+    }, 320);
     $('#nextQ').onclick = done;
     setTimeout(() => { const b = $('#nextQ'); if (b) b.focus(); }, 60);
 
@@ -1572,7 +1593,23 @@
     return 'Spell Quest!';
   }
 
-  const say = (html, cls) => { if (quest) quest.log.push({ who: 'ara', html, cls: cls || '' }); };
+  /* Every bubble carries the plain words to read aloud. A child who finds
+     reading harder than spelling should never be stuck looking at a hint she
+     cannot get into her head — the help moments SPEAK themselves, and every
+     bubble keeps a 🔊 she can tap again. */
+  const say = (html, cls, voice) => {
+    if (!quest) return;
+    const plain = voice != null ? String(voice)
+      : String(html).replace(/<[^>]*>/g, ' ').replace(/&[a-z]+;/g, ' ')
+          .replace(/[\u{1F300}-\u{1FAFF}\u{2600}-\u{27BF}]/gu, '')
+          .replace(/\s+/g, ' ').trim();
+    quest.log.push({ who: 'ara', html, cls: cls || '', voice: plain });
+    // A correction or a hint is read out at once — that is the moment help
+    // is needed most, and it is exactly what Prem asked for.
+    if (cls === 'hint' || cls === 'good' || cls === 'final') {
+      setTimeout(() => window.U.speak(plain), cls === 'good' ? 900 : 260);
+    }
+  };
   const heard = text => { if (quest) quest.log.push({ who: 'kid', html: esc(text) }); };
   const pick = list => list[Math.floor(Math.random() * list.length)];
 
@@ -1609,15 +1646,22 @@
     quest.tries = 0;
     quest.qStart = Date.now();
 
+    /* The school's own definition, word for word. Aradhana noticed at once
+       when the game asked her about a word using language her Spell Buzz
+       sheet never used — and she was right to. The sheet's wording is what
+       she has read all week and what the test will use. AraBuzz's own
+       riddle clue is still here, but it waits behind "another clue" for a
+       child who wants a second way in. */
+    const school = (wd.meaning || '').trim();
     const clues = (wd.clues || []).filter(Boolean);
-    const clue = clues.length
-      ? clues[Math.floor(Math.random() * clues.length)]
-      : (wd.kidMeaning || wd.meaning || 'Spell this week’s word.');
+    const clue = school || wd.kidMeaning || 'Spell this week’s word.';
+    quest.extraClue = school && clues.length ? clues[Math.floor(Math.random() * clues.length)] : '';
     const n = quest.round === 1 ? (quest.i + 1) : (quest.words.length + quest.i + 1);
 
     say(`<span class="q-kicker">🧩 CLUE ${n}${quest.round === 2 ? ' · one more try' : ''}</span>` +
         `<p style="margin:6px 0 0">${esc(clue)}</p>` +
-        `<p class="q-ask">⌨️ Type the spelling below</p>`);
+        (school ? `<p class="q-from">— from your Spell Buzz sheet 📄</p>` : '') +
+        `<p class="q-ask">⌨️ Type the spelling below</p>`, '', clue);
     paintQuest();
   }
 
@@ -1688,7 +1732,8 @@
           `<p style="margin:6px 0 0">${quest.round === 1
             ? 'Say it out loud once, and we will come back to it at the end. 😉'
             : 'It got away this time — it will be back in your next game. 😉'}</p>`, 'hint');
-      window.U.speak(wd.word);
+      window.U.speak(wd.word, { rate: 0.6 });
+      window.U.spellOut(wd.word);
       if (quest.round === 1) quest.parked.push(wd);
       nextQuest();
       return;
@@ -1786,7 +1831,9 @@
       <div class="quest-log" id="qlog">
         ${quest.log.map(m => m.who === 'ara'
           ? `<div class="q-row"><div class="q-ara">${Ara.svg({ level: Game.levelFor(Store.db.game.points), width: 34, mood: 'happy', plain: true })}</div>
-               <div class="q-bubble ${m.cls}">${m.html}</div></div>`
+               <div class="q-bubble ${m.cls}">${m.html}
+                 ${m.voice ? `<button type="button" class="q-say" data-say-text="${esc(m.voice)}"
+                     title="Read this to me" aria-label="Read this to me">${Icon.icon('speaker', { size: 15 })}</button>` : ''}</div></div>`
           : `<div class="q-row mine"><div class="q-bubble mine">${m.html}</div></div>`).join('')}
       </div>
 
@@ -1801,6 +1848,11 @@
                  autocomplete="off" autocapitalize="off" spellcheck="false" enterkeyhint="send">
           <button class="btn-primary" id="qSend">Send</button>
         </div>
+        <div class="row center wrap" style="gap:8px;margin-top:10px">
+          <button class="btn-quiet btn-s" id="qHear">${Icon.icon('speaker', { size: 15 })} Read the clue again</button>
+          ${quest.extraClue ? `<button class="btn-quiet btn-s" id="qMore">💡 Another clue</button>` : ''}
+          ${window.U.speedBtn()}
+        </div>
         <p class="hint center-text" style="margin-top:8px">No rush — spelling it yourself is the whole point.</p>`}`;
 
     const log = $('#qlog');
@@ -1814,6 +1866,15 @@
       el('#qAgain').onclick = () => { const p = quest.pool, w = quest.weekIds; quest = null; startQuest(p, { weekIds: w }); };
       return;
     }
+
+    const lastAra = [...quest.log].reverse().find(m => m.who === 'ara' && m.voice);
+    if (el('#qHear')) el('#qHear').onclick = () => { if (lastAra) window.U.speak(lastAra.voice); };
+    if (el('#qMore')) el('#qMore').onclick = () => {
+      const extra = quest.extraClue;
+      quest.extraClue = '';                       // one extra clue per word
+      say(`💡 Another way to think about it: ${esc(extra)}`, 'hint', 'Another way to think about it. ' + extra);
+      paintQuest();
+    };
 
     const inp = el('#qIn');
     const send = () => { const v = inp.value; inp.value = ''; answerQuest(v); };
