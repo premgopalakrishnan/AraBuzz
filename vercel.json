@@ -32,7 +32,7 @@
   "crons": [
     {
       "path": "/api/weekly",
-      "schedule": "30 2 * * *"
+      "schedule": "30 2 * * 3"
     }
   ],
   "rewrites": [

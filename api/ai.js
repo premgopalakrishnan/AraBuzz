@@ -17,7 +17,44 @@
    who made it, so the admin console's Usage tab is simply true.
    ========================================================================== */
 
-import { whoIs, askClaude, rpcAsUser, serviceCount, ALLOWED_MODELS, send } from './_lib.js';
+import {
+  whoIs, askClaude, rpcAsUser, serviceCount, serviceGet,
+  emailOf, sendEmail, emailShell, APP_URL, ALLOWED_MODELS, send
+} from './_lib.js';
+
+const escHtml = t => String(t == null ? '' : t)
+  .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+
+/* The starting-point note deserves the same knock on the door as the weekly
+   one: a short email saying it is ready, sent the moment it is written. The
+   note itself never travels by email — it stays behind the PIN. */
+async function emailOnboardingReady(who, childId) {
+  let kidName = 'your kid';
+  try {
+    if (childId) {
+      const rows = await serviceGet(`children?id=eq.${childId}&select=name`);
+      if (rows && rows[0] && rows[0].name) kidName = rows[0].name;
+    }
+  } catch (e) { /* the name is a nicety, not a requirement */ }
+
+  const email = await emailOf(who.user.id);
+  if (!email) return;
+  const parentName = (who.parent && who.parent.full_name) || '';
+  await sendEmail(email, `${kidName}'s starting-point note is ready`, emailShell(`
+    <p style="margin:0 0 14px">Hi ${escHtml(parentName)},</p>
+    <p style="margin:0 0 14px">${escHtml(kidName)} finished the first check, and the
+       starting-point note is ready — a short read on where ${escHtml(kidName)} is
+       starting from and what the practice will aim at first.</p>
+    <p style="margin:0 0 20px;text-align:center">
+      <a href="${APP_URL}" style="display:inline-block;background:#B8862F;color:#fff;
+         text-decoration:none;padding:12px 28px;border-radius:999px">Open AraBuzz</a></p>
+    <p style="margin:0 0 14px;font-size:13px;color:#4C5D5A">Tap <b>Grown-ups</b>, enter
+       your PIN, and open <b>Coach Report</b>. The note never travels by email — it stays
+       behind your PIN.</p>
+    <p style="margin:0;font-size:13px;color:#4C5D5A">From here, a fresh note is published
+       every <b>Wednesday morning</b> — as long as ${escHtml(kidName)} has done a couple
+       of practice rounds in AraBuzz by then.</p>`));
+}
 
 const ADMIN_JOBS  = new Set(['read-deck', 'enrich', 'topic-list']);
 const PARENT_JOBS = new Set(['coach-report', 'onboarding-report', 'memory-tricks', 'top-up', 'test']);
@@ -85,6 +122,14 @@ export default async function handler(req, res) {
       });
     } catch (e) {
       console.warn('usage not recorded', e.message);
+    }
+
+    /* The first check's note just got written — tell the parent, the same
+       way the Wednesday note does. Never fatal: the note itself is already
+       on its way into the app regardless. */
+    if (job === 'onboarding-report') {
+      try { await emailOnboardingReady(who, b.childId || null); }
+      catch (e) { console.warn('onboarding email not sent', e.message); }
     }
 
     return send(res, 200, { out: result, usage });

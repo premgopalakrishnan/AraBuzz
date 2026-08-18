@@ -1,13 +1,14 @@
 /* ==========================================================================
    AraBuzz — api/weekly.js
-   The weekly note, kept honestly weekly.
+   The weekly note, published on Wednesday mornings.
 
-   Vercel wakes this once a day. For each child it asks one question: has
-   enough genuinely happened since their last note to be worth a parent's
-   attention? The bar is the agreed one — at least TWO sessions and TWENTY-FIVE
-   answers since the last note, and the last note at least six days old. A
-   child who didn't play this week simply doesn't get a note, which is far
-   better than a note with nothing in it.
+   Vercel wakes this every Wednesday (02:30 UTC — mid-morning in Manila,
+   breakfast in India). For each child it asks one question: has enough
+   genuinely happened since their last note to be worth a parent's
+   attention? The bar is the agreed one — at least TWO sessions and
+   TWENTY-FIVE answers since the last note. A child who didn't practise
+   simply doesn't get a note that week, which is far better than a note
+   with nothing in it.
 
    When the bar is met, the note is written HERE, on the server, from the
    synced data — and the parent gets one short email saying it is ready. The
@@ -21,7 +22,10 @@ import {
 
 const MIN_SESSIONS = 2;
 const MIN_ANSWERS = 25;
-const MIN_DAYS_BETWEEN = 6;
+/* Two days, not six: the schedule itself is weekly (Wednesdays only), so
+   this guard exists just for the one legitimate short gap — a starting-point
+   note written on, say, a Monday, followed by the first Wednesday note. */
+const MIN_DAYS_BETWEEN = 2;
 const MODEL = 'claude-sonnet-5';
 
 export default async function handler(req, res) {
@@ -137,9 +141,12 @@ async function maybeWriteNote(kid) {
       <p style="margin:0 0 20px;text-align:center">
         <a href="${APP_URL}" style="display:inline-block;background:#B8862F;color:#fff;
            text-decoration:none;padding:12px 28px;border-radius:999px">Open AraBuzz</a></p>
-      <p style="margin:0;font-size:13px;color:#4C5D5A">Tap the padlock, enter your PIN,
+      <p style="margin:0 0 14px;font-size:13px;color:#4C5D5A">Tap <b>Grown-ups</b>, enter your PIN,
          and open <b>Coach Report</b>. The note never travels by email — it stays behind
-         your PIN.</p>`));
+         your PIN.</p>
+      <p style="margin:0;font-size:13px;color:#4C5D5A">The next note comes <b>next Wednesday
+         morning</b> — as long as ${esc(kid.name)} has done a couple of practice rounds in
+         AraBuzz by then.</p>`));
   }
   return true;
 }

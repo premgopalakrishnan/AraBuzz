@@ -34,7 +34,7 @@ export async function whoIs(req) {
   if (!user || !user.id) return null;
 
   const rows = await serviceGet(
-    `parents?id=eq.${user.id}&select=id,family_id,role,active,families(active)`);
+    `parents?id=eq.${user.id}&select=id,family_id,full_name,role,active,families(active)`);
   const parent = (rows && rows[0]) || null;
   if (!parent || parent.active === false) return null;
   if (parent.families && parent.families.active === false && parent.role !== 'admin') return null;

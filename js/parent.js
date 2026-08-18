@@ -1165,9 +1165,9 @@ Reflex = A quick automatic response"></textarea>
            three specific things to do this week. Plain English, not teacher-speak.</p>
         <p class="muted small"><b>Notes write themselves.</b> The starting-point note arrives right
            after the first check${missingOnboard ? ' — it is being written now, give it a minute'
-           : ''}, and a fresh note is written about <b>once a week</b>, as long as ${esc(name)} has
-           practised enough since the last one. You get an email when a new one is ready — there is
-           nothing here for you to run.</p>
+           : ''}, and a fresh note is published every <b>Wednesday morning</b>, provided ${esc(name)}
+           has done a couple of practice rounds since the last one. You get an email each time a
+           note is ready — there is nothing here for you to run.</p>
         <p class="muted small"><b>Notes are never overwritten.</b> Each one is filed by date and kept,
            so you can open any of them again and watch the shape of their progress change from one to the next.</p>
         <div id="rStatus"></div>
