@@ -265,8 +265,8 @@
       <div class="card" style="margin-top:14px">
         <h3>Common questions</h3>
         ${[
-          ['Does the voice reading to my child come from the internet too?',
-           'No. AraBuzz reads aloud using a voice that belongs to the device itself — there is no speech service behind it, no account anywhere, and no sentence your child hears is ever sent away to be turned into sound. On <b>Android, Windows and Mac</b> that works well, and adding a better voice in your device settings genuinely improves it (the steps are in <b>Voice check</b> under Settings). On an <b>iPad or iPhone</b> it can sound somewhat robotic, and that part cannot be fixed: Apple keeps its Enhanced and Premium voices for proper apps and does not share them with a web app, whatever you download. We would rather sound a little flat than send your child\'s spellings to an outside company to be read back.'],
+          ['Where does the voice reading to my child come from?',
+           'From the device itself. There is no third-party speech service behind it — every sentence your child hears is spoken by the device they are using, and nothing is sent anywhere to be read aloud. On <b>Apple devices</b>, Apple does not allow its Enhanced and Premium voices to be used by web apps like this one, so the list AraBuzz offers is everything the device will give it, and it might sound robotic at times — choose the voice and the pace that suit your child. On <b>Android</b> you can choose from the full Google voice list, so adding a voice that suits your child makes AraBuzz sound better. Both are under <b>Voice check</b> in Settings.'],
           ['Do they need the internet?',
            'Mostly no, with one exception worth knowing. The device needs to connect once to download the latest words and questions — after that, Spell Buzz, Word Rush, Listen &amp; Spell, Word Meanings, the crossword and the word search all run on the device itself, on a plane or in the car with the wifi off. <b>The exception is Spell Quest.</b> That is the game where your child can chat with Ara — Ara answers the letters she actually typed, and she can stop and ask a question in her own words — and that conversation is written in the moment by an AI engine (Anthropic\'s Claude Haiku), which needs a connection. It is not a general chatbot and cannot become one: Ara may only discuss this word, its letters, what it means <b>using your school\'s own definition</b>, and the game — the conversation stays inside the sheet your child chose. Attempts to talk her out of that are turned back, and the chatting is capped per word so it cannot replace the practice. Played offline, Spell Quest still works and every answer still counts; Ara simply falls back to the app\'s own shorter hints. Anything played offline is saved on the device and syncs to your family account the next time it connects. One honest caution: until that sync happens, the new answers exist only on that device — if the browser data is cleared before it reconnects, they are lost. The sync tracker at the top of this screen tells you whether anything is still waiting.'],
           ['Where does the data go?',
@@ -1977,11 +1977,11 @@ Reflex = A quick automatic response"></textarea>
     ios: {
       title: 'On an iPad or iPhone',
       steps: [
-        '<b>Do not spend an evening downloading voices.</b> Apple lets a proper app use the Enhanced and Premium voices you download, but does not share them with a web app like AraBuzz — whatever you install, and however long it takes. We checked with 400&nbsp;MB of Premium voices and AraBuzz could not see one of them.',
-        'So the list above is genuinely all this iPad will offer, and the best thing you can do here is <b>tap a few and keep the one you like</b>.',
-        'If none of them sound quite right, that is unfortunately the honest end of it on an iPad. AraBuzz will not send your child’s words to an outside speech service to get a better one — a slightly flat voice is a fair trade for that.'
+        '<b>There is no download that will help here.</b> Apple does not allow its Enhanced and Premium voices to be used by web apps like AraBuzz, so nothing you add in Settings will reach this app.',
+        'The list above is everything the device will offer. Tap through them and keep the one that sounds best to your child.',
+        'If it still sounds a little robotic, try a slower pace — <b>Reading speed for spoken words</b> is just above this panel, and slowing it down helps most children more than a different voice does.'
       ],
-      note: 'This is an Apple decision, not an AraBuzz limitation and not something you have done wrong. Android, Windows and Mac all hand a web app their good voices; only iPhone and iPad hold them back.'
+      note: 'This is Apple’s decision about web apps, not something you have done wrong. Android, Windows and Mac all share their good voices with AraBuzz; iPhone and iPad do not.'
     },
     android: {
       title: 'On an Android phone or tablet',
@@ -2044,21 +2044,19 @@ Reflex = A quick automatic response"></textarea>
         <p class="muted small" style="margin-top:0">Every device keeps a shorter list of voices for web apps than
            it shows in its own settings. This is the <b>real</b> list on this device — tap one to hear it.</p>
         <div class="feedback" style="margin:12px 0">
-          <b>AraBuzz speaks with this device's own voice, and with nothing else.</b>
-          <p class="small" style="margin:6px 0 0">There is no speech service behind it and no account
-             anywhere: no sentence your child hears is ever sent away to be turned into sound.
+          <b>AraBuzz uses the voices built into the device.</b>
+          <p class="small" style="margin:6px 0 0">There is no third-party speech service behind it —
+             every sentence your child hears is spoken by the device they are using.
              ${plat === 'ios'
-               ? `The cost of that on an <b>iPad or iPhone</b> is that it can sound somewhat robotic.
-                  Apple keeps its Enhanced and Premium voices for proper apps and does not share them
-                  with a web app like this one, whatever you download — so the list below really is
-                  everything this device will offer, and the best of them is the best there is here.`
+               ? `On Apple devices, Apple does not allow its Enhanced and Premium voices to be used
+                  by web apps like this one. So the list below is everything the device will offer,
+                  and it might sound robotic at times — choose the voice and the pace that suit your
+                  child.`
                : plat === 'android'
-               ? `On <b>Android</b> you get the good ones: Chrome hands AraBuzz the full Google voice
-                  list, so adding a better voice in your device settings genuinely improves what your
-                  child hears. The steps are below.`
-               : `On <b>${esc((PLATFORM_NAME[plat] || 'this device').replace(/^an? /, ''))}</b> the
-                  system's own voices are good, and adding a better one in your settings genuinely
-                  improves what your child hears. The steps are below.`}</p>
+               ? `On Android you can choose from the full Google voice list, so adding a voice that
+                  suits your child makes AraBuzz sound better. The steps are below.`
+               : `On this device the built-in voices are good, and adding one that suits your child
+                  makes AraBuzz sound better. The steps are below.`}</p>
         </div>
 
         <p class="hint" style="margin:0 0 4px"><b>Open this screen on the device your child actually uses.</b>
