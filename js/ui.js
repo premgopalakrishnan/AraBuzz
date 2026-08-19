@@ -134,7 +134,7 @@
             </div>
           </div>
           <div class="field" style="text-align:left">
-            <label>Ara will talk about you — which words should he use?</label>
+            <label>Ara will talk about you — which words should she use?</label>
             <div class="row wrap" style="gap:8px" id="pnPick">
               ${window.U.PRONOUNS.map((p, i) => `<button class="btn-quiet pn ${i === 2 ? 'on' : ''}"
                  data-pn="${p.key}">${esc(p.label)}</button>`).join('')}
@@ -633,7 +633,7 @@
     // it is everything combined, including a small crossword, so it reads as the
     // real thing to work up to.
     const modes = [
-      { k: 'quest', ic: 'trophy', t: 'Spell Quest', d: 'Ara gives you a clue, you type the spelling — the whole list, one at a time, until you beat it. Talk to him back; this one is better with the internet on. 📶', ribbon: 'NEW' },
+      { k: 'quest', ic: 'trophy', t: 'Spell Quest', d: 'Ara gives you a clue, you type the spelling — the whole list, one at a time, until you beat it. Talk to her back; this one is better with the internet on. 📶', ribbon: 'NEW' },
       { k: 'spellbuzz', ic: 'pencil', t: 'Spell Buzz', d: 'Read the clue, spell the word. Just like the test at school.', ribbon: 'START HERE' },
       { k: 'rush', ic: 'keys', t: 'Word Rush', d: 'Typing game. Copy it, watch it vanish, then type it from memory.' },
       { k: 'listen', ic: 'ear', t: 'Listen & Spell', d: 'I say the word out loud. You spell it.' },

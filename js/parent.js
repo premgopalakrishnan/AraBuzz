@@ -266,7 +266,7 @@
         <h3>Common questions</h3>
         ${[
           ['Do they need the internet?',
-           'Mostly no, with one exception worth knowing. The device needs to connect once to download the latest words and questions — after that, Spell Buzz, Word Rush, Listen &amp; Spell, Word Meanings, the crossword and the word search all run on the device itself, on a plane or in the car with the wifi off. <b>The exception is Spell Quest.</b> That is the game where Ara talks back — he answers what your child actually typed, and she can ask him questions mid-game — and that conversation is written in the moment by an AI engine (Anthropic\'s Claude Haiku), which needs a connection. Played offline, Spell Quest still works and every answer still counts; Ara simply falls back to the app\'s own shorter hints. Anything played offline is saved on the device and syncs to your family account the next time it connects. One honest caution: until that sync happens, the new answers exist only on that device — if the browser data is cleared before it reconnects, they are lost. The sync tracker at the top of this screen tells you whether anything is still waiting.'],
+           'Mostly no, with one exception worth knowing. The device needs to connect once to download the latest words and questions — after that, Spell Buzz, Word Rush, Listen &amp; Spell, Word Meanings, the crossword and the word search all run on the device itself, on a plane or in the car with the wifi off. <b>The exception is Spell Quest.</b> That is the game where your child can chat with Ara — Ara answers the letters she actually typed, and she can stop and ask a question in her own words — and that conversation is written in the moment by an AI engine (Anthropic\'s Claude Haiku), which needs a connection. It is not a general chatbot and cannot become one: Ara may only discuss this word, its letters, what it means <b>using your school\'s own definition</b>, and the game — the conversation stays inside the sheet your child chose. Attempts to talk her out of that are turned back, and the chatting is capped per word so it cannot replace the practice. Played offline, Spell Quest still works and every answer still counts; Ara simply falls back to the app\'s own shorter hints. Anything played offline is saved on the device and syncs to your family account the next time it connects. One honest caution: until that sync happens, the new answers exist only on that device — if the browser data is cleared before it reconnects, they are lost. The sync tracker at the top of this screen tells you whether anything is still waiting.'],
           ['Where does the data go?',
            'It stays on the device and in your own private family account — which is what lets progress follow your kid onto any device they sign in on. It is never sold, never shared, and never used to train anything. You can download a copy or delete everything, any time, from Settings.'],
           ['Will they just memorise the quiz?',
@@ -2016,11 +2016,19 @@ Reflex = A quick automatic response"></textarea>
   const PLATFORM_NAME = { ios: 'an iPad or iPhone', android: 'an Android device',
                           windows: 'a Windows computer', mac: 'a Mac', other: 'this device' };
 
+  /* Sticky between repaints, not between visits — a filter is a way of
+     looking at the list right now, not a setting worth remembering. */
+  let voiceBestOnly = null;
+
   function voiceCheckHTML() {
-    const list = (window.U.voiceList ? window.U.voiceList() : []);
+    const all = (window.U.voiceList ? window.U.voiceList() : []);
     const plat = platformGuess();
     const help = VOICE_HELP[plat] || VOICE_HELP.other;
-    const best = list.filter(v => v.grade > 0);
+    const best = all.filter(v => v.grade > 0);
+    /* Default to the short list when there IS one — a device can offer forty
+       voices, and thirty-seven of them are not worth a child's ear. */
+    if (voiceBestOnly === null) voiceBestOnly = best.length > 0;
+    const list = (voiceBestOnly && best.length) ? best : all;
 
     return `
       <div class="card" id="voiceCheck" style="margin-top:14px;background:var(--paper-2)">
@@ -2032,16 +2040,30 @@ Reflex = A quick automatic response"></textarea>
            and AraBuzz thinks that is <b>${esc(PLATFORM_NAME[plat] || 'this device')}</b>. The voice
            you choose is remembered per device, because each one offers a different set.</p>
 
-        ${list.length ? `<div class="row wrap" style="gap:8px;margin:12px 0">
+        ${all.length ? `
+        <label class="ob-agree" for="voiceBest" style="margin:12px 0 4px">
+          <input type="checkbox" id="voiceBest" ${voiceBestOnly ? 'checked' : ''} ${best.length ? '' : 'disabled'}>
+          <span><b>Show only the better voices</b>
+            <span class="faint small">— Premium, Enhanced, Natural and Neural${best.length
+              ? ` · ${best.length} of ${all.length} here` : ' · none on this device yet'}</span></span></label>` : ''}
+
+        ${list.length ? `<div class="row wrap" style="gap:8px;margin:10px 0">
           ${list.map(v => `<button class="btn-quiet btn-s" data-tryvoice="${esc(v.uri)}"
-             title="${esc(v.lang)}">${v.grade > 0 ? '★ ' : ''}${esc(v.name)}</button>`).join('')}
+             title="${esc(v.lang)}${v.grade > 0 ? ' · one of the good ones' : ''}"
+             style="${Store.db.settings.voiceURI === v.uri ? 'border-color:var(--jade);background:var(--jade-soft)' : ''}">${
+             Store.db.settings.voiceURI === v.uri ? '✓ ' : (v.grade > 0 ? '★ ' : '')}${esc(v.name)}</button>`).join('')}
         </div>` : `<p class="small" style="margin:12px 0"><b>This device is not offering AraBuzz any voices yet.</b>
            On an iPad this sometimes clears after the app is closed and opened once.</p>`}
 
         <p class="small ${best.length ? 'sage-text' : 'muted'}" style="margin:0 0 12px">
           ${best.length
-            ? `★ ${window.U.plural(best.length, 'better voice')} available here — those are the ones recorded from a real person. AraBuzz already prefers them.`
-            : 'None of these are the higher-quality recordings. The steps below add one.'}</p>
+            ? `★ ${window.U.plural(best.length, 'better voice')} available here — those are the ones recorded from a real person. AraBuzz already prefers them, and a ✓ marks the one in use.`
+            : 'None of these are the higher-quality recordings on this device yet. The steps below add one.'}</p>
+
+        <p class="hint" style="margin:0 0 12px"><b>Just downloaded one and it is not in the list?</b>
+          That is normal, especially on an iPad — a device only hands its voices to an app when the
+          app starts. <b>Close AraBuzz completely</b> (swipe it away from the app switcher, not just
+          back to the home screen), open it again, and come back here.</p>
 
         <details${best.length ? '' : ' open'}>
           <summary><b>${help.title}</b> — how to add a better voice</summary>
@@ -2067,11 +2089,23 @@ Reflex = A quick automatic response"></textarea>
       window.U.speak('Well done. Now try spelling this one: necessary.');
       toast('That voice is now the one AraBuzz uses.', '', 2600);
     });
-    const again = $('#voiceAgain');
-    if (again) again.onclick = () => {
-      window.U.loadVoices();
+    const only = $('#voiceBest');
+    if (only) only.onchange = () => {
+      voiceBestOnly = only.checked;
       const box = $('#voiceCheck');
       if (box) { box.outerHTML = voiceCheckHTML(); wireVoiceCheck(); }
+    };
+    const again = $('#voiceAgain');
+    if (again) again.onclick = () => {
+      /* Ask the device twice, a beat apart. Some browsers fill the list
+         asynchronously and answer the first call with nothing at all. */
+      window.U.loadVoices();
+      const redraw = () => {
+        const box = $('#voiceCheck');
+        if (box) { box.outerHTML = voiceCheckHTML(); wireVoiceCheck(); }
+      };
+      redraw();
+      setTimeout(() => { window.U.loadVoices(); redraw(); }, 600);
     };
     /* The device-by-device guide lives in the sign-up flow, which a family
        who joined months ago will never walk through again. It is the same

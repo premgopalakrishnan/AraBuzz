@@ -683,7 +683,9 @@ Use British English. Mix single words and short terms. Avoid words that are triv
   /** One live line from Ara, mid-game. Costs about a tenth of a penny and
    *  is allowed to fail: the game always has its own line ready, so this
    *  returns null rather than throwing when there is no signal, no account,
-   *  or the model is slow. `ms` is how long the game is willing to wait. */
+   *  or the model is slow. `ms` is how long the game is willing to wait.
+   *  Resolves to `{ line, offTopic }`, where offTopic means she asked about
+   *  something outside this week's words and was turned back. */
   async function coachTurn(payload, ms) {
     if (!window.Cloud || !Cloud.signedIn() || !Cloud.token) return null;
     if (navigator.onLine === false) return null;
@@ -697,7 +699,8 @@ Use British English. Mix single words and short terms. Avoid words that are triv
         signal: ctl ? ctl.signal : undefined
       });
       const j = await res.json();
-      return (j && j.line) ? String(j.line) : null;
+      if (!j || !j.line) return null;
+      return { line: String(j.line), offTopic: !!j.offTopic };
     } catch (e) {
       return null;
     } finally { clearTimeout(timer); }

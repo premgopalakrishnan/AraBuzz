@@ -165,17 +165,29 @@
 There is a change in AraBuzz this week that I want you to hear from me rather than notice on your own.
 
 WHAT CHANGED
-Spell Quest — the game where Ara gives a clue and your child types the spelling — now answers what your child actually typed. If she writes "wel byng", Ara tells her the first three letters are right and that her ending sounds correct, instead of repeating a fact she already knows. She can also stop and ask him a question mid-game, in her own words, and get a real answer.
+In Spell Quest — the game where Ara gives a clue and your child types the spelling — your child can now have a conversation with Ara while she plays.
+
+Ara answers the letters your child actually typed. If she writes "wel byng", Ara tells her the first three letters are right and that her ending sounds correct, instead of repeating a fact she already knows. Your child can also stop and ask a question in her own words — "why two Ls?", "what does that mean again?" — and get a real answer.
 
 Aradhana is the reason this exists. She told me the game was not really listening to her, and she was right.
 
-THE ONE THING THAT IS DIFFERENT
-Those replies are written in the moment by an AI engine (Anthropic's Claude Haiku), so while your child plays that one game, three things are sent to be answered: what she typed, the word she is spelling, and the school's own definition of it. Nothing else about her goes with it. No reply is ever allowed to contain the word she is trying to spell — that is checked before it reaches her screen, and thrown away if it does.
+THIS IS NOT A CHATBOT, AND IT IS BUILT SO IT CANNOT BECOME ONE
+I know exactly what most of us worry about the moment a child can type to an AI, so let me be specific about the fence rather than reassuring about it.
 
-Every other game — Spell Buzz, Word Rush, Listen & Spell, Word Meanings, the crossword and the word search — still runs entirely on the device with no connection at all. And Spell Quest itself still works with no internet; Ara simply gives shorter hints written by the app rather than by him.
+Ara is allowed to discuss four things and nothing else: the word your child is spelling right now, its letters and sounds, what it means using ONLY the definition your school wrote on the sheet, and the game itself. She can go deeper on that definition — say it another way, help your child picture it — but never wider. No second meaning she happens to know. No facts from outside the sheet. No stories, no jokes, no other subjects, nothing about herself. The whole conversation stays inside the Spell Buzz sheet your child chose to play.
+
+Children test fences, and mine will too, so this one is held at three separate points:
+- Obvious attempts to change Ara's instructions — the "ignore your rules", "pretend you are", "just tell me the answer" that go around every playground — are turned back before they reach the AI at all.
+- Every reply is read by the app before your child sees it, and thrown away entirely if it wanders off the sheet or contains the word she is trying to spell.
+- The chatting is capped per word. A conversation is help; an endless conversation is a way of not spelling the word.
+
+WHERE HER WORDS GO
+Those replies are written in the moment by an AI engine (Anthropic's Claude Haiku), so while your child plays that one game, three things are sent to be answered: what she typed, the word she is spelling, and the school's own definition of it. Nothing else about her goes with it, and it is used only to write that reply.
+
+Every other game — Spell Buzz, Word Rush, Listen & Spell, Word Meanings, the crossword and the word search — still runs entirely on the device with no connection at all. And Spell Quest itself still works with no internet; Ara simply gives shorter hints written by the app rather than by her.
 
 WHAT YOU NEED TO DO
-1. You will be asked to agree to the consent again next time you open AraBuzz. That is deliberate. The old wording said your child's words never leave the device during play, and that is no longer true for this one game, so I would rather ask you again than move you onto it quietly. There is a new section explaining exactly what is sent. Please read it.
+1. You will be asked to agree to the consent again next time you open AraBuzz. That is deliberate. The old wording said your child's words never leave the device during play, and that is no longer true for this one game, so I would rather ask you again than move you onto it quietly. There are two new sections — what Ara may and may not talk about, and exactly what is sent. Please read them; they are short.
 
 2. Optional, but worth two minutes: AraBuzz reads clues and corrections out loud, and most devices arrive with the flat robotic voice switched on. The better recordings are already on the device, or a short download away.
    On an iPad or iPhone: open Settings, pull the list down to reveal the search box at the top, type Voices, tap English, and download one marked Enhanced or Premium. Ignore anything called "Siri Voice" — Apple never shares those with an app like this.

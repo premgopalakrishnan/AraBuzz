@@ -1659,7 +1659,7 @@
      slow, she never notices: the net catches it in the same bubble.
      ====================================================================== */
 
-  /** Can Ara actually hold a conversation right now? He needs three things:
+  /** Can Ara actually hold a conversation right now? She needs three things:
    *  a connection, a signed-in family account, and the app's own server. Any
    *  one missing and the game still plays perfectly — he is simply briefer. */
   function araIsLive() {
@@ -1667,6 +1667,13 @@
     if (!window.API || !API.coachTurn) return false;
     return !!(window.Cloud && Cloud.signedIn && Cloud.signedIn() && Cloud.token);
   }
+
+  /* How much talking one word can carry before it stops being practice.
+     Four questions is generous for a nine-year-old who is genuinely stuck;
+     twenty-five across a whole game is more than she will ever reach
+     honestly, and caps what a bored evening can turn this into. */
+  const CHAT_PER_WORD  = 4;
+  const CHAT_PER_QUEST = 25;
 
   const flatten = t => String(t || '').toLowerCase().replace(/[^a-z]/g, '');
 
@@ -1742,10 +1749,10 @@
       return;
     }
     const id = thinking();
-    let line = null;
+    let reply = null;
     try {
       if (window.API && API.coachTurn) {
-        line = await API.coachTurn({
+        reply = await API.coachTurn({
           kind,
           childId: (window.Sync && Sync.isDbId(Store.db.activeChildId)) ? Store.db.activeChildId : null,
           word: wd ? wd.word : '',
@@ -1757,8 +1764,11 @@
             .map(m => ({ who: m.who, text: m.who === 'kid' ? plainOf(m.html) : (m.voice || plainOf(m.html)) }))
         }, 6000);
       }
-    } catch (e) { line = null; }
+    } catch (e) { reply = null; }
     if (!quest) return;
+    const line = reply && reply.line;
+    if (reply && reply.offTopic) quest.offTopic = (quest.offTopic || 0) + 1;
+    else if (line) quest.offTopic = 0;
     if (line) resolveBubble(id, esc(line), cls || 'hint', line);
     else resolveBubble(id, fallbackHTML, cls || 'hint');
   }
@@ -1844,6 +1854,32 @@
        conversation, and it is the thing she was really asking for. */
     if (isTalking(given) && !Phonics.analyse(wd.word, given).ok) {
       heard(given);
+
+      /* Three limits, and none of them are about the machine. A conversation
+         is help; an endless conversation is a way of not spelling the word.
+         And a child who has found that asking silly things gets a fun answer
+         will keep asking silly things — so the fence gets quieter and firmer
+         the more she leans on it, without ever telling her off. */
+      const key = quest.round + ':' + quest.i;
+      if (quest.chatKey !== key) { quest.chatKey = key; quest.chatN = 0; }
+      quest.chatN++;
+      quest.chatTotal = (quest.chatTotal || 0) + 1;
+
+      const tooMany = quest.chatN > CHAT_PER_WORD;
+      const wandering = (quest.offTopic || 0) >= 2;
+      const spent = quest.chatTotal > CHAT_PER_QUEST;
+
+      if (tooMany || wandering || spent) {
+        const line = wandering
+          ? `I only know about the words on your sheet 🦜 — this one first, then ask me again.`
+          : `Let us get this one down first, then I am all ears. 👂 What is your best guess?`;
+        quest.log.push({ who: 'ara', html: line, cls: 'chat', voice: plainOf(line) });
+        paintQuest();
+        setTimeout(() => window.U.speak(plainOf(line)), 200);
+        armIdle();
+        return;
+      }
+
       quest.busy = true;
       paintQuest();
       await araLine('chat', wd, given, questFacts(wd, '', null),
@@ -1895,12 +1931,13 @@
         const id = thinking();
         let line = null;
         try {
-          line = (window.API && API.coachTurn) ? await API.coachTurn({
+          const r = (window.API && API.coachTurn) ? await API.coachTurn({
             kind: 'right', childId: (window.Sync && Sync.isDbId(Store.db.activeChildId)) ? Store.db.activeChildId : null,
             word: wd.word, definition: wd.meaning || wd.kidMeaning || '',
             attempt: given, tries: quest.tries, facts: questFacts(wd, given, an),
             history: []
           }, 5000) : null;
+          line = r && r.line;
         } catch (e) { line = null; }
         if (!quest) return;
         resolveBubble(id,
@@ -1914,8 +1951,8 @@
       return;
     }
 
-    /* Not yet. Ara answers her, in his own words, about what she actually
-       typed. The app's line waits underneath in case he cannot be reached. */
+    /* Not yet. Ara answers her, in her own words, about what she actually
+       typed. The app's line waits underneath in case she cannot be reached. */
     window.U.beep('bad');
     quest.run = 0;
 
@@ -1932,11 +1969,12 @@
       const id = thinking();
       let line = null;
       try {
-        line = (window.API && API.coachTurn) ? await API.coachTurn({
+        const r2 = (window.API && API.coachTurn) ? await API.coachTurn({
           kind: 'parked', childId: (window.Sync && Sync.isDbId(Store.db.activeChildId)) ? Store.db.activeChildId : null,
           word: wd.word, definition: wd.meaning || wd.kidMeaning || '',
           attempt: given, tries: quest.tries, facts: questFacts(wd, given, an), history: []
         }, 5000) : null;
+        line = r2 && r2.line;
       } catch (e) { line = null; }
       if (!quest) return;
       /* The word itself is shown here on purpose — three tries are up, and
@@ -2134,7 +2172,7 @@
 
   /* The connection can come and go mid-game. Repaint when it does, so the
      pill is never a stale claim — and so Ara starts talking again the moment
-     he can, without her having to restart anything. */
+     she can, without the child having to restart anything. */
   let netWatch = false;
   function watchNetwork() {
     if (netWatch) return;

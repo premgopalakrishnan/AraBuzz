@@ -76,16 +76,33 @@
             (Anthropic’s API), so your child’s spelling attempts are sent there to
             produce them. Anthropic does not use this to train their models. Everything
             else stays on your device and in a private database.` },
-      { h: 'One game talks back, and that one needs the internet.',
-        p: `<b>Spell Quest</b> is a conversation: your child types a spelling, and Ara
-            replies about the letters <i>she actually wrote</i> — and she can ask him
-            questions mid-game. Those replies are written in the moment by an AI engine
-            (Anthropic’s Claude Haiku), so while she plays that game her attempt, the
-            word, and the school’s own definition of it are sent there to be answered.
-            Nothing else about her goes with it, and no reply is ever allowed to contain
-            the word she is trying to spell. Every other game runs entirely on the
-            device. Played with no connection, Spell Quest still works and every answer
-            still counts — Ara simply gives shorter hints written by the app itself.` },
+      { h: 'One game lets your child chat — inside a fence.',
+        p: `In <b>Spell Quest</b> your child can talk to Ara, and Ara talks back about
+            the letters <i>she actually wrote</i>. She can also stop and ask a question
+            in her own words — “why two Ls?”, “what does that mean again?” — and get a
+            real answer. <b>This is not a general chatbot, and it is built so that it
+            cannot become one.</b> Ara is allowed to discuss four things and nothing
+            else: the word your child is spelling right now, its letters and sounds,
+            what it means <i>using only the definition your school wrote</i>, and the
+            game itself. She may go deeper on that definition — say it another way,
+            help your child picture it — but never wider: no second meaning, no facts
+            from outside the sheet, no stories, no other subjects, nothing about
+            herself. The whole conversation stays inside the Spell Buzz sheet your child
+            chose to play. Children test fences, and this one is tested at three points:
+            obvious attempts to change Ara’s instructions are turned back before they
+            reach the AI at all; every reply is checked before it is shown and thrown
+            away if it strays or contains the word she is trying to spell; and the
+            chatting is capped per word, so a conversation cannot quietly replace the
+            practice.` },
+      { h: 'What that means for where the words go.',
+        p: `Those replies are written in the moment by an AI engine (Anthropic’s Claude
+            Haiku), so while your child plays that one game, three things are sent to be
+            answered: what she typed, the word she is spelling, and the school’s own
+            definition of it. Nothing else about her goes with it, and it is used only to
+            write that reply. <b>Spell Quest is the only part of AraBuzz that does
+            this</b> — every other game runs entirely on the device, with no connection
+            at all. Played with no connection, Spell Quest still works and every answer
+            still counts: Ara simply gives shorter hints written by the app itself.` },
       { h: 'What we collect, which is deliberately very little.',
         p: `Your name, email and mobile. Your child’s first name only, a chosen avatar,
             and their answers to spelling questions. No photographs, no address, no date of
