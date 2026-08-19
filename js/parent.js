@@ -2013,9 +2013,13 @@ Reflex = A quick automatic response"></textarea>
     other: { title: 'On this device', steps: ['Look for “text to speech” or “spoken content” in your system settings and add an English voice.'], note: '' }
   };
 
+  const PLATFORM_NAME = { ios: 'an iPad or iPhone', android: 'an Android device',
+                          windows: 'a Windows computer', mac: 'a Mac', other: 'this device' };
+
   function voiceCheckHTML() {
     const list = (window.U.voiceList ? window.U.voiceList() : []);
-    const help = VOICE_HELP[platformGuess()] || VOICE_HELP.other;
+    const plat = platformGuess();
+    const help = VOICE_HELP[plat] || VOICE_HELP.other;
     const best = list.filter(v => v.grade > 0);
 
     return `
@@ -2023,6 +2027,10 @@ Reflex = A quick automatic response"></textarea>
         <h3>Voice check</h3>
         <p class="muted small" style="margin-top:0">Every device keeps a shorter list of voices for web apps than
            it shows in its own settings. This is the <b>real</b> list on this device — tap one to hear it.</p>
+        <p class="hint" style="margin:0 0 4px"><b>Open this screen on the device your child actually uses.</b>
+           Both the list above and the steps below belong to whatever you are holding right now —
+           and AraBuzz thinks that is <b>${esc(PLATFORM_NAME[plat] || 'this device')}</b>. The voice
+           you choose is remembered per device, because each one offers a different set.</p>
 
         ${list.length ? `<div class="row wrap" style="gap:8px;margin:12px 0">
           ${list.map(v => `<button class="btn-quiet btn-s" data-tryvoice="${esc(v.uri)}"
