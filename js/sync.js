@@ -357,8 +357,15 @@
    * session. Progress and game state last, because they are a picture of
    * "now" and are read fresh at this moment rather than when they changed.
    */
+  /* Everything stops while another family's data is on screen. Syncing then
+     would push this device's outbox into whichever account is being looked
+     at — the single most damaging thing "view as" could do. */
+  let paused = false;
+  function pause() { paused = true; }
+  function resume() { paused = false; }
+
   async function flush(force) {
-    if (flushing) return;
+    if (paused || flushing) return;
     if (!w.Cloud || !Cloud.available() || !Cloud.signedIn()) return;
     if (navigator.onLine === false) return;
 
@@ -594,6 +601,10 @@
         createdAt: d.created_at ? Date.parse(d.created_at) : Date.now(),
         published: true,
         fromCloud: true,
+        /* A sheet from the school belongs to everybody. A page of one child's
+           own marked work belongs to her alone — her sister must never be
+           asked to spell the words her sister got wrong. */
+        childId: d.child_id || null,
         wordIds: byDeck[d.id] || []
       };
       if (at >= 0) db.weeks[at] = Object.assign(db.weeks[at], wk);
@@ -738,7 +749,7 @@
 
   /** Everything that comes down, in the right order. */
   async function pull(opts) {
-    if (pulling) return;
+    if (paused || pulling) return;
     if (!w.Cloud || !Cloud.available() || !Cloud.signedIn()) return;
     if (navigator.onLine === false) return;
     pulling = true;
@@ -885,7 +896,7 @@
   loadBlocked();
 
   w.Sync = {
-    start, pull, flush, status, onChange,
+    start, pull, flush, status, onChange, pause, resume,
     get blockedRows() { return blocked.slice(); },
     clearBlocked() { blocked = []; saveBlocked(); announce(); },
     noteAttempt, noteSession, noteProgress, noteGame,

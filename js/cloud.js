@@ -53,8 +53,30 @@
   /* The raw client, for sync.js and the admin console. Everything they do is
      still decided by row-level security against the signed-in identity — this
      hands out no authority that this file does not already have. */
+  /* Writes are refused outright while the admin is LOOKING at a family
+     rather than acting for them. This is the single place it is enforced,
+     deliberately: a guard spread across twenty screens is a guard with holes
+     in it, and the thing being protected is another family's data. */
+  const WRITES = ['insert', 'update', 'upsert', 'delete'];
+  function readOnlyTable(table) {
+    const refuse = () => Promise.resolve({
+      data: null,
+      error: { message: 'You are looking at this family, not acting for them. ' +
+                        'Turn on "Act as this parent" first.', code: 'VIEW_ONLY' }
+    });
+    const real = client().from(table);
+    return new Proxy(real, {
+      get(t, prop) {
+        if (WRITES.includes(prop)) return refuse;
+        const v = t[prop];
+        return typeof v === 'function' ? v.bind(t) : v;
+      }
+    });
+  }
+
   function from(table) {
     const c = client(); if (!c) throw new Error('offline');
+    if (w.ViewAs && ViewAs.lookingOnly && ViewAs.lookingOnly()) return readOnlyTable(table);
     return c.from(table);
   }
   function rpc(name, params) {

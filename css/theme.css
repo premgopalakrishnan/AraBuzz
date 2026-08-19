@@ -1180,3 +1180,31 @@ body.bootwait #madeBy { display: none !important; }
   border: 1px solid rgba(199,106,74,.22);
 }
 .q-offline b { font-weight: 650; }
+
+/* --- her own work ------------------------------------------------------
+   A small × inside a pill, for a parent removing a word they decided not to
+   keep. Quiet until you are near it, because it lives beside the word. */
+.linky {
+  background: none; border: 0; padding: 0 2px; cursor: pointer;
+  color: var(--ink-faint); font-size: 1rem; line-height: 1;
+}
+.linky:hover { color: var(--clay); }
+.ow-word { font-family: var(--font-body); }
+
+/* --- looking at a family's screens -------------------------------------
+   Impossible to mistake for your own account, and impossible to leave
+   running by accident: the band is fixed, loud, and carries the way out. */
+body.viewing-as { padding-bottom: 64px; }
+.va-bar {
+  position: fixed; left: 0; right: 0; bottom: 0; z-index: 900;
+  display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+  padding: 10px 16px; font-size: .84rem;
+  background: var(--indigo); color: #fff; box-shadow: 0 -4px 20px rgba(0,0,0,.28);
+}
+.va-bar.acting { background: var(--clay); }
+.va-bar .va-what { font-family: var(--font-head); font-size: .68rem; letter-spacing: .16em;
+  text-transform: uppercase; opacity: .85; }
+.va-bar .va-note { opacity: .8; font-size: .78rem; }
+.va-bar button { margin-left: auto; }
+.va-bar button + button { margin-left: 8px; }
+@media (max-width: 560px) { .va-bar .va-note { width: 100%; margin-left: 0; } }

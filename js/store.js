@@ -201,7 +201,35 @@
     });
   }
 
+  /* ------------------------------------------------------------- borrowing
+     When Prem looks at a family's screens as they see them, the app is asked
+     to render SOMEBODY ELSE'S data. It does that by lending Store a different
+     db for a while. Two things make that safe: this device's real data is
+     held aside untouched, and saving is switched off, so nothing he does
+     while looking can ever be written over a family's history — or over his
+     own. `giveBack()` puts everything back exactly as it was. */
+  let ownDb = null;
+  let readOnly = false;
+  function borrow(other) {
+    if (ownDb) return false;                 // already borrowing
+    ownDb = db;
+    db = other;
+    readOnly = true;
+    return true;
+  }
+  function giveBack() {
+    if (!ownDb) return false;
+    db = ownDb; ownDb = null; readOnly = false;
+    return true;
+  }
+  const borrowing = () => !!ownDb;
+  function allowWrites(yes) { readOnly = !yes; }
+
   function save(now) {
+    /* Borrowed data is never written to this device. Nothing else in the app
+       needs to know that — every screen calls save() as usual and it simply
+       does nothing, which is why "view as" needed no changes anywhere else. */
+    if (readOnly) return;
     clearTimeout(saveTimer);
     const doIt = () => {
       try {
@@ -291,6 +319,20 @@
    *  is numbered in the order the school year actually runs, and the number
    *  a kid sees matches the number the console shows. Sheets without a test
    *  date fall to the end; ties keep their upload order. */
+  /** The sheets this child may play with: everything from the school, plus
+   *  her own marked work, and nobody else's. Pass no id for the child at the
+   *  keyboard right now. */
+  function weeksFor(childId) {
+    const who = childId || db.activeChildId || null;
+    return (db.weeks || []).filter(k => !k.childId || k.childId === who);
+  }
+
+  /** Her own-work sheet, if she has one yet. */
+  function ownWeek(childId) {
+    const who = childId || db.activeChildId || null;
+    return who ? (db.weeks || []).find(k => k.childId === who) : null;
+  }
+
   function weekTag(wk) {
     if (!wk) return '';
     const key = k => (k.assessedOn || '9999') + '·' + String(k.no || 0).padStart(4, '0');
@@ -402,9 +444,12 @@
   w.Store = {
     get db() { return db; },
     load, save, uid, today, blank,
+    borrow, giveBack, borrowing, allowWrites,
+    get readOnly() { return readOnly; },
     normalize, wordKey, upsertWord, ensureProgress, uniq,
     AVATARS, COLOURS, switchChild, addChild, removeChild, childList, stashActive,
     addWeek, deleteWeek, weekWords, wordsFor, allWords, weekOfWord, weekTag, numberWeeks,
+    weeksFor, ownWeek,
     logAttempt, attemptsFor, recentAttempts,
     logUsage, usageThisWeek,
     exportBlob, importJSON, wipe

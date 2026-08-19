@@ -113,6 +113,25 @@
             can choose from the full Google voice list. Either way,
             <b>Grown-ups → Settings → Voice check</b> lets you hear every voice available and pick
             the one, and the pace, that suit your child.` },
+      { h: 'Photographs of your child\'s schoolwork — only if you take them.',
+        p: `There is a place in the grown-ups screen where you can photograph a page of your child's
+            written work. If a teacher has marked it, AraBuzz reads their corrections. If nobody has
+            marked it, AraBuzz reads it and says which words <i>it</i> thinks are misspelled — shown
+            separately and clearly labelled, because that is an opinion and not a teacher's mark.
+            Either way <b>you decide</b> which words are worth practising, and nothing is added
+            until you say so. The page is sent to the AI service to be read and <b>the photograph is
+            never stored</b>, not by us and not anywhere: it is read and then gone. Only the words
+            you approve are kept, and they belong to that child alone — not to another family, and
+            not to a brother or sister on your own account. This is entirely optional; ignore it and
+            AraBuzz works exactly as before.` },
+      { h: 'What Prem can see, and how you know when he looks.',
+        p: `Prem runs AraBuzz. When something goes wrong he can open your family's screens and see
+            them exactly as you see them — your child's progress, their notes, their words,
+            including any you approved from a photographed page. He cannot see the photograph,
+            because no photograph is ever kept. <b>Every time he opens your family, it is recorded
+            with the time</b>, and he cannot open it at all unless that record is written first.
+            Looking is all he can do by default; changing anything on your behalf takes a second,
+            deliberate step, and that is recorded too.` },
       { h: 'What we collect, which is deliberately very little.',
         p: `Your name, email and mobile. Your child’s first name only, a chosen avatar,
             and their answers to spelling questions. No photographs, no address, no date of

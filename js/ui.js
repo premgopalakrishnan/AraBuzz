@@ -765,7 +765,8 @@
     const o = opts || {};
     playPick.mode = o.mode || playPick.mode || 'spellbuzz';
     if (o.weekIds) playPick.weekIds = o.weekIds.slice();
-    if (!playPick.weekIds.length && db.weeks.length) playPick.weekIds = [db.weeks[0].id];
+    const myWeeks = Store.weeksFor();
+    if (!playPick.weekIds.length && myWeeks.length) playPick.weekIds = [myWeeks[0].id];
 
     const isPuzzle = ['crossword', 'wordsearch', 'rush', 'puzzles', 'quest'].includes(playPick.mode);
     const titles = {
@@ -827,8 +828,9 @@
          sheets — plus anything already ticked — get tiles; everything older
          waits inside one quiet dropdown until it is asked for. */
       const RECENT = 6;
-      const shown = db.weeks.filter((wk, i) => i < RECENT || playPick.weekIds.includes(wk.id));
-      const older = db.weeks.filter((wk, i) => i >= RECENT && !playPick.weekIds.includes(wk.id));
+      const mine = Store.weeksFor();
+      const shown = mine.filter((wk, i) => i < RECENT || playPick.weekIds.includes(wk.id));
+      const older = mine.filter((wk, i) => i >= RECENT && !playPick.weekIds.includes(wk.id));
       $('#weekPick').innerHTML = (shown.map(wk => {
         const on = playPick.weekIds.includes(wk.id);
         const words = Store.weekWords(wk.id);
@@ -901,8 +903,8 @@
     }
 
     paintWeeks(); paintStart();
-    $('#pickAll').onclick = () => { playPick.weekIds = db.weeks.map(x => x.id); paintWeeks(); paintStart(); };
-    $('#pickLatest').onclick = () => { playPick.weekIds = db.weeks.length ? [db.weeks[0].id] : []; paintWeeks(); paintStart(); };
+    $('#pickAll').onclick = () => { playPick.weekIds = Store.weeksFor().map(x => x.id); paintWeeks(); paintStart(); };
+    $('#pickLatest').onclick = () => { const m = Store.weeksFor(); playPick.weekIds = m.length ? [m[0].id] : []; paintWeeks(); paintStart(); };
     $('#pickTricky').onclick = () => {
       const t = Engine.trickyWords(40);
       if (t.length < 3) { toast('Not enough tricky words yet — keep playing!'); return; }
@@ -926,7 +928,7 @@
   function paintLearn(opts) {
     const db = Store.db, s = $('#scr-learn');
     if (opts && opts.weekId) { learnState.weekId = opts.weekId; learnState.i = 0; }
-    if (!learnState.weekId && db.weeks.length) learnState.weekId = db.weeks[0].id;
+    if (!learnState.weekId && Store.weeksFor().length) learnState.weekId = Store.weeksFor()[0].id;
 
     const words = learnState.weekId ? Store.weekWords(learnState.weekId) : [];
     if (!words.length) {
@@ -959,7 +961,7 @@
           ? 'This week\u2019s new words, saying hello. Look, listen, say each one out loud — nothing to get right or wrong.'
           : 'Look, listen, say it out loud. No marks here.'}</p></div>
         <select id="wkSel" style="width:auto;min-width:190px">
-          ${db.weeks.map(x => `<option value="${x.id}" ${x.id === learnState.weekId ? 'selected' : ''}>${Store.weekTag(x)} · ${esc(x.topic || x.title)}</option>`).join('')}
+          ${Store.weeksFor().map(x => `<option value="${x.id}" ${x.id === learnState.weekId ? 'selected' : ''}>${Store.weekTag(x)} · ${esc(x.topic || x.title)}</option>`).join('')}
         </select>
       </div>
 

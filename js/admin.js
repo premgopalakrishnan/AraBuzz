@@ -462,6 +462,12 @@ Anything you notice, just message me."></textarea></div>
            <p class="muted">No families yet. Start with the <b>Invite</b> tab.</p></div>`;
 
     $$('#atab [data-child]').forEach(b => b.onclick = () => openChild(b.dataset.child, b.dataset.family));
+
+    /* The real thing: their screens, not a summary of them. */
+    $$('#atab [data-viewas]').forEach(b => b.onclick = () => {
+      const fam = families().find(f => f.id === b.dataset.viewas);
+      if (fam && window.ViewAs) ViewAs.start(fam);
+    });
     $$('#atab [data-toggle-family]').forEach(b => b.onclick = () => toggleFamily(b.dataset.toggleFamily, b.dataset.to === '1'));
     $$('#atab [data-toggle-child]').forEach(b => b.onclick = () => toggleChild(b.dataset.toggleChild, b.dataset.to === '1'));
     $$('#atab [data-delete-family]').forEach(b => b.onclick = () => deleteFamily(b.dataset.deleteFamily, b.dataset.fname));
@@ -533,14 +539,17 @@ Anything you notice, just message me."></textarea></div>
               ${parents.map(p => esc(p.name) + (p.email ? ` &lt;${esc(p.email)}&gt;` : '')).join(' · ') || 'no parent yet'}
             </p>
           </div>
-          ${mine
-            ? '<span class="pill honey">your family</span>'
-            : `<div class="row" style="gap:6px">
-                 <button class="btn-quiet btn-s" data-toggle-family="${f.id}" data-to="${f.active ? 0 : 1}">
+          <div class="row wrap" style="gap:6px">
+            ${f.active ? `<button class="btn-ghost btn-s" data-viewas="${f.id}"
+                 title="Open their screens exactly as they see them">
+                 ${Icon.icon('eye', { size: 14 })} View as them</button>` : ''}
+            ${mine
+              ? '<span class="pill honey">your family</span>'
+              : `<button class="btn-quiet btn-s" data-toggle-family="${f.id}" data-to="${f.active ? 0 : 1}">
                    ${f.active ? 'Switch off' : 'Switch back on'}</button>
                  <button class="btn-quiet btn-s" data-delete-family="${f.id}" data-fname="${esc(f.name)}"
-                   style="color:var(--coral-deep)">Delete…</button>
-               </div>`}
+                   style="color:var(--coral-deep)">Delete…</button>`}
+          </div>
         </div>
 
         <div class="row wrap" style="gap:6px;margin:10px 0 4px">
