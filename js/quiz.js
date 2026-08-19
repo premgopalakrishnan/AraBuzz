@@ -1575,8 +1575,9 @@
     watchNetwork();
     say(`<b>🏆 ${esc(quest.title)}</b>`);
     say(`Here is how it works: I give you a clue, you type the spelling. ` +
-        `Get it and you earn a star ⭐. Miss it and I give you a hint, then you try ` +
-        `again — I never just hand you the answer. 😉`);
+        `Get it and you earn a star ⭐. Miss it and I give you a hint and you have ` +
+        `one more go — then I just show you, and we move on. Any word that beats me ` +
+        `to it comes back before the end. 😉`);
 
     /* This is the one game that talks back, and talking back needs a line to
        the outside world. Say so at the door, in her language, rather than
@@ -1620,8 +1621,11 @@
     quest.log.push({ who: 'ara', html, cls: cls || '', voice: plain });
     // A correction or a hint is read out at once — that is the moment help
     // is needed most, and it is exactly what Prem asked for.
-    if (cls === 'hint' || cls === 'good' || cls === 'final') {
-      setTimeout(() => window.U.speak(plain), cls === 'good' ? 900 : 260);
+    /* Only help gets read out, and only if she has left the voice on. The
+       cheers used to speak too, which meant Ara talked over her typing after
+       every correct answer — the thing she actually complained about. */
+    if (cls === 'hint' || cls === 'final') {
+      setTimeout(() => window.U.speakAuto(plain), 260);
     }
   };
   const heard = text => { if (quest) quest.log.push({ who: 'kid', html: esc(text) }); };
@@ -1675,6 +1679,9 @@
   const CHAT_PER_WORD  = 4;
   const CHAT_PER_QUEST = 25;
 
+  /* How many goes at one word before Ara simply shows her and moves on. */
+  const TRIES_PER_WORD = 2;
+
   const flatten = t => String(t || '').toLowerCase().replace(/[^a-z]/g, '');
 
   /** Everything the app knows about her answer, as plain facts a model can
@@ -1726,8 +1733,8 @@
     const row = { who: 'ara', html, cls: cls || '', voice: plain };
     if (at < 0) quest.log.push(row); else quest.log[at] = row;
     paintQuest();
-    if (cls === 'hint' || cls === 'good' || cls === 'final' || cls === 'chat') {
-      setTimeout(() => window.U.speak(plain), cls === 'good' ? 700 : 220);
+    if (cls === 'hint' || cls === 'final' || cls === 'chat') {
+      setTimeout(() => window.U.speakAuto(plain), 220);
     }
   }
   const plainOf = html => String(html).replace(/<[^>]*>/g, ' ').replace(/&[a-z]+;/g, ' ')
@@ -1745,7 +1752,7 @@
       const plain = plainOf(fallbackHTML);
       quest.log.push({ who: 'ara', html: fallbackHTML, cls: cls || 'hint', voice: plain });
       paintQuest();
-      setTimeout(() => window.U.speak(plain), 220);
+      setTimeout(() => window.U.speakAuto(plain), 220);
       return;
     }
     const id = thinking();
@@ -1875,7 +1882,7 @@
           : `Let us get this one down first, then I am all ears. 👂 What is your best guess?`;
         quest.log.push({ who: 'ara', html: line, cls: 'chat', voice: plainOf(line) });
         paintQuest();
-        setTimeout(() => window.U.speak(plainOf(line)), 200);
+        setTimeout(() => window.U.speakAuto(plainOf(line)), 200);
         armIdle();
         return;
       }
@@ -1905,13 +1912,15 @@
     Engine.record(q, given, ok, quest.tries === 1, ms, quest.sessionId);
 
     if (ok) {
-      const pts = quest.tries === 1 ? Game.POINTS.first
-                : quest.tries === 2 ? Game.POINTS.second : Game.POINTS.hinted;
+      /* Two tries means only two prices. A word she fixes on the second go is
+         worth nearly as much as one she got straight away — the fixing is the
+         learning, and pricing it like a failure taught the wrong thing. */
+      const pts = quest.tries === 1 ? Game.POINTS.first : Game.POINTS.second;
       quest.points += pts;
       quest.correct++;
       quest.run = quest.tries === 1 ? (quest.run || 0) + 1 : 0;
       window.U.beep('great');
-      window.U.speak(wd.word);
+      window.U.speakAuto(wd.word);
 
       const firstGo = quest.tries === 1;
       const long = flatten(wd.word).length >= 10;
@@ -1956,15 +1965,22 @@
     window.U.beep('bad');
     quest.run = 0;
 
-    if (quest.tries >= 3) {
+    /* TWO tries, not three. Aradhana's words: being asked a third time makes
+       it feel like being made to study. The chat she liked showed her the
+       answer and moved on — and the word still comes back later in the same
+       game, which is the part that actually teaches. A third demand at the
+       same wall teaches nothing except that the wall is there. */
+    if (quest.tries >= TRIES_PER_WORD) {
       const localGiveUp =
-        `${pick(['This one is a tricky customer! 🦜', 'Right — this word is being difficult. 😤',
-                 'That word is putting up a fight!'])} Here it is: ` +
+        `${pick(['No worries — here it is: ', 'Here you go: ', 'This one is a sneaky one. Here it is: ',
+                 'Have a look at it: '])}` +
         `<span class="q-word">${esc(wd.word)}</span>` +
         `${wd.memoryTrick ? `<p style="margin:6px 0 0">💡 ${esc(wd.memoryTrick)}</p>` : ''}` +
         `<p style="margin:6px 0 0">${quest.round === 1
-          ? 'Say it out loud once, and we will come back to it at the end. 😉'
-          : 'It got away this time — it will be back in your next game. 😉'}</p>`;
+          ? pick(['Keep it in your pocket — it comes back at the end. 😉',
+                  'It will pop up again later, so no rush now.',
+                  'On we go — you will see this one again before we finish. 👉'])
+          : 'It got away this time. It will be waiting in your next game. 😉'}</p>`;
 
       const id = thinking();
       let line = null;
@@ -1985,8 +2001,10 @@
         `${line && wd.memoryTrick ? `<p style="margin:6px 0 0">💡 ${esc(wd.memoryTrick)}</p>` : ''}`,
         'hint',
         (line ? line + '. ' : '') + 'Here it is. ' + wd.word);
-      window.U.speak(wd.word, { rate: 0.6 });
-      window.U.spellOut(wd.word);
+      if (window.U.autoVoiceOn()) {
+        window.U.speak(wd.word, { rate: 0.6 });
+        window.U.spellOut(wd.word);
+      }
       if (quest.round === 1) quest.parked.push(wd);
       quest.busy = false;
       nextQuest();
@@ -2097,6 +2115,9 @@
       <div class="row between" style="margin-bottom:6px">
         <button class="btn-quiet btn-s" id="quit">← Stop</button>
         <div class="row" style="gap:6px">
+          <button class="q-mute${window.U.autoVoiceOn() ? '' : ' off'}" id="qMute"
+            title="${window.U.autoVoiceOn() ? 'Ara reads things out — tap to make it quiet' : 'Quiet — tap if you want Ara to read things out'}"
+            aria-label="Voice on or off">${Icon.icon(window.U.autoVoiceOn() ? 'speaker' : 'mute', { size: 16 })}</button>
           <span class="pill honey">${Icon.icon('star', { size: 14 })} <b>${quest.correct}</b>/${total}</span>
           ${quest.points ? `<span class="pill sky">+${quest.points}</span>` : ''}
         </div>
@@ -2146,6 +2167,16 @@
 
     const el = sel => scr.querySelector(sel);
     el('#quit').onclick = confirmQuitQuest;
+
+    /* Hers to decide, mid-game, without hunting through a grown-up's screen.
+       It stops whatever is being said right now as well as everything after,
+       because the annoying part is being talked over. */
+    el('#qMute').onclick = () => {
+      const now = !window.U.autoVoiceOn();
+      window.U.setAutoVoice(now);
+      paintQuest();
+      window.U.toast(now ? 'Ara will read things out again.' : 'Quiet mode. Tap a 🔊 any time you want to hear something.', '', 2600);
+    };
 
     if (over) {
       el('#qHome').onclick = () => { quest = null; UI.go('home'); };

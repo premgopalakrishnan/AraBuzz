@@ -40,6 +40,7 @@
       sound: true,
       speakRate: 0.85,
       voiceURI: '',
+      autoVoice: true,         // the app reading things out unasked — hers to switch off
       dailyGoal: 1,
       allowSpotSpelling: true,
       warnCallsPerWeek: 40

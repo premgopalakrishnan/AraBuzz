@@ -376,6 +376,34 @@
      three Apple ships, because Apple does not share the good ones with a web
      app. We would rather sound a little flat than quietly send a
      nine-year-old's spelling attempts to a third company to be read back. */
+  /* ----------------------------------------------------- speaking, or not
+     There are two kinds of speaking in this app and they are not the same
+     thing. One is a child ASKING to hear a word — a tap on a speaker, the
+     whole point of Listen & Spell — and that must always work. The other is
+     the app deciding to read something out because it thinks that helps.
+
+     Aradhana does not want the second kind. She is a strong reader; being
+     read to while she is thinking is an interruption, not help. So the
+     automatic kind can be switched off and the asked-for kind cannot, which
+     means turning the voice off costs her nothing she wanted.
+
+     Use speakAuto() for anything the app decided to say. Use speak() only
+     where a person asked. */
+  function autoVoiceOn() {
+    const s = (window.Store && Store.db && Store.db.settings) || {};
+    return s.autoVoice !== false;
+  }
+  function speakAuto(text, opts) {
+    if (!autoVoiceOn()) return;
+    speak(text, opts);
+  }
+  function setAutoVoice(on) {
+    if (!window.Store || !Store.db) return;
+    Store.db.settings.autoVoice = !!on;
+    Store.save(true);
+    if (!on && 'speechSynthesis' in window) { try { speechSynthesis.cancel(); } catch (e) {} }
+  }
+
   function speak(text, opts) {
     const o = opts || {};
     const full = String(text || '').trim();
@@ -792,7 +820,8 @@
 
   w.U = {
     $, $$, el, esc, toast, modal, closeAllModals, confirmBox, promptBox, confetti, floatPoints,
-    beep, speak, speakWordThen, spellOut, loadVoices, bestVoice, voiceList, voiceGrade,
+    beep, speak, speakAuto, autoVoiceOn, setAutoVoice, speakWordThen, spellOut,
+    loadVoices, bestVoice, voiceList, voiceGrade,
     noveltyCount, variantCount, onVoices, appleTouch,
     speedBtn, sayMeaningBtn,
     fmtDate, fmtDay, pct, plural, daysBetween, noAutoCorrect,

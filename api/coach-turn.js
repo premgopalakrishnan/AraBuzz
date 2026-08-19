@@ -101,7 +101,7 @@ function turnPrompt(b) {
   if (f.twoParts)     bits.push(`This is really two small words joined together.`);
 
   if (b.kind === 'right')   bits.push(`She just got it RIGHT after ${b.tries} tries. Celebrate the specific thing she fixed. Do not teach.`);
-  if (b.kind === 'parked')  bits.push(`Three tries are up. She is about to be shown the word. Say something kind and un-defeated; it will come back at the end of the game.`);
+  if (b.kind === 'parked')  bits.push(`She has had two goes and is about to be shown the word. This is NOT a telling-off and NOT a consolation — it is simply moving on, the way a person would. One light sentence, no lesson, no "try harder", no dwelling. The word comes back later in the same game and she does not need reminding of that twice.`);
   if (b.kind === 'opening') bits.push(`This is the start of the game. One line of welcome, in your voice.`);
   if (b.kind === 'chat')    bits.push(`She has stopped to ASK you something instead of spelling: "${b.attempt}". Answer it honestly and briefly, still without writing the word, then nudge her to try.`);
   if (b.kind === 'stuck')   bits.push(`She has gone quiet — nothing typed for a while. Offer one small way in, warmly, without any pressure and without hinting that she is slow.`);

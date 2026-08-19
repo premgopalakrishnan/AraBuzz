@@ -1208,3 +1208,15 @@ body.viewing-as { padding-bottom: 64px; }
 .va-bar button { margin-left: auto; }
 .va-bar button + button { margin-left: 8px; }
 @media (max-width: 560px) { .va-bar .va-note { width: 100%; margin-left: 0; } }
+
+/* --- her hand on the volume ---------------------------------------------
+   Inside the game, not buried in a grown-up's settings. A nine-year-old who
+   wants quiet should not have to ask anyone for it. */
+.q-mute {
+  display: inline-grid; place-items: center; width: 34px; height: 30px;
+  border-radius: 999px; border: 1px solid var(--line); cursor: pointer;
+  background: var(--gold-soft); color: var(--gold-deep);
+  transition: background .15s, color .15s, border-color .15s;
+}
+.q-mute.off { background: var(--paper-2); color: var(--ink-faint); }
+.q-mute:hover { border-color: var(--gold); }
