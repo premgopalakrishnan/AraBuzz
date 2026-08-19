@@ -34,7 +34,7 @@ import {
    really there before sending anything. */
 
 const ADMIN_JOBS  = new Set(['read-deck', 'enrich', 'topic-list']);
-const PARENT_JOBS = new Set(['coach-report', 'onboarding-report', 'memory-tricks', 'top-up', 'test']);
+const PARENT_JOBS = new Set(['coach-report', 'onboarding-report', 'memory-tricks', 'top-up', 'test', 'reword']);
 
 const MAX_TOKENS_CEILING = 24000;
 const FAMILY_CALLS_PER_DAY = 40;

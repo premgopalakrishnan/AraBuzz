@@ -706,6 +706,54 @@ Use British English. Mix single words and short terms. Avoid words that are triv
     } finally { clearTimeout(timer); }
   }
 
-  w.API = { hasKey, usingOwnKey, key, modelFor, readDeck, enrich, topUp, onboardingReport,
+  /* ------------------------------------------------------------ rewording
+     A note written when a child's pronoun was still "they" reads as "they
+     got it", "by themselves". Changing the pronoun does not fix a note that
+     is already written, and a find-and-replace would be worse than useless:
+     a real note says "writing words the way they sound", where "they" is the
+     words. So the model does it, because knowing which "they" is the child
+     is the entire job. */
+  async function reword(html, name, pronoun) {
+    const P = { she: ['she', 'her', 'her', 'hers', 'herself'],
+                he:  ['he', 'him', 'his', 'his', 'himself'],
+                they:['they', 'them', 'their', 'theirs', 'themselves'] }[pronoun] || null;
+    if (!P) throw new Error('Unknown pronoun.');
+    return call('reword', {
+      system:
+        `You are correcting pronouns in a note a parent reads about their own child. ` +
+        `The child is ${name}. Refer to ${name} as ${P[0]}/${P[1]}/${P[2]}/${P[4]} throughout.
+
+` +
+        `RULES
+` +
+        `- Return the SAME HTML, byte for byte, except for pronouns that refer to ${name}. ` +
+        `Do not reword anything else, do not improve the writing, do not change any spelling ` +
+        `the child got wrong, do not add or remove tags, attributes or whitespace.
+` +
+        `- Only change a pronoun that refers to ${name}. Many do not: "writing words the way they ` +
+        `sound" is about the words, "the letters and where they sit" is about the letters. Leave ` +
+        `every one of those exactly as it is. If you are unsure, leave it.
+` +
+        `- Fix the verb when the pronoun forces it — "they were" becomes "${P[0]} was".
+` +
+        `- Never change a quotation of what the child actually wrote.`,
+      content: [{ type: 'text', text: html }],
+      tool: {
+        name: 'reworded',
+        description: 'The same note with the pronouns corrected.',
+        input_schema: {
+          type: 'object',
+          properties: {
+            html: { type: 'string', description: 'The full HTML, unchanged except for the pronouns.' },
+            changed: { type: 'integer', description: 'How many pronouns you changed.' }
+          },
+          required: ['html', 'changed']
+        }
+      },
+      maxTokens: 8000
+    });
+  }
+
+  w.API = { hasKey, usingOwnKey, key, modelFor, readDeck, enrich, topUp, onboardingReport, reword,
             memoryTricks, coachReport, topicList, test, noteReady, coachTurn, estCost, RATES };
 })(window);

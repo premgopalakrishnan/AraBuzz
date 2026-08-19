@@ -1274,6 +1274,80 @@ Reflex = A quick automatic response"></textarea>
     }
   }
 
+  /* ---------------------------------------------------------------- notes up
+     Notes arrive from three places — the Wednesday cron, the starting-point
+     write, and a parent pressing the button — and only two of them ever
+     reached the account. So a device could hold notes nobody else could see,
+     which is not a sync bug a parent can diagnose; it just looks like the app
+     losing things. This is the one place a note goes up, used by all three. */
+  async function pushReport(rec, childId) {
+    if (!window.Cloud || !Cloud.signedIn() || !window.Sync || !Sync.isDbId(childId)) return null;
+    if (rec.cloudId) return rec.cloudId;                    // already up there
+    const { data, error } = await Cloud.from('reports').insert({
+      child_id: childId,
+      payload: { kind: rec.kind || 'weekly', result: rec.result || null,
+                 metrics: rec.metrics || null, headline: rec.headline || '' },
+      html: rec.html || null
+    }).select().single();
+    if (error) throw error;
+    rec.cloudId = data.id;
+    Store.save(true);
+    return data.id;
+  }
+
+  /** Anything sitting on this device that the account has never seen. Runs
+   *  quietly whenever the Coach Report is opened, so the two agree without
+   *  anybody being told to do anything. */
+  async function pushAnyStrandedReports(childId) {
+    const bag = Store.db.activeChildId === childId
+      ? Store.db : (Store.db.children || []).find(c => c.id === childId);
+    if (!bag || !bag.reports || !bag.reports.length) return 0;
+    let sent = 0;
+    for (const r of bag.reports) {
+      if (r.cloudId) continue;
+      try { await pushReport(r, childId); sent++; }
+      catch (e) { console.warn('stranded note not synced', e); }
+    }
+    return sent;
+  }
+
+  /* ------------------------------------------------- notes that call her "they"
+     Aradhana was set up before her pronoun was, so her notes say "they got
+     it" and "by themselves". Changing the pronoun now fixes every note
+     written from here on, and does nothing at all for the ones already
+     written — which are the ones her parent is actually reading. */
+  const PRON_WORDS = /\b(they|them|their|theirs|themselves|they're|they've)\b/i;
+
+  function wrongPronouns(rec) {
+    const want = (Store.db.profile && Store.db.profile.pronoun) || 'they';
+    if (want === 'they') return false;
+    const text = String(rec && rec.html || '').replace(/<[^>]*>/g, ' ');
+    return PRON_WORDS.test(text);
+  }
+
+  async function fixWording(rec, childId) {
+    const name = (Store.db.profile && Store.db.profile.name) || 'your child';
+    const want = (Store.db.profile && Store.db.profile.pronoun) || 'they';
+    const out = await API.reword(rec.html, name, want);
+    const fixed = out && String(out.html || '');
+
+    /* A rewording that comes back the wrong shape is not a rewording. If the
+       note has lost its card, or a third of its length, something else has
+       happened and the original stays exactly as it was. */
+    if (!fixed || !/class="[^"]*report/.test(fixed) ||
+        fixed.length < rec.html.length * 0.6 || fixed.length > rec.html.length * 1.6) {
+      throw new Error('The rewritten note did not come back in one piece, so nothing was changed.');
+    }
+
+    rec.html = fixed;
+    Store.save(true);
+    if (rec.cloudId && window.Cloud && Cloud.signedIn()) {
+      try { await Cloud.from('reports').update({ html: fixed }).eq('id', rec.cloudId); }
+      catch (e) { console.warn('reworded note not synced', e); }
+    }
+    return (out && out.changed) || 0;
+  }
+
   let onboardFixInFlight = false;
 
   /** The starting-point answers, wherever they happen to be. Normally they
@@ -1307,7 +1381,13 @@ Reflex = A quick automatic response"></textarea>
        then — consider rewriting a missing starting-point note. Healing
        before the merge finished is how a note that existed in the account
        got written a second time. */
-    mergeCloudReports().then(changed => {
+    /* Send up anything this device has been keeping to itself, THEN merge.
+       That order matters: pushing first means the merge sees a complete
+       account and the two lists genuinely match afterwards. */
+    pushAnyStrandedReports(forChildId)
+      .catch(() => 0)
+      .then(() => mergeCloudReports())
+      .then(changed => {
       if (tab !== 'report' || Store.db.activeChildId !== forChildId) return;
       if (changed) { tabReport(); return; }
       return baselineFor(forChildId);
@@ -1366,8 +1446,31 @@ Reflex = A quick automatic response"></textarea>
       const out = $('#reportOut');
       out.innerHTML = `<div class="card" style="margin-top:14px">
           ${reportToolbar(r.range || 'Note')}
+          ${wrongPronouns(r) ? `<div class="feedback" style="margin:10px 0 0">
+            <b>This note calls ${esc(Store.db.profile.name)} “they”.</b>
+            <p class="small" style="margin:6px 0 0">It was written before ${esc(Store.db.profile.name)}’s
+               words were set. Notes from here on use the right ones; this one can be corrected too —
+               only the pronouns change, nothing else about what it says.</p>
+            <button class="btn-ghost btn-s" id="fixWords" style="margin-top:8px">Correct the wording</button>
+            <div id="fixStat"></div>
+          </div>` : ''}
         </div>${noteFragment(r.html)}`;
       wireReport(out);
+
+      const fw = $('#fixWords');
+      if (fw) fw.onclick = async () => {
+        fw.disabled = true;
+        fw.innerHTML = '<span class="loader"></span> Correcting';
+        try {
+          const n = await fixWording(r, Store.db.activeChildId);
+          toast(n ? `${window.U.plural(n, 'word')} corrected.` : 'Nothing needed changing.', 'good', 3200);
+          tabReport();
+        } catch (e) {
+          $('#fixStat').innerHTML = `<p class="small" style="margin:8px 0 0;color:var(--coral-deep)">${esc(e.message || e)}</p>`;
+          fw.disabled = false;
+          fw.textContent = 'Try again';
+        }
+      };
       out.scrollIntoView({ behavior: 'smooth', block: 'start' });
     });
     window.U.$$('[data-rdel]').forEach(b => b.onclick = async () => {
@@ -1798,6 +1901,10 @@ Reflex = A quick automatic response"></textarea>
       Store.db.reports.push(rec);
       if (Store.db.reports.length > 40) Store.db.reports.shift();
       Store.save(true);
+      /* …and into the account. Without this a note written here lived on this
+         one device for ever: Prem opened Aradhana's Coach Report on her laptop
+         and saw two notes, opened it on his own and saw one. */
+      pushReport(rec, Store.db.activeChildId).catch(e => console.warn('note not synced', e));
       if (window.Vault && Vault.supported) Vault.saveReport(wrapReportHTML(html), `coach-report-${new Date().toISOString().slice(0, 10)}`);
       UI.checkpointVault();
       st.innerHTML = '';
@@ -2758,7 +2865,6 @@ ${disclaimerHTML()}</body></html>`;
       <div class="card" style="margin-top:14px;text-align:center">
         <img src="assets/cokindle-labs.png" alt="CoKindle Labs" style="height:64px">
         <p class="small muted" style="margin:10px 0 0"><b>AraBuzz</b> · a CoKindle Labs initiative</p>
-        <p class="tiny faint" style="margin:4px 0 0">Built for Aradhana. Version 1.1</p>
       </div>`;
 
     if ($('#saveKey')) $('#saveKey').onclick = () => {

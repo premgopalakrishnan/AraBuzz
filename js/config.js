@@ -46,7 +46,8 @@
           'memory-tricks': 'claude-haiku-4-5-20251001',
           'coach-report': 'claude-sonnet-5',
           'topic-list': 'claude-haiku-4-5-20251001',
-          'test': 'claude-haiku-4-5-20251001'
+          'test': 'claude-haiku-4-5-20251001',
+          'reword': 'claude-haiku-4-5-20251001'
         }
       },
       balanced: {
@@ -59,7 +60,8 @@
           'memory-tricks': 'claude-haiku-4-5-20251001',
           'coach-report': 'claude-sonnet-5',
           'topic-list': 'claude-sonnet-5',
-          'test': 'claude-haiku-4-5-20251001'
+          'test': 'claude-haiku-4-5-20251001',
+          'reword': 'claude-haiku-4-5-20251001'
         }
       },
       best: {
@@ -72,7 +74,8 @@
           'memory-tricks': 'claude-sonnet-5',
           'coach-report': 'claude-opus-5',
           'topic-list': 'claude-opus-5',
-          'test': 'claude-haiku-4-5-20251001'
+          'test': 'claude-haiku-4-5-20251001',
+          'reword': 'claude-haiku-4-5-20251001'
         }
       }
     },
