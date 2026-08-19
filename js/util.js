@@ -308,6 +308,15 @@
     return m ? m[1].replace(/^./, c => c.toUpperCase()) : '';
   }
 
+  /* Which devices are fenced off from their own good voices. Only Apple's,
+     and only on the web — worth knowing, because it changes what we can
+     honestly promise a parent. */
+  function appleTouch() {
+    const ua = navigator.userAgent || '';
+    return /iPhone|iPad|iPod/.test(ua) ||
+           (/Macintosh/.test(ua) && navigator.maxTouchPoints > 1);
+  }
+
   function voiceList(opts) {
     const o = opts || {};
     const rows = englishVoices()
@@ -359,125 +368,18 @@
       .map(x => x.trim()).filter(Boolean);
   }
 
-  /* ======================================================================
-     A REAL VOICE
-     Apple does not hand a web app the Enhanced or Premium voices a parent
-     downloads — that is an operating-system decision, not something AraBuzz
-     can ask permission for. So on any device where the built-in voice is
-     poor, the audio is made on our own server instead and simply played
-     here. Every line is spoken once ever and then cached, so this is not an
-     expensive thing to do; it is a slightly slower one, which is why the
-     browser's own voice remains the instant fallback for everything.
-     ====================================================================== */
-  const cloudCache = new Map();      // text|rate → object URL, for this session
-  let cloudOff = false;              // set once the server says it has no voice
-  let cloudWhy = '';                 // …and why, so a parent can be told
-  let audioEl = null;                // ONE element, unlocked once (see below)
-  let audioReady = false;
-
-  /* This is an Apple problem and nowhere else's. Android hands Chrome the
-     full Google voice list, Windows gives Edge the Natural voices, a Mac has
-     its Enhanced ones — all of them good, all of them instant, none of them
-     costing a thing. Only iPhone and iPad are fenced off from the voices
-     their owner downloaded. So AraBuzz's own voice is offered THERE, and the
-     allowance is not spent on devices that never needed it. */
-  function appleTouch() {
-    const ua = navigator.userAgent || '';
-    return /iPhone|iPad|iPod/.test(ua) ||
-           (/Macintosh/.test(ua) && navigator.maxTouchPoints > 1);   // iPad in disguise
-  }
-
-  function cloudWanted() {
-    const s = (window.Store && Store.db && Store.db.settings) || {};
-    if (s.cloudVoice !== true) return false;       // off unless a parent said yes
-    if (!appleTouch() && s.cloudVoiceAnywhere !== true) return false;
-    if (cloudOff) return false;
-    if (navigator.onLine === false) return false;
-    return !!(window.Cloud && Cloud.signedIn && Cloud.signedIn() && Cloud.token);
-  }
-
-  /* iOS will not let a page play audio it did not ask for. An element that
-     has been played once inside a real tap is trusted from then on, so the
-     first touch anywhere in the app quietly plays a moment of silence and
-     buys every later line the right to speak. Without this the first hint of
-     a game is silent on every iPhone and iPad, and only that one. */
-  const SILENCE = 'data:audio/mpeg;base64,//uQxAAAAAAAAAAAAAAAAAAAAAAAWGluZwAAAA8AAAACAAACcQCA';
-  function unlockAudio() {
-    if (audioReady) return;
-    try {
-      audioEl = audioEl || new Audio();
-      audioEl.playsInline = true;
-      audioEl.src = SILENCE;
-      const p = audioEl.play();
-      if (p && p.then) p.then(() => { audioReady = true; }).catch(() => {});
-      else audioReady = true;
-    } catch (e) {}
-  }
-  ['touchend', 'pointerup', 'click', 'keydown'].forEach(ev =>
-    document.addEventListener(ev, unlockAudio, { once: true, passive: true, capture: true }));
-
-  async function cloudUrl(text, rate) {
-    const key = rate.toFixed(2) + '|' + text;
-    if (cloudCache.has(key)) return cloudCache.get(key);
-    const res = await fetch('/api/speak', {
-      method: 'POST',
-      headers: { 'content-type': 'application/json', authorization: 'Bearer ' + Cloud.token },
-      body: JSON.stringify({ text, rate,
-        childId: (window.Sync && Store.db && Sync.isDbId(Store.db.activeChildId)) ? Store.db.activeChildId : null })
-    });
-    if (res.status === 503) {
-      /* Either no voice service is set up, or the month's allowance is spent.
-         Both mean the same thing to a child — the device speaks instead —
-         but a parent deserves to know which. */
-      cloudOff = true;
-      try { cloudWhy = (await res.json()).error || 'unavailable'; } catch (e) { cloudWhy = 'unavailable'; }
-      return null;
-    }
-    if (!res.ok) return null;
-    const url = URL.createObjectURL(await res.blob());
-    if (cloudCache.size > 120) {                                 // a sitting's worth
-      const first = cloudCache.keys().next().value;
-      URL.revokeObjectURL(cloudCache.get(first));
-      cloudCache.delete(first);
-    }
-    cloudCache.set(key, url);
-    return url;
-  }
-
-  /** Returns true if it managed to speak. Never throws, never waits long. */
-  async function speakCloud(text, rate, onend) {
-    try {
-      const url = await cloudUrl(text, rate);
-      if (!url) return false;
-      audioEl = audioEl || new Audio();
-      audioEl.playsInline = true;
-      audioEl.onended = null;
-      audioEl.src = url;
-      if (onend) audioEl.onended = onend;
-      await audioEl.play();
-      return true;
-    } catch (e) { return false; }
-  }
-
-  function stopCloud() {
-    try { if (audioEl) { audioEl.pause(); audioEl.currentTime = 0; } } catch (e) {}
-  }
-
+  /* AraBuzz speaks with the voice that belongs to the device, and with
+     nothing else. No speech service, no account anywhere, no sentence sent
+     off to be turned into sound — what a child says and hears in this app
+     stays on the device that heard it. That is a deliberate choice and it
+     costs something: on an iPad the built-in voice is the plainest of the
+     three Apple ships, because Apple does not share the good ones with a web
+     app. We would rather sound a little flat than quietly send a
+     nine-year-old's spelling attempts to a third company to be read back. */
   function speak(text, opts) {
     const o = opts || {};
     const full = String(text || '').trim();
     if (!full) return;
-    const rate = o.rate || (window.Store && Store.db.settings.speakRate) || 0.85;
-
-    /* Try the good voice first, and fall back the moment anything is not
-       perfect — no signal, no account, a slow server, a device that refuses
-       to play. She never waits on it, and she never notices which one spoke. */
-    if (cloudWanted() && full.length <= 600) {
-      stopCloud();
-      if ('speechSynthesis' in window) speechSynthesis.cancel();
-      speakCloud(full, rate, o.onend).then(done => { if (!done) deviceSpeak(full, o); });
-      return;
-    }
     deviceSpeak(full, o);
   }
 
@@ -891,9 +793,7 @@
   w.U = {
     $, $$, el, esc, toast, modal, closeAllModals, confirmBox, promptBox, confetti, floatPoints,
     beep, speak, speakWordThen, spellOut, loadVoices, bestVoice, voiceList, voiceGrade,
-    unlockAudio, stopCloud,
-    cloudVoiceState: () => ({ off: cloudOff, why: cloudWhy, needed: appleTouch() }),
-    noveltyCount, variantCount, onVoices,
+    noveltyCount, variantCount, onVoices, appleTouch,
     speedBtn, sayMeaningBtn,
     fmtDate, fmtDay, pct, plural, daysBetween, noAutoCorrect,
     PRONOUNS, pronouns, pronounNote,

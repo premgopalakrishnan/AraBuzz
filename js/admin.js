@@ -181,12 +181,12 @@ Children test fences, and mine will too, so this one is held at three separate p
 - Every reply is read by the app before your child sees it, and thrown away entirely if it wanders off the sheet or contains the word she is trying to spell.
 - The chatting is capped per word. A conversation is help; an endless conversation is a way of not spelling the word.
 
-ONE OPTIONAL EXTRA, WHICH IS OFF
-AraBuzz reads a lot out loud, and it borrows a voice from the device to do it. On an iPad that voice is flat and robotic, and it turns out it cannot be improved: Apple lets a proper app use the Enhanced and Premium voices you download, but does not share them with a web app like this one. I downloaded 400 MB of them to be sure, and AraBuzz could not see a single one.
+A NOTE ON THE VOICE, SINCE IT COMES UP
+AraBuzz reads a lot out loud, and it uses a voice belonging to the device to do it. There is no speech service behind it and no account anywhere — nothing your child hears is sent away to be turned into sound, and I would like to keep it that way.
 
-So there is now a switch that has AraBuzz make the audio itself, through a speech service, and the device just plays it. The difference is a voice that sounds like a person rather than a machine.
+On Android, Windows and a Mac those built-in voices are good, and you can add a better one in a couple of minutes; the steps are in Voice check.
 
-It is OFF, and it stays off unless you turn it on — because turning it on means the sentence being read aloud is sent to that service, and sometimes that sentence quotes what your child just typed. That is a change I am not willing to make on your behalf. The switch is under Grown-ups, then Settings, then Voice check, and it explains all of this again before it does anything. Try it if the robotic voice bothers your child; ignore it entirely if it does not.
+On an iPad or iPhone it can sound somewhat robotic, and there is no fixing it: Apple keeps its Enhanced and Premium voices for proper apps and does not share them with a web app like AraBuzz, whatever you download. I lost an evening proving that, so you do not have to. I looked at sending the words to an outside voice service to get something better and decided against it — a slightly flat voice is a fair trade for your child's spellings staying where they are.
 
 WHERE HER WORDS GO
 Those replies are written in the moment by an AI engine (Anthropic's Claude Haiku), so while your child plays that one game, three things are sent to be answered: what she typed, the word she is spelling, and the school's own definition of it. Nothing else about her goes with it, and it is used only to write that reply.
@@ -194,11 +194,11 @@ Those replies are written in the moment by an AI engine (Anthropic's Claude Haik
 Every other game — Spell Buzz, Word Rush, Listen & Spell, Word Meanings, the crossword and the word search — still runs entirely on the device with no connection at all. And Spell Quest itself still works with no internet; Ara simply gives shorter hints written by the app rather than by her.
 
 WHAT YOU NEED TO DO
-1. You will be asked to agree to the consent again next time you open AraBuzz. That is deliberate. The old wording said your child's words never leave the device during play, and that is no longer true for this one game, so I would rather ask you again than move you onto it quietly. There are new sections on what Ara may and may not talk about, exactly what is sent, and the optional voice switch. Please read them; they are short.
+1. You will be asked to agree to the consent again next time you open AraBuzz. That is deliberate. The old wording said your child's words never leave the device during play, and that is no longer true for this one game, so I would rather ask you again than move you onto it quietly. There are new sections on what Ara may and may not talk about, exactly what is sent, and where the reading voice comes from. Please read them; they are short.
 
-2. Optional: AraBuzz reads clues and corrections out loud, and most devices arrive with the flat robotic voice switched on. Open AraBuzz on your child's device and go to Grown-ups, then Settings, then Voice check — it lists every voice that device actually offers, with a play button on each. Pick the one you like.
+2. Optional: open AraBuzz on your child's device and go to Grown-ups, then Settings, then Voice check. It lists every voice that device actually offers, with a play button on each — pick the one you like.
    On Android, Windows or a Mac you can add a much better one first, and the panel gives you the steps for your device.
-   On an iPad or iPhone, do not spend time downloading voices: Apple lets a proper app use the Enhanced and Premium voices you download but does not share them with a web app like AraBuzz, whatever you install. The same panel has the alternative described above, off until you choose it.
+   On an iPad or iPhone, do not spend time downloading voices; see the note above.
 
 3. Nothing else. Your child does not need to do anything, and no progress, points or streaks are affected.
 

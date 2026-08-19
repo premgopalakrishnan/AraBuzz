@@ -266,7 +266,7 @@
         <h3>Common questions</h3>
         ${[
           ['Does the voice reading to my child come from the internet too?',
-           'No — not unless you switch it on yourself. By default the voice belongs to the device and nothing leaves it. There is an optional switch, and here is why it exists: AraBuzz reads a lot aloud, and it borrows a voice from the device. On an iPad that voice is flat and robotic, and it cannot be improved: Apple lets a proper app use the Enhanced and Premium voices you download but does not share them with a web app, whatever you install. So AraBuzz can make the audio itself through a speech service (Microsoft Azure) and let the device play it. Turn that on and the sentence being read aloud is sent there to be turned into sound — sometimes a line about what your child just typed — used for the recording and nothing else, and kept afterwards so the same sentence is never sent twice. The switch is under <b>Voice check</b> in Settings, it explains all of this again before it starts, and switching it back off returns to the device\'s own voice at once.'],
+           'No. AraBuzz reads aloud using a voice that belongs to the device itself — there is no speech service behind it, no account anywhere, and no sentence your child hears is ever sent away to be turned into sound. On <b>Android, Windows and Mac</b> that works well, and adding a better voice in your device settings genuinely improves it (the steps are in <b>Voice check</b> under Settings). On an <b>iPad or iPhone</b> it can sound somewhat robotic, and that part cannot be fixed: Apple keeps its Enhanced and Premium voices for proper apps and does not share them with a web app, whatever you download. We would rather sound a little flat than send your child\'s spellings to an outside company to be read back.'],
           ['Do they need the internet?',
            'Mostly no, with one exception worth knowing. The device needs to connect once to download the latest words and questions — after that, Spell Buzz, Word Rush, Listen &amp; Spell, Word Meanings, the crossword and the word search all run on the device itself, on a plane or in the car with the wifi off. <b>The exception is Spell Quest.</b> That is the game where your child can chat with Ara — Ara answers the letters she actually typed, and she can stop and ask a question in her own words — and that conversation is written in the moment by an AI engine (Anthropic\'s Claude Haiku), which needs a connection. It is not a general chatbot and cannot become one: Ara may only discuss this word, its letters, what it means <b>using your school\'s own definition</b>, and the game — the conversation stays inside the sheet your child chose. Attempts to talk her out of that are turned back, and the chatting is capped per word so it cannot replace the practice. Played offline, Spell Quest still works and every answer still counts; Ara simply falls back to the app\'s own shorter hints. Anything played offline is saved on the device and syncs to your family account the next time it connects. One honest caution: until that sync happens, the new answers exist only on that device — if the browser data is cleared before it reconnects, they are lost. The sync tracker at the top of this screen tells you whether anything is still waiting.'],
           ['Where does the data go?',
@@ -1979,7 +1979,7 @@ Reflex = A quick automatic response"></textarea>
       steps: [
         '<b>Do not spend an evening downloading voices.</b> Apple lets a proper app use the Enhanced and Premium voices you download, but does not share them with a web app like AraBuzz — whatever you install, and however long it takes. We checked with 400&nbsp;MB of Premium voices and AraBuzz could not see one of them.',
         'So the list above is genuinely all this iPad will offer, and the best thing you can do here is <b>tap a few and keep the one you like</b>.',
-        'If none of them sound good enough — and on an iPad they often do not — that is what <b>AraBuzz’s own voice</b> at the top of this panel is for. It is off unless you turn it on, and it explains exactly what changes before it does anything.'
+        'If none of them sound quite right, that is unfortunately the honest end of it on an iPad. AraBuzz will not send your child’s words to an outside speech service to get a better one — a slightly flat voice is a fair trade for that.'
       ],
       note: 'This is an Apple decision, not an AraBuzz limitation and not something you have done wrong. Android, Windows and Mac all hand a web app their good voices; only iPhone and iPad hold them back.'
     },
@@ -2043,36 +2043,25 @@ Reflex = A quick automatic response"></textarea>
         <h3>Voice check</h3>
         <p class="muted small" style="margin-top:0">Every device keeps a shorter list of voices for web apps than
            it shows in its own settings. This is the <b>real</b> list on this device — tap one to hear it.</p>
-        ${plat !== 'ios' ? `<p class="tiny faint" style="margin:10px 0 0">
-          AraBuzz's own voice is offered on iPhone and iPad, where Apple keeps the good voices to
-          itself. ${esc(PLATFORM_NAME[plat] || 'This device')} already has decent ones of its own —
-          pick from the list below.</p>` : `
-        <label class="ob-agree" for="cloudVoice" style="margin:12px 0 10px;padding:12px 14px;background:var(--jade-soft);border-color:rgba(47,107,88,.25)">
-          <input type="checkbox" id="cloudVoice" ${Store.db.settings.cloudVoice === false ? '' : 'checked'}>
-          <span><b>Use AraBuzz's own voice</b> <span class="pill tiny">optional</span>
-            <span class="faint small">— a properly recorded voice, made by AraBuzz rather than
-            borrowed from this device. Apple does not let a web app use the Premium voices you
-            download, so on an iPad this is the only way to get a good one. <b>Off unless you
-            turn it on</b>, and it will explain exactly what that means before it starts. Needs
-            a connection; when there is none — or when the month's allowance is spent — the voice
-            you have chosen below steps in.</span></span></label>`}
+        <div class="feedback" style="margin:12px 0">
+          <b>AraBuzz speaks with this device's own voice, and with nothing else.</b>
+          <p class="small" style="margin:6px 0 0">There is no speech service behind it and no account
+             anywhere: no sentence your child hears is ever sent away to be turned into sound.
+             ${plat === 'ios'
+               ? `The cost of that on an <b>iPad or iPhone</b> is that it can sound somewhat robotic.
+                  Apple keeps its Enhanced and Premium voices for proper apps and does not share them
+                  with a web app like this one, whatever you download — so the list below really is
+                  everything this device will offer, and the best of them is the best there is here.`
+               : plat === 'android'
+               ? `On <b>Android</b> you get the good ones: Chrome hands AraBuzz the full Google voice
+                  list, so adding a better voice in your device settings genuinely improves what your
+                  child hears. The steps are below.`
+               : `On <b>${esc((PLATFORM_NAME[plat] || 'this device').replace(/^an? /, ''))}</b> the
+                  system's own voices are good, and adding a better one in your settings genuinely
+                  improves what your child hears. The steps are below.`}</p>
+        </div>
 
-        ${(() => {
-          const st = (window.U.cloudVoiceState ? window.U.cloudVoiceState() : { off: false });
-          if (!st.off || Store.db.settings.cloudVoice === false) return '';
-          return `<div class="feedback" style="margin:0 0 10px"><b>${
-            st.why === 'monthly-limit'
-              ? 'AraBuzz’s voice has used this month’s allowance.'
-              : 'AraBuzz’s voice is not available on this account yet.'}</b>
-            <p class="small" style="margin:6px 0 0">${
-            st.why === 'monthly-limit'
-              ? 'It stops there on purpose rather than costing anything, so this device’s own voice is filling in until the month turns over. Nothing else changes, and every answer still counts.'
-              : 'The device’s own voice is being used instead. Nothing is broken — the speech service simply is not switched on for AraBuzz.'}</p></div>`;
-        })()}
-
-        <p class="hint" style="margin:0 0 4px"><b>The list below is this device's own voices</b> — used
-           when AraBuzz's voice is switched off, or when there is no connection.
-           <b>Open this screen on the device your child actually uses.</b>
+        <p class="hint" style="margin:0 0 4px"><b>Open this screen on the device your child actually uses.</b>
            Both the list below and the steps at the bottom belong to whatever you are holding right now —
            and AraBuzz thinks that is <b>${esc(PLATFORM_NAME[plat] || 'this device')}</b>. The voice
            you choose is remembered per device, because each one offers a different set.</p>
@@ -2175,38 +2164,6 @@ Reflex = A quick automatic response"></textarea>
       window.U.speak('Well done. Now try spelling this one: necessary.');
       toast('That voice is now the one AraBuzz uses.', '', 2600);
     });
-    /* Turning this ON starts sending sentences to another company, so it asks
-       first — properly, in the words a parent needs, at the moment it matters
-       rather than buried in a consent screen they read months ago. Turning it
-       OFF asks nothing: stopping should never need permission. */
-    const cloud = $('#cloudVoice');
-    if (cloud) cloud.onchange = async () => {
-      if (!cloud.checked) {
-        Store.db.settings.cloudVoice = false;
-        Store.save(true);
-        toast('Back to this device’s own voice.', '', 2400);
-        repaintVoiceCheck();
-        return;
-      }
-      cloud.checked = false;                    // not until they say yes
-      const yes = await confirmBox('Use AraBuzz’s own voice?',
-        `<p style="margin:0 0 10px">This is the only way to get a good voice on an iPad — Apple does
-            not share the Premium voices you download with a web app, whatever you install.</p>
-         <p style="margin:0 0 10px"><b>What changes:</b> the sentence being read aloud is sent to a
-            speech service (Microsoft Azure) to be turned into sound. Sometimes that sentence quotes
-            what your child just typed. It is used to make the recording and nothing else, and each
-            sentence is kept so the same one is never sent twice.</p>
-         <p style="margin:0"><b>What does not:</b> everything else stays exactly as it is, and you can
-            switch this back off here at any time — the device’s own voice takes over immediately.</p>`,
-        'Yes, use it');
-      if (!yes) { repaintVoiceCheck(); return; }
-      Store.db.settings.cloudVoice = true;
-      Store.save(true);
-      window.U.unlockAudio && window.U.unlockAudio();
-      window.U.speak('Well done. Now try spelling this one: necessary.');
-      repaintVoiceCheck();
-    };
-
     const only = $('#voiceBest');
     if (only) only.onchange = () => { voiceBestOnly = only.checked; repaintVoiceCheck(); };
 

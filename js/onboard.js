@@ -103,20 +103,15 @@
             this</b> — every other game runs entirely on the device, with no connection
             at all. Played with no connection, Spell Quest still works and every answer
             still counts: Ara simply gives shorter hints written by the app itself.` },
-      { h: 'The voice that reads to your child — and one thing you may switch on.',
+      { h: 'The voice that reads to your child stays on the device.',
         p: `AraBuzz reads a lot aloud: the word, your school's definition, the correction when a
-            spelling goes wrong. It uses a voice belonging to the device itself, and none of that
-            leaves the device. <b>That is how it works unless you decide otherwise.</b>
-            On an iPad the built-in voice is poor and cannot be improved — Apple lets a proper app
-            use the better voices you download but does not share them with a web app like this
-            one, whatever you install. So there is an <b>optional</b> switch under
-            <b>Grown-ups → Settings → Voice check</b> that has AraBuzz make the audio itself
-            through a speech service (Microsoft Azure). It is <b>off</b>, and stays off until you
-            turn it on. If you do, the sentence being read aloud is sent there to become sound —
-            sometimes a line quoting what your child just typed — used for the recording and
-            nothing else, and kept so the same sentence is never sent twice. The switch explains
-            all of this again at the moment you use it, and switching it back off returns to the
-            device's own voice at once.` },
+            spelling goes wrong. It uses a voice belonging to the device itself. There is no speech
+            service behind it and no account anywhere — <b>no sentence your child hears is ever sent
+            away to be turned into sound.</b> On an iPad that costs us something: Apple keeps its
+            better voices for proper apps and does not share them with a web app, so it can sound a
+            little flat, and no download fixes that. We think that is a fair trade. On Android,
+            Windows and Mac the device's own voices are good, and <b>Grown-ups → Settings → Voice
+            check</b> shows you which ones this device offers and how to add a better one.` },
       { h: 'What we collect, which is deliberately very little.',
         p: `Your name, email and mobile. Your child’s first name only, a chosen avatar,
             and their answers to spelling questions. No photographs, no address, no date of
@@ -698,13 +693,14 @@
          difference to a child who is listening rather than reading.</p>
       ${[
         ['iPhone & iPad — read this before you download anything', [
-          `<b>Downloading a better voice will not help here.</b> Apple lets a proper app use the
-           Enhanced and Premium voices you download, but does not share them with a web app like
-           AraBuzz — whatever you install.`,
-          `So skip it. Open <b>Grown-ups → Settings → Voice check</b> instead, tap the voices this
-           iPad does offer, and keep the best one.`,
-          `If none are good enough, the same panel has a switch for <b>AraBuzz's own voice</b>,
-           which is off until you turn it on and explains what changes first.`
+          `<b>Downloading a better voice will not help here.</b> Apple keeps its Enhanced and
+           Premium voices for proper apps and does not share them with a web app like AraBuzz,
+           whatever you install.`,
+          `So skip it. Open <b>Grown-ups → Settings → Voice check</b>, tap the voices this iPad does
+           offer, and keep the best one. That really is the best available here.`,
+          `It may still sound a little robotic. AraBuzz will not send your child's words to an
+           outside speech service to improve on it, and we would rather tell you that plainly than
+           quietly do it.`
         ]],
         ['Android', [
           `<b>Settings</b> → <b>Accessibility</b> → <b>Text-to-speech output</b> (some phones: Settings → General management → Text-to-speech).`,
@@ -779,16 +775,16 @@
 
       <div class="ob-warn" style="border-color:var(--jade);margin-top:12px">
         <b>A word about the voice that reads to your child.</b>
-        <p>AraBuzz reads clues and corrections aloud using a voice that belongs to the device.
-           On <b>Android, Windows and Mac</b> you can add a much better one in a couple of
-           minutes and every browser on the device will use it — worth doing.</p>
-        <p><b>On an iPad or iPhone, do not bother.</b> Apple lets a proper app use the Enhanced
-           and Premium voices you download, but does not share them with a web app like this one,
-           whatever you install. If the voice on an iPad bothers your child, there is a switch
-           inside AraBuzz for that instead — <b>Grown-ups → Settings → Voice check</b> — which
-           explains itself before it does anything.</p>
-        <p class="hint" style="margin:8px 0 0">Either way, <b>Voice check</b> shows you every voice
-           that device actually offers AraBuzz, with a play button on each.
+        <p>AraBuzz reads clues and corrections aloud using a voice that belongs to the device —
+           nothing is sent anywhere to be spoken. On <b>Android, Windows and Mac</b> you can add a
+           much better one in a couple of minutes and every browser on the device will use it.
+           Worth doing.</p>
+        <p><b>On an iPad or iPhone, do not bother.</b> Apple keeps its Enhanced and Premium voices
+           for proper apps and does not share them with a web app like this one, whatever you
+           install — so it may sound somewhat robotic there, and that is Apple's decision rather
+           than something you can fix.</p>
+        <p class="hint" style="margin:8px 0 0"><b>Voice check</b> under Grown-ups → Settings shows
+           every voice that device actually offers AraBuzz, with a play button on each.
            <a href="#" id="obVoiceHow"><b>All devices \u2192</b></a></p>
       </div>
 

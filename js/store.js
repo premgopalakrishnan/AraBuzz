@@ -40,7 +40,6 @@
       sound: true,
       speakRate: 0.85,
       voiceURI: '',
-      cloudVoice: false,       // off until a parent turns it on, eyes open
       dailyGoal: 1,
       allowSpotSpelling: true,
       warnCallsPerWeek: 40
