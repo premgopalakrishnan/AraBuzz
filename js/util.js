@@ -242,24 +242,30 @@
     try { voices = speechSynthesis.getVoices() || []; } catch (e) { voices = []; }
     return voices;
   }
-  if ('speechSynthesis' in window) {
-    loadVoices();
-    speechSynthesis.onvoiceschanged = loadVoices;
-  }
+  if ('speechSynthesis' in window) loadVoices();   // the watcher below rebinds this
 
   /* Devices ship several grades of the same voice and hand the plainest one
      over first. The plain grade is the robotic one — the "Enhanced",
      "Premium", "Natural" and "Neural" builds are recorded from a person and
      sound like one. Prefer them everywhere, on every platform, before
      falling back to accent. */
-  const NICE = /\b(enhanced|premium|natural|neural|siri|eloquence)\b/i;
+  const NICE = /\b(enhanced|premium|natural|neural|siri)\b/i;
+
+  /* The joke voices. Apple ships a drawer of them — singing, robotic, alien —
+     and not one is any use for reading a spelling to a nine-year-old. They
+     are hidden rather than sorted to the bottom, because a list you have to
+     scroll past rubbish to read is a list nobody reads. */
+  const NOVELTY = /\b(bells?|bubbles?|organ|cellos?|zarvox|trinoids|boing|jester|wobble|whisper|bahh|deranged|hysterical|bad news|good news|pipe organ|superstar|albert|princess|junior|ralph|fred|kathy|bruce|agnes|victoria|alice singing|sing)\b/i;
+
   function voiceGrade(v) {
     const n = (v && v.name) || '';
     if (/premium|neural|natural/i.test(n)) return 3;
     if (/enhanced|siri/i.test(n)) return 2;
-    if (/compact|eloquence|novelty|whisper|bells|bubbles|organ|zarvox|trinoids/i.test(n)) return -1;
+    if (NOVELTY.test(n)) return -2;
+    if (/compact|eloquence/i.test(n)) return -1;
     return 0;
   }
+  function isNovelty(v) { return NOVELTY.test((v && v.name) || ''); }
   function englishVoices() {
     if (!voices.length) loadVoices();
     return voices.filter(v => /^en/i.test(v.lang || ''));
@@ -285,10 +291,32 @@
   /** Every English voice this device is willing to hand to AraBuzz, best
    *  first — which is not the same list the device shows in its own
    *  settings, and that difference is worth being able to see. */
-  function voiceList() {
-    return englishVoices().slice().sort((a, b) => voiceGrade(b) - voiceGrade(a) || a.name.localeCompare(b.name))
+  /** Every English voice this device is willing to hand to AraBuzz, best
+   *  first — which is not the same list the device shows in its own
+   *  settings, and that difference is worth being able to see.
+   *  Pass `{ all: true }` to include the joke voices as well. */
+  function voiceList(opts) {
+    const all = !!(opts && opts.all);
+    return englishVoices()
+      .filter(v => all || !isNovelty(v))
+      .slice()
+      .sort((a, b) => voiceGrade(b) - voiceGrade(a) || a.name.localeCompare(b.name))
       .map(v => ({ uri: v.voiceURI, name: v.name, lang: v.lang, grade: voiceGrade(v),
-                   nice: NICE.test(v.name) }));
+                   nice: NICE.test(v.name), novelty: isNovelty(v) }));
+  }
+  function noveltyCount() { return englishVoices().filter(isNovelty).length; }
+
+  /* A device fills its voice list when it is ready, not when it is asked —
+     often a second or two after the page has drawn. Anything showing that
+     list can subscribe and redraw itself instead of making a parent press a
+     button and hope. */
+  const voiceWatchers = [];
+  function onVoices(fn) { voiceWatchers.push(fn); }
+  if ('speechSynthesis' in window) {
+    speechSynthesis.onvoiceschanged = () => {
+      loadVoices();
+      voiceWatchers.forEach(fn => { try { fn(voices.length); } catch (e) {} });
+    };
   }
 
   /* One long flat utterance is most of what makes a synthetic voice sound
@@ -713,6 +741,7 @@
   w.U = {
     $, $$, el, esc, toast, modal, closeAllModals, confirmBox, promptBox, confetti, floatPoints,
     beep, speak, speakWordThen, spellOut, loadVoices, bestVoice, voiceList, voiceGrade,
+    noveltyCount, onVoices,
     speedBtn, sayMeaningBtn,
     fmtDate, fmtDay, pct, plural, daysBetween, noAutoCorrect,
     PRONOUNS, pronouns, pronounNote,

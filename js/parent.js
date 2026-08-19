@@ -2019,16 +2019,20 @@ Reflex = A quick automatic response"></textarea>
   /* Sticky between repaints, not between visits — a filter is a way of
      looking at the list right now, not a setting worth remembering. */
   let voiceBestOnly = null;
+  let voiceShowAll  = false;
 
   function voiceCheckHTML() {
-    const all = (window.U.voiceList ? window.U.voiceList() : []);
+    const all  = (window.U.voiceList ? window.U.voiceList({ all: voiceShowAll }) : []);
+    const hidden = (window.U.noveltyCount ? window.U.noveltyCount() : 0);
     const plat = platformGuess();
     const help = VOICE_HELP[plat] || VOICE_HELP.other;
     const best = all.filter(v => v.grade > 0);
-    /* Default to the short list when there IS one — a device can offer forty
-       voices, and thirty-seven of them are not worth a child's ear. */
+    /* Default to the short list when there IS one. When there is not, the
+       box is not drawn at all — a tick box that cannot be ticked is worse
+       than no tick box, and that is exactly what Prem ran into. */
     if (voiceBestOnly === null) voiceBestOnly = best.length > 0;
     const list = (voiceBestOnly && best.length) ? best : all;
+    const chosen = Store.db.settings.voiceURI;
 
     return `
       <div class="card" id="voiceCheck" style="margin-top:14px;background:var(--paper-2)">
@@ -2036,34 +2040,43 @@ Reflex = A quick automatic response"></textarea>
         <p class="muted small" style="margin-top:0">Every device keeps a shorter list of voices for web apps than
            it shows in its own settings. This is the <b>real</b> list on this device — tap one to hear it.</p>
         <p class="hint" style="margin:0 0 4px"><b>Open this screen on the device your child actually uses.</b>
-           Both the list above and the steps below belong to whatever you are holding right now —
+           Both the list below and the steps at the bottom belong to whatever you are holding right now —
            and AraBuzz thinks that is <b>${esc(PLATFORM_NAME[plat] || 'this device')}</b>. The voice
            you choose is remembered per device, because each one offers a different set.</p>
 
-        ${all.length ? `
-        <label class="ob-agree" for="voiceBest" style="margin:12px 0 4px">
-          <input type="checkbox" id="voiceBest" ${voiceBestOnly ? 'checked' : ''} ${best.length ? '' : 'disabled'}>
+        ${best.length ? `
+        <label class="ob-agree" for="voiceBest" style="margin:12px 0 4px;padding:12px 14px">
+          <input type="checkbox" id="voiceBest" ${voiceBestOnly ? 'checked' : ''}>
           <span><b>Show only the better voices</b>
-            <span class="faint small">— Premium, Enhanced, Natural and Neural${best.length
-              ? ` · ${best.length} of ${all.length} here` : ' · none on this device yet'}</span></span></label>` : ''}
+            <span class="faint small">— the ${best.length} here whose name says Premium, Enhanced,
+            Natural or Neural, out of ${all.length}</span></span></label>` : ''}
 
-        ${list.length ? `<div class="row wrap" style="gap:8px;margin:10px 0">
+        ${list.length ? `<div class="row wrap" style="gap:8px;margin:12px 0">
           ${list.map(v => `<button class="btn-quiet btn-s" data-tryvoice="${esc(v.uri)}"
              title="${esc(v.lang)}${v.grade > 0 ? ' · one of the good ones' : ''}"
-             style="${Store.db.settings.voiceURI === v.uri ? 'border-color:var(--jade);background:var(--jade-soft)' : ''}">${
-             Store.db.settings.voiceURI === v.uri ? '✓ ' : (v.grade > 0 ? '★ ' : '')}${esc(v.name)}</button>`).join('')}
+             style="${chosen === v.uri ? 'border-color:var(--jade);background:var(--jade-soft)' : ''}">${
+             chosen === v.uri ? '✓ ' : (v.grade > 0 ? '★ ' : '')}${esc(v.name)}</button>`).join('')}
         </div>` : `<p class="small" style="margin:12px 0"><b>This device is not offering AraBuzz any voices yet.</b>
-           On an iPad this sometimes clears after the app is closed and opened once.</p>`}
+           Close the app completely and open it again — that is usually all it needs.</p>`}
 
-        <p class="small ${best.length ? 'sage-text' : 'muted'}" style="margin:0 0 12px">
+        <p class="small ${best.length ? 'sage-text' : 'muted'}" style="margin:0 0 10px">
           ${best.length
-            ? `★ ${window.U.plural(best.length, 'better voice')} available here — those are the ones recorded from a real person. AraBuzz already prefers them, and a ✓ marks the one in use.`
-            : 'None of these are the higher-quality recordings on this device yet. The steps below add one.'}</p>
+            ? `★ marks a voice recorded from a real person. AraBuzz already prefers those, and ✓ marks the one in use.`
+            : `<b>None of these say Premium or Enhanced in their name — and that does not mean your download failed.</b>
+               Apple in particular often hands the better recording over under its plain name, so a
+               voice you downloaded as “Zoe (Premium)” can arrive here as simply “Zoe”. The only
+               reliable test is your ear: tap a few and keep the one that sounds like a person.`}</p>
+
+        ${hidden ? `<p class="tiny faint" style="margin:0 0 10px">
+          ${window.U.plural(hidden, 'novelty voice')} on this device ${hidden === 1 ? 'is' : 'are'}
+          hidden — the singing, robotic and joke ones are no use for reading a spelling aloud.
+          <a href="#" id="voiceAll">${voiceShowAll ? 'Hide them again' : 'Show them anyway'}</a></p>` : ''}
 
         <p class="hint" style="margin:0 0 12px"><b>Just downloaded one and it is not in the list?</b>
           That is normal, especially on an iPad — a device only hands its voices to an app when the
           app starts. <b>Close AraBuzz completely</b> (swipe it away from the app switcher, not just
-          back to the home screen), open it again, and come back here.</p>
+          back to the home screen), open it again, and come back here. This list also refreshes
+          itself if the device is simply being slow.</p>
 
         <details${best.length ? '' : ' open'}>
           <summary><b>${help.title}</b> — how to add a better voice</summary>
@@ -2080,6 +2093,20 @@ Reflex = A quick automatic response"></textarea>
       </div>`;
   }
 
+  /** Redraw the panel in place, wherever it is. */
+  function repaintVoiceCheck() {
+    const box = $('#voiceCheck');
+    if (!box) return false;
+    box.outerHTML = voiceCheckHTML();
+    wireVoiceCheck();
+    return true;
+  }
+
+  /* Voices often arrive a second or two after the screen has drawn. Rather
+     than asking a parent to press a button and hope, the panel listens and
+     redraws itself the moment the device changes its mind. */
+  if (window.U && window.U.onVoices) window.U.onVoices(() => { repaintVoiceCheck(); });
+
   function wireVoiceCheck() {
     window.U.$$('[data-tryvoice]').forEach(b => b.onclick = () => {
       const s = Store.db.settings;
@@ -2090,22 +2117,17 @@ Reflex = A quick automatic response"></textarea>
       toast('That voice is now the one AraBuzz uses.', '', 2600);
     });
     const only = $('#voiceBest');
-    if (only) only.onchange = () => {
-      voiceBestOnly = only.checked;
-      const box = $('#voiceCheck');
-      if (box) { box.outerHTML = voiceCheckHTML(); wireVoiceCheck(); }
-    };
+    if (only) only.onchange = () => { voiceBestOnly = only.checked; repaintVoiceCheck(); };
+
+    const showAll = $('#voiceAll');
+    if (showAll) showAll.onclick = e => { e.preventDefault(); voiceShowAll = !voiceShowAll; repaintVoiceCheck(); };
+
     const again = $('#voiceAgain');
     if (again) again.onclick = () => {
-      /* Ask the device twice, a beat apart. Some browsers fill the list
-         asynchronously and answer the first call with nothing at all. */
-      window.U.loadVoices();
-      const redraw = () => {
-        const box = $('#voiceCheck');
-        if (box) { box.outerHTML = voiceCheckHTML(); wireVoiceCheck(); }
-      };
-      redraw();
-      setTimeout(() => { window.U.loadVoices(); redraw(); }, 600);
+      /* Ask the device three times over a couple of seconds. Some browsers
+         fill the list asynchronously and answer the first call with nothing
+         at all, which is how a downloaded voice looks like a failed one. */
+      [0, 500, 1500].forEach(ms => setTimeout(() => { window.U.loadVoices(); repaintVoiceCheck(); }, ms));
     };
     /* The device-by-device guide lives in the sign-up flow, which a family
        who joined months ago will never walk through again. It is the same
