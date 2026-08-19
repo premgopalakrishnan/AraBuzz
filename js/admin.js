@@ -147,6 +147,49 @@
         .filter(p => p.role === 'parent')
         .map(p => ({ id: p.id, name: p.name, email: p.email || '', family: f.name })));
 
+  /* ======================================================================
+     DRAFTS
+     Some updates are written the moment the change is made, not the moment
+     it is announced — a release note is finished long before Prem is ready
+     to press send. These sit here, written and waiting, and do nothing at
+     all until he opens one, reads it, edits whatever he wants and sends it
+     himself. Nothing here is ever sent automatically.
+     ====================================================================== */
+  const DRAFTS = [
+    {
+      id: 'v436-quest-live',
+      about: 'Written for the release where Spell Quest started talking back.',
+      subject: 'A small but real change to AraBuzz — please read before your next game',
+      body: `Hi all,
+
+There is a change in AraBuzz this week that I want you to hear from me rather than notice on your own.
+
+WHAT CHANGED
+Spell Quest — the game where Ara gives a clue and your child types the spelling — now answers what your child actually typed. If she writes "wel byng", Ara tells her the first three letters are right and that her ending sounds correct, instead of repeating a fact she already knows. She can also stop and ask him a question mid-game, in her own words, and get a real answer.
+
+Aradhana is the reason this exists. She told me the game was not really listening to her, and she was right.
+
+THE ONE THING THAT IS DIFFERENT
+Those replies are written in the moment by an AI engine (Anthropic's Claude Haiku), so while your child plays that one game, three things are sent to be answered: what she typed, the word she is spelling, and the school's own definition of it. Nothing else about her goes with it. No reply is ever allowed to contain the word she is trying to spell — that is checked before it reaches her screen, and thrown away if it does.
+
+Every other game — Spell Buzz, Word Rush, Listen & Spell, Word Meanings, the crossword and the word search — still runs entirely on the device with no connection at all. And Spell Quest itself still works with no internet; Ara simply gives shorter hints written by the app rather than by him.
+
+WHAT YOU NEED TO DO
+1. You will be asked to agree to the consent again next time you open AraBuzz. That is deliberate. The old wording said your child's words never leave the device during play, and that is no longer true for this one game, so I would rather ask you again than move you onto it quietly. There is a new section explaining exactly what is sent. Please read it.
+
+2. Optional, but worth two minutes: AraBuzz reads clues and corrections out loud, and most devices arrive with the flat robotic voice switched on. The better recordings are already on the device, or a short download away.
+   On an iPad or iPhone: open Settings, pull the list down to reveal the search box at the top, type Voices, tap English, and download one marked Enhanced or Premium. Ignore anything called "Siri Voice" — Apple never shares those with an app like this.
+   On Android: Settings, then Accessibility, then Text-to-speech output. Make sure the engine is Google Speech Services, tap the gear beside it, then Install voice data, then English.
+   To hear what your device is actually offering, open AraBuzz on that device and go to Grown-ups, then Settings, then Voice check. Tap any voice to hear it and choose the one you like.
+
+3. Nothing else. Your child does not need to do anything, and no progress, points or streaks are affected.
+
+As always — if anything looks wrong, or your child says something about the app worth repeating, please tell me. That is how the last three improvements happened.
+
+Prem`
+    }
+  ];
+
     $('#atab').innerHTML = `
       <div class="card">
         <h2>Send an update to the parents</h2>
@@ -184,12 +227,39 @@ Anything you notice, just message me."></textarea></div>
       </div>
       <div id="msgStatus" style="margin-top:12px"></div>
 
+      ${DRAFTS.length ? `<div class="card" style="margin-top:14px">
+        <h3>Drafts waiting for you <span class="pill tiny">${DRAFTS.length}</span></h3>
+        <p class="muted small" style="margin-top:0">Written when the change was made, sent only when
+           you say so. Open one, read it, change anything you like, then send it the normal way.</p>
+        <div id="draftList" style="margin-top:10px">
+          ${DRAFTS.map(d => `
+            <details style="border-bottom:1px solid var(--line);padding:10px 0">
+              <summary style="cursor:pointer;font-weight:600">${esc(d.subject)}
+                <span class="faint small" id="draftSent-${d.id}"></span></summary>
+              <p class="tiny faint" style="margin:8px 0 4px">${esc(d.about)}</p>
+              <p class="small" style="white-space:pre-wrap;margin:0 0 10px">${esc(d.body)}</p>
+              <button class="btn-ghost btn-s" data-draft="${d.id}">Open this in the message above</button>
+            </details>`).join('')}
+        </div>
+      </div>` : ''}
+
       <div class="card" style="margin-top:14px">
         <h3>Sent messages</h3>
         <div id="msgHistory"><p class="muted small"><span class="loader"></span> Loading…</p></div>
       </div>`;
 
     paintMessageHistory();
+
+    /* Loading a draft only fills the boxes. Everything after that — who it
+       goes to, the confirmation, the send — is the ordinary path, unchanged. */
+    $$('[data-draft]').forEach(b => b.onclick = () => {
+      const d = DRAFTS.find(x => x.id === b.dataset.draft);
+      if (!d) return;
+      $('#msgSubject').value = d.subject;
+      $('#msgBody').value = d.body;
+      $('#msgSubject').scrollIntoView({ behavior: 'smooth', block: 'center' });
+      toast('Loaded. Read it through, then press Send it when you are happy.', '', 4200);
+    });
 
     const all = $('#msgAll'), list = $('#msgList');
     if (all) all.onchange = () => {
@@ -219,6 +289,14 @@ Anything you notice, just message me."></textarea></div>
         box.innerHTML = '<p class="muted small">Nothing sent yet. The first update you send will be kept here.</p>';
         return;
       }
+      /* If one of these went out already, say so on the draft itself — the
+         one mistake worth designing out here is sending it twice. */
+      DRAFTS.forEach(d => {
+        const hit = rows.find(r => r.subject === d.subject);
+        const tag = $('#draftSent-' + d.id);
+        if (tag && hit) tag.innerHTML = ` · <b style="color:var(--jade)">already sent ${esc(window.U.fmtDate(Date.parse(hit.ts)))}</b>`;
+      });
+
       const months = {};
       rows.forEach(r => {
         const d = new Date(r.ts);

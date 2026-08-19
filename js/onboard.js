@@ -663,7 +663,7 @@
       <h2 style="margin-top:26px">While you are here: a better reading voice</h2>
       <p class="muted small">AraBuzz reads clues and corrections aloud using a voice that belongs to the
          device, not to us. Most devices arrive with the plainest one switched on — the robotic one. The
-         better recordings are free, already on the device or a short download away, and they make a real
+         better recordings are already on the device, or a short download away, and they make a real
          difference to a child who is listening rather than reading.</p>
       ${[
         ['iPhone & iPad', [
@@ -678,7 +678,7 @@
         ]],
         ['Windows — Edge or Chrome', [
           `<b>Settings</b> → <b>Time &amp; language</b> → <b>Speech</b> → <b>Manage voices</b> → <b>Add voices</b>.`,
-          `On Windows 11, <b>Edge</b> offers the <b>Natural</b> voices — the best free ones available in a browser.`
+          `On Windows 11, <b>Edge</b> offers the <b>Natural</b> voices — the best ones available in a browser.`
         ]],
         ['Mac — Safari or Chrome', [
           `<b>System Settings</b> → <b>Accessibility</b> → <b>Spoken Content</b> → <b>System Voice</b> → <b>Manage Voices…</b>`,
@@ -748,7 +748,8 @@
            the <b>search box</b> at the top, type <b>Voices</b>, tap <b>English</b>, and
            download a voice marked <b>Enhanced</b> or <b>Premium</b>. AraBuzz reads clues
            and corrections aloud, and the voice a device arrives with is the flat robotic
-           one — the better recordings are free and sound like a person.</p>
+           one — the better recordings are already on the device, or a short download away, and
+           sound like a person.</p>
         <p class="hint" style="margin:8px 0 0">Ignore anything called <b>Siri Voice</b>; Apple
            keeps those for Siri and never shares them with an app like this. Other devices,
            and a live check of which voices actually reached AraBuzz, are under

@@ -336,7 +336,7 @@
           <li>Each word gets a practice pack built: four clues, four sentences, six likely
               misspellings, a crossword clue, a memory hook — <b>1 API call for the whole week</b>.</li>
           <li>After that, every quiz, crossword and word search is generated on this device
-              for free, however many times the kids play.</li>
+              itself, however many times the kids play.</li>
         </ol>
       </div>`;
 
@@ -1996,7 +1996,7 @@ Reflex = A quick automatic response"></textarea>
       title: 'On a Windows computer',
       steps: [
         'Open <b>Settings</b> → <b>Time &amp; language</b> → <b>Speech</b> → <b>Manage voices</b> → <b>Add voices</b>, and add an English voice.',
-        'Use <b>Microsoft Edge</b> if you can — on Windows 11 it offers the <b>Natural</b> voices, which are the best free ones anywhere.',
+        'Use <b>Microsoft Edge</b> if you can — on Windows 11 it offers the <b>Natural</b> voices, which are the best ones anywhere.',
         'Come back here and press <b>Check again</b>.'
       ],
       note: 'If you see a voice with "Natural" in its name, choose it — it is recorded from a person rather than assembled from fragments.'
