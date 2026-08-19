@@ -2027,11 +2027,12 @@ Reflex = A quick automatic response"></textarea>
     const plat = platformGuess();
     const help = VOICE_HELP[plat] || VOICE_HELP.other;
     const best = all.filter(v => v.grade > 0);
-    /* Default to the short list when there IS one. When there is not, the
-       box is not drawn at all — a tick box that cannot be ticked is worse
-       than no tick box, and that is exactly what Prem ran into. */
+    /* The box is ALWAYS live. A greyed-out control teaches a parent nothing;
+       one that answers tells them something true about the device in their
+       hand. So ticking it with nothing to show is allowed, and answers.
+       It starts on only when there is something to start on. */
     if (voiceBestOnly === null) voiceBestOnly = best.length > 0;
-    const list = (voiceBestOnly && best.length) ? best : all;
+    const list = voiceBestOnly ? best : all;
     const chosen = Store.db.settings.voiceURI;
 
     return `
@@ -2044,28 +2045,39 @@ Reflex = A quick automatic response"></textarea>
            and AraBuzz thinks that is <b>${esc(PLATFORM_NAME[plat] || 'this device')}</b>. The voice
            you choose is remembered per device, because each one offers a different set.</p>
 
-        ${best.length ? `
+        ${all.length ? `
         <label class="ob-agree" for="voiceBest" style="margin:12px 0 4px;padding:12px 14px">
           <input type="checkbox" id="voiceBest" ${voiceBestOnly ? 'checked' : ''}>
           <span><b>Show only the better voices</b>
-            <span class="faint small">— the ${best.length} here whose name says Premium, Enhanced,
-            Natural or Neural, out of ${all.length}</span></span></label>` : ''}
+            <span class="faint small">— the ones whose name says Premium, Enhanced, Natural or
+            Neural${best.length ? `: ${best.length} of ${all.length} here` : ''}</span></span></label>` : ''}
 
         ${list.length ? `<div class="row wrap" style="gap:8px;margin:12px 0">
           ${list.map(v => `<button class="btn-quiet btn-s" data-tryvoice="${esc(v.uri)}"
              title="${esc(v.lang)}${v.grade > 0 ? ' · one of the good ones' : ''}"
              style="${chosen === v.uri ? 'border-color:var(--jade);background:var(--jade-soft)' : ''}">${
              chosen === v.uri ? '✓ ' : (v.grade > 0 ? '★ ' : '')}${esc(v.name)}</button>`).join('')}
-        </div>` : `<p class="small" style="margin:12px 0"><b>This device is not offering AraBuzz any voices yet.</b>
-           Close the app completely and open it again — that is usually all it needs.</p>`}
+        </div>`
+        : !all.length
+        ? `<p class="small" style="margin:12px 0"><b>This device is not offering AraBuzz any voices yet.</b>
+           Close the app completely and open it again — that is usually all it needs.</p>`
+        : `<div class="feedback" style="margin:12px 0">
+             <b>No voice on this device says Premium, Enhanced, Natural or Neural in its name.</b>
+             <p class="small" style="margin:8px 0 0">That is not the same as none being installed.
+                Apple in particular often hands the better recording over under its plain name, so a
+                voice you downloaded as “Zoe (Premium)” can arrive here as simply <b>Zoe</b> — which
+                is why AraBuzz will not tell you your download failed when it cannot actually know.
+                Untick the box, tap a few, and keep the one that sounds like a person. Your ear is
+                the only reliable test here.</p>
+             <button class="btn-ghost btn-s" id="voiceShowAllNow" style="margin-top:10px">
+               Show all ${window.U.plural(all.length, 'voice')}</button>
+           </div>`}
 
-        <p class="small ${best.length ? 'sage-text' : 'muted'}" style="margin:0 0 10px">
+        ${list.length ? `<p class="small ${best.length ? 'sage-text' : 'muted'}" style="margin:0 0 10px">
           ${best.length
             ? `★ marks a voice recorded from a real person. AraBuzz already prefers those, and ✓ marks the one in use.`
-            : `<b>None of these say Premium or Enhanced in their name — and that does not mean your download failed.</b>
-               Apple in particular often hands the better recording over under its plain name, so a
-               voice you downloaded as “Zoe (Premium)” can arrive here as simply “Zoe”. The only
-               reliable test is your ear: tap a few and keep the one that sounds like a person.`}</p>
+            : `None of these announce themselves as the better recordings — but on Apple a Premium
+               voice often arrives under its plain name, so trust your ear rather than the label.`}</p>` : ''}
 
         ${hidden ? `<p class="tiny faint" style="margin:0 0 10px">
           ${window.U.plural(hidden, 'novelty voice')} on this device ${hidden === 1 ? 'is' : 'are'}
@@ -2118,6 +2130,9 @@ Reflex = A quick automatic response"></textarea>
     });
     const only = $('#voiceBest');
     if (only) only.onchange = () => { voiceBestOnly = only.checked; repaintVoiceCheck(); };
+
+    const showNow = $('#voiceShowAllNow');
+    if (showNow) showNow.onclick = () => { voiceBestOnly = false; repaintVoiceCheck(); };
 
     const showAll = $('#voiceAll');
     if (showAll) showAll.onclick = e => { e.preventDefault(); voiceShowAll = !voiceShowAll; repaintVoiceCheck(); };
