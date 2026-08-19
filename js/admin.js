@@ -196,10 +196,9 @@ Every other game — Spell Buzz, Word Rush, Listen & Spell, Word Meanings, the c
 WHAT YOU NEED TO DO
 1. You will be asked to agree to the consent again next time you open AraBuzz. That is deliberate. The old wording said your child's words never leave the device during play, and that is no longer true for this one game, so I would rather ask you again than move you onto it quietly. There are new sections on what Ara may and may not talk about, exactly what is sent, and the optional voice switch. Please read them; they are short.
 
-2. Optional, but worth two minutes: AraBuzz reads clues and corrections out loud, and most devices arrive with the flat robotic voice switched on. The better recordings are already on the device, or a short download away.
-   On an iPad or iPhone: open Settings, pull the list down to reveal the search box at the top, type Voices, tap English, and download one marked Enhanced or Premium. Ignore anything called "Siri Voice" — Apple never shares those with an app like this.
-   On Android: Settings, then Accessibility, then Text-to-speech output. Make sure the engine is Google Speech Services, tap the gear beside it, then Install voice data, then English.
-   To hear what your device is actually offering, open AraBuzz on that device and go to Grown-ups, then Settings, then Voice check. Tap any voice to hear it and choose the one you like.
+2. Optional: AraBuzz reads clues and corrections out loud, and most devices arrive with the flat robotic voice switched on. Open AraBuzz on your child's device and go to Grown-ups, then Settings, then Voice check — it lists every voice that device actually offers, with a play button on each. Pick the one you like.
+   On Android, Windows or a Mac you can add a much better one first, and the panel gives you the steps for your device.
+   On an iPad or iPhone, do not spend time downloading voices: Apple lets a proper app use the Enhanced and Premium voices you download but does not share them with a web app like AraBuzz, whatever you install. The same panel has the alternative described above, off until you choose it.
 
 3. Nothing else. Your child does not need to do anything, and no progress, points or streaks are affected.
 

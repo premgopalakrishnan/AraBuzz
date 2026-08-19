@@ -697,15 +697,14 @@
          better recordings are already on the device, or a short download away, and they make a real
          difference to a child who is listening rather than reading.</p>
       ${[
-        ['iPhone & iPad', [
-          `Open <b>Settings</b>, pull the list down to reveal the <b>search box</b> at the top, and type <b>Voices</b>.`,
-          `(The long way: Accessibility → <b>Read &amp; Speak</b> → Voices on iPadOS 26, or Accessibility → <b>Spoken Content</b> → Voices on older versions.)`,
-          `Tap <b>English</b>. Each voice is listed three times — plain, <b>Enhanced</b> and
-           <b>Premium</b> — as three separate downloads. Tap Premium, or Enhanced if you would
-           rather not wait.`,
-          `<b>Let it finish.</b> Enhanced is around 200&nbsp;MB and Premium can be over 400&nbsp;MB.
-           Until the download completes the voice does not exist as far as any app is concerned —
-           the progress shows beside the name.`
+        ['iPhone & iPad — read this before you download anything', [
+          `<b>Downloading a better voice will not help here.</b> Apple lets a proper app use the
+           Enhanced and Premium voices you download, but does not share them with a web app like
+           AraBuzz — whatever you install.`,
+          `So skip it. Open <b>Grown-ups → Settings → Voice check</b> instead, tap the voices this
+           iPad does offer, and keep the best one.`,
+          `If none are good enough, the same panel has a switch for <b>AraBuzz's own voice</b>,
+           which is off until you turn it on and explains what changes first.`
         ]],
         ['Android', [
           `<b>Settings</b> → <b>Accessibility</b> → <b>Text-to-speech output</b> (some phones: Settings → General management → Text-to-speech).`,
@@ -779,17 +778,17 @@
       </div>
 
       <div class="ob-warn" style="border-color:var(--jade);margin-top:12px">
-        <b>Two minutes that make a real difference: a better reading voice.</b>
-        <p><b>On an iPad or iPhone:</b> open <b>Settings</b>, pull the list down to reveal
-           the <b>search box</b> at the top, type <b>Voices</b>, tap <b>English</b>, and
-           download a voice marked <b>Enhanced</b> or <b>Premium</b>. AraBuzz reads clues
-           and corrections aloud, and the voice a device arrives with is the flat robotic
-           one — the better recordings are already on the device, or a short download away, and
-           sound like a person.</p>
-        <p class="hint" style="margin:8px 0 0">Ignore anything called <b>Siri Voice</b>; Apple
-           keeps those for Siri and never shares them with an app like this. Other devices,
-           and a live check of which voices actually reached AraBuzz, are under
-           <b>Grown-ups → Settings → Voice check</b>.
+        <b>A word about the voice that reads to your child.</b>
+        <p>AraBuzz reads clues and corrections aloud using a voice that belongs to the device.
+           On <b>Android, Windows and Mac</b> you can add a much better one in a couple of
+           minutes and every browser on the device will use it — worth doing.</p>
+        <p><b>On an iPad or iPhone, do not bother.</b> Apple lets a proper app use the Enhanced
+           and Premium voices you download, but does not share them with a web app like this one,
+           whatever you install. If the voice on an iPad bothers your child, there is a switch
+           inside AraBuzz for that instead — <b>Grown-ups → Settings → Voice check</b> — which
+           explains itself before it does anything.</p>
+        <p class="hint" style="margin:8px 0 0">Either way, <b>Voice check</b> shows you every voice
+           that device actually offers AraBuzz, with a play button on each.
            <a href="#" id="obVoiceHow"><b>All devices \u2192</b></a></p>
       </div>
 

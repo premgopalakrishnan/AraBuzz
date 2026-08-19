@@ -1977,13 +1977,11 @@ Reflex = A quick automatic response"></textarea>
     ios: {
       title: 'On an iPad or iPhone',
       steps: [
-        'Open <b>Settings</b> and pull the list down to reveal the <b>search box</b> at the very top.',
-        'Type <b>Voices</b> — it goes straight to the right screen. (On iPadOS 26 the long way round is Accessibility → <b>Read &amp; Speak</b> → Voices; on older versions it is Accessibility → <b>Spoken Content</b> → Voices.)',
-        'Tap <b>English</b>. Each voice appears three times — plain, <b>Enhanced</b> and <b>Premium</b> — as three separate downloads. Tap Premium, or Enhanced if you would rather not wait.',
-        '<b>Let it finish.</b> Enhanced is around 200&nbsp;MB, Premium can be over 400&nbsp;MB, and until the last of it arrives the voice does not exist for any app. The progress shows beside the name.',
-        'Come back here and press <b>Check again</b> — if the new voice appears in the list above, choose it.'
+        '<b>Do not spend an evening downloading voices.</b> Apple lets a proper app use the Enhanced and Premium voices you download, but does not share them with a web app like AraBuzz — whatever you install, and however long it takes. We checked with 400&nbsp;MB of Premium voices and AraBuzz could not see one of them.',
+        'So the list above is genuinely all this iPad will offer, and the best thing you can do here is <b>tap a few and keep the one you like</b>.',
+        'If none of them sound good enough — and on an iPad they often do not — that is what <b>AraBuzz’s own voice</b> at the top of this panel is for. It is off unless you turn it on, and it explains exactly what changes before it does anything.'
       ],
-      note: 'Apple only shares some of its voices with web apps, and on iOS 26 downloads sometimes stall. If nothing new appears here, nothing is wrong at your end — the device is simply not offering it.'
+      note: 'This is an Apple decision, not an AraBuzz limitation and not something you have done wrong. Android, Windows and Mac all hand a web app their good voices; only iPhone and iPad hold them back.'
     },
     android: {
       title: 'On an Android phone or tablet',
