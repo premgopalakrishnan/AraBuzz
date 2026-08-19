@@ -295,14 +295,44 @@
    *  first — which is not the same list the device shows in its own
    *  settings, and that difference is worth being able to see.
    *  Pass `{ all: true }` to include the joke voices as well. */
+  /* A device lists the SAME voice three times: "Karen", "Karen (Enhanced)"
+     and "Karen (Premium)" are one person recorded three ways, and only the
+     last is worth listening to. Showing all three invites a parent to pick
+     the worst one by accident, so variants are folded together and the best
+     grade wins — with the plain ones still reachable on request. */
+  function baseName(n) {
+    return String(n || '').replace(/\s*\((enhanced|premium|natural|neural|compact)\)\s*/ig, '').trim();
+  }
+  function variantOf(n) {
+    const m = String(n || '').match(/\((enhanced|premium|natural|neural)\)/i);
+    return m ? m[1].replace(/^./, c => c.toUpperCase()) : '';
+  }
+
   function voiceList(opts) {
-    const all = !!(opts && opts.all);
-    return englishVoices()
-      .filter(v => all || !isNovelty(v))
-      .slice()
-      .sort((a, b) => voiceGrade(b) - voiceGrade(a) || a.name.localeCompare(b.name))
-      .map(v => ({ uri: v.voiceURI, name: v.name, lang: v.lang, grade: voiceGrade(v),
-                   nice: NICE.test(v.name), novelty: isNovelty(v) }));
+    const o = opts || {};
+    const rows = englishVoices()
+      .filter(v => o.all || !isNovelty(v))
+      .map(v => ({ uri: v.voiceURI, name: v.name, base: baseName(v.name), variant: variantOf(v.name),
+                   lang: v.lang, grade: voiceGrade(v), nice: NICE.test(v.name), novelty: isNovelty(v) }));
+
+    if (!o.everyVariant) {
+      const byBase = new Map();
+      rows.forEach(r => {
+        const key = (r.base + '|' + (r.lang || '')).toLowerCase();
+        const had = byBase.get(key);
+        if (!had || r.grade > had.grade) byBase.set(key, r);
+        if (had && r.grade <= had.grade) had.alsoPlain = true;
+      });
+      return Array.from(byBase.values())
+        .sort((a, b) => b.grade - a.grade || a.base.localeCompare(b.base));
+    }
+    return rows.sort((a, b) => b.grade - a.grade || a.name.localeCompare(b.name));
+  }
+
+  /** How many entries are being folded away as lesser copies of a voice
+   *  already on the list. */
+  function variantCount() {
+    return Math.max(0, voiceList({ everyVariant: true }).length - voiceList().length);
   }
   function noveltyCount() { return englishVoices().filter(isNovelty).length; }
 
@@ -741,7 +771,7 @@
   w.U = {
     $, $$, el, esc, toast, modal, closeAllModals, confirmBox, promptBox, confetti, floatPoints,
     beep, speak, speakWordThen, spellOut, loadVoices, bestVoice, voiceList, voiceGrade,
-    noveltyCount, onVoices,
+    noveltyCount, variantCount, onVoices,
     speedBtn, sayMeaningBtn,
     fmtDate, fmtDay, pct, plural, daysBetween, noAutoCorrect,
     PRONOUNS, pronouns, pronounNote,

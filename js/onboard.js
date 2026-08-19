@@ -686,7 +686,12 @@
         ['iPhone & iPad', [
           `Open <b>Settings</b>, pull the list down to reveal the <b>search box</b> at the top, and type <b>Voices</b>.`,
           `(The long way: Accessibility → <b>Read &amp; Speak</b> → Voices on iPadOS 26, or Accessibility → <b>Spoken Content</b> → Voices on older versions.)`,
-          `Tap <b>English</b>, then a voice marked <b>Enhanced</b> or <b>Premium</b>, and let it download.`
+          `Tap <b>English</b>. Each voice is listed three times — plain, <b>Enhanced</b> and
+           <b>Premium</b> — as three separate downloads. Tap Premium, or Enhanced if you would
+           rather not wait.`,
+          `<b>Let it finish.</b> Enhanced is around 200&nbsp;MB and Premium can be over 400&nbsp;MB.
+           Until the download completes the voice does not exist as far as any app is concerned —
+           the progress shows beside the name.`
         ]],
         ['Android', [
           `<b>Settings</b> → <b>Accessibility</b> → <b>Text-to-speech output</b> (some phones: Settings → General management → Text-to-speech).`,

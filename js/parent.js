@@ -1977,7 +1977,8 @@ Reflex = A quick automatic response"></textarea>
       steps: [
         'Open <b>Settings</b> and pull the list down to reveal the <b>search box</b> at the very top.',
         'Type <b>Voices</b> — it goes straight to the right screen. (On iPadOS 26 the long way round is Accessibility → <b>Read &amp; Speak</b> → Voices; on older versions it is Accessibility → <b>Spoken Content</b> → Voices.)',
-        'Tap <b>English</b>, then tap a voice marked <b>Enhanced</b> or <b>Premium</b> and let it download.',
+        'Tap <b>English</b>. Each voice appears three times — plain, <b>Enhanced</b> and <b>Premium</b> — as three separate downloads. Tap Premium, or Enhanced if you would rather not wait.',
+        '<b>Let it finish.</b> Enhanced is around 200&nbsp;MB, Premium can be over 400&nbsp;MB, and until the last of it arrives the voice does not exist for any app. The progress shows beside the name.',
         'Come back here and press <b>Check again</b> — if the new voice appears in the list above, choose it.'
       ],
       note: 'Apple only shares some of its voices with web apps, and on iOS 26 downloads sometimes stall. If nothing new appears here, nothing is wrong at your end — the device is simply not offering it.'
@@ -2020,10 +2021,12 @@ Reflex = A quick automatic response"></textarea>
      looking at the list right now, not a setting worth remembering. */
   let voiceBestOnly = null;
   let voiceShowAll  = false;
+  let voiceEvery    = false;
 
   function voiceCheckHTML() {
-    const all  = (window.U.voiceList ? window.U.voiceList({ all: voiceShowAll }) : []);
+    const all  = (window.U.voiceList ? window.U.voiceList({ all: voiceShowAll, everyVariant: voiceEvery }) : []);
     const hidden = (window.U.noveltyCount ? window.U.noveltyCount() : 0);
+    const folded = (window.U.variantCount ? window.U.variantCount() : 0);
     const plat = platformGuess();
     const help = VOICE_HELP[plat] || VOICE_HELP.other;
     const best = all.filter(v => v.grade > 0);
@@ -2054,9 +2057,10 @@ Reflex = A quick automatic response"></textarea>
 
         ${list.length ? `<div class="row wrap" style="gap:8px;margin:12px 0">
           ${list.map(v => `<button class="btn-quiet btn-s" data-tryvoice="${esc(v.uri)}"
-             title="${esc(v.lang)}${v.grade > 0 ? ' · one of the good ones' : ''}"
+             title="${esc(v.name)} · ${esc(v.lang)}${v.grade > 0 ? ' · one of the good ones' : ''}"
              style="${chosen === v.uri ? 'border-color:var(--jade);background:var(--jade-soft)' : ''}">${
-             chosen === v.uri ? '✓ ' : (v.grade > 0 ? '★ ' : '')}${esc(v.name)}</button>`).join('')}
+             chosen === v.uri ? '✓ ' : (v.grade > 0 ? '★ ' : '')}${esc(voiceEvery ? v.name : v.base)}${
+             v.variant && !voiceEvery ? ` <span class="faint">· ${esc(v.variant)}</span>` : ''}</button>`).join('')}
         </div>`
         : !all.length
         ? `<p class="small" style="margin:12px 0"><b>This device is not offering AraBuzz any voices yet.</b>
@@ -2079,16 +2083,28 @@ Reflex = A quick automatic response"></textarea>
             : `None of these announce themselves as the better recordings — but on Apple a Premium
                voice often arrives under its plain name, so trust your ear rather than the label.`}</p>` : ''}
 
+        ${folded && !voiceEvery ? `<p class="tiny faint" style="margin:0 0 6px">
+          A device lists the same voice more than once — “Karen”, “Karen (Enhanced)” and
+          “Karen (Premium)” are one person recorded three ways. Only the best of each is
+          shown, so ${window.U.plural(folded, 'plainer copy')} ${folded === 1 ? 'is' : 'are'} folded away.
+          <a href="#" id="voiceEvery">Show every version</a></p>`
+        : voiceEvery ? `<p class="tiny faint" style="margin:0 0 6px">
+          Showing every version of every voice. <a href="#" id="voiceEvery">Just the best of each</a></p>` : ''}
+
         ${hidden ? `<p class="tiny faint" style="margin:0 0 10px">
           ${window.U.plural(hidden, 'novelty voice')} on this device ${hidden === 1 ? 'is' : 'are'}
           hidden — the singing, robotic and joke ones are no use for reading a spelling aloud.
           <a href="#" id="voiceAll">${voiceShowAll ? 'Hide them again' : 'Show them anyway'}</a></p>` : ''}
 
         <p class="hint" style="margin:0 0 12px"><b>Just downloaded one and it is not in the list?</b>
-          That is normal, especially on an iPad — a device only hands its voices to an app when the
-          app starts. <b>Close AraBuzz completely</b> (swipe it away from the app switcher, not just
-          back to the home screen), open it again, and come back here. This list also refreshes
-          itself if the device is simply being slow.</p>
+          Two things, in this order. <b>First, check the download actually finished.</b> These are
+          not small files — an Enhanced voice runs to around 200&nbsp;MB and a Premium one can be
+          over 400&nbsp;MB, and until the last of it has arrived the voice does not exist as far as
+          any app is concerned. Go back to the voice list on the device: a part-finished download
+          shows its progress beside the name, and it needs wifi and patience rather than anything
+          from you. <b>Then close AraBuzz completely</b> — swipe it away from the app switcher, not
+          just back to the home screen — and open it again, because a device only hands its voices
+          to an app at startup. This list also refreshes itself if the device is simply being slow.</p>
 
         <details${best.length ? '' : ' open'}>
           <summary><b>${help.title}</b> — how to add a better voice</summary>
@@ -2101,7 +2117,9 @@ Reflex = A quick automatic response"></textarea>
         <div class="row wrap" style="gap:8px;margin-top:12px">
           <button class="btn-ghost btn-s" id="voiceAgain">Check again</button>
           <button class="btn-quiet btn-s" id="voiceFullGuide">Full guide, device by device</button>
+          <button class="btn-quiet btn-s" id="voiceCopy" title="Copies the exact names this device reports, to paste into a message">Copy this list</button>
         </div>
+        <div id="voiceRaw"></div>
       </div>`;
   }
 
@@ -2134,8 +2152,30 @@ Reflex = A quick automatic response"></textarea>
     const showNow = $('#voiceShowAllNow');
     if (showNow) showNow.onclick = () => { voiceBestOnly = false; repaintVoiceCheck(); };
 
+    const every = $('#voiceEvery');
+    if (every) every.onclick = e => { e.preventDefault(); voiceEvery = !voiceEvery; repaintVoiceCheck(); };
+
     const showAll = $('#voiceAll');
     if (showAll) showAll.onclick = e => { e.preventDefault(); voiceShowAll = !voiceShowAll; repaintVoiceCheck(); };
+
+    /* When a list still looks wrong, guessing from the other side of a
+       screenshot is hopeless. This puts the exact names and language codes
+       the device reports onto the clipboard — and on screen as a fallback,
+       because a PWA cannot always reach the clipboard. */
+    const copy = $('#voiceCopy');
+    if (copy) copy.onclick = async () => {
+      const rows = (window.U.voiceList ? window.U.voiceList({ all: true, everyVariant: true }) : []);
+      const text = `AraBuzz voice list · ${navigator.userAgent}\n` +
+        `${rows.length} English ${rows.length === 1 ? 'voice' : 'voices'} reported\n` +
+        rows.map(v => `· ${v.name}  [${v.lang}]${v.grade > 0 ? '  ★' : ''}${v.novelty ? '  (novelty)' : ''}`).join('\n');
+      let done = false;
+      try { await navigator.clipboard.writeText(text); done = true; } catch (e) {}
+      const out = $('#voiceRaw');
+      if (out) out.innerHTML = `<p class="tiny faint" style="margin:10px 0 0">${
+        done ? 'Copied — paste it into a message.' : 'Could not reach the clipboard, so here it is to copy by hand:'}</p>
+        <textarea rows="8" readonly style="margin-top:6px;font-size:.74rem">${esc(text)}</textarea>`;
+      if (done) toast('Copied.', '', 2200);
+    };
 
     const again = $('#voiceAgain');
     if (again) again.onclick = () => {
