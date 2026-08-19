@@ -665,6 +665,21 @@ Use British English. Mix single words and short terms. Avoid words that are triv
     return Date.now() - t0;
   }
 
+  /** Knock on the parent's door — but only after the note is actually filed
+   *  in the account. The server checks that for itself before it sends
+   *  anything, so a note that failed to save sends no email at all. */
+  async function noteReady(childId) {
+    if (!window.Cloud || !Cloud.signedIn() || !Cloud.token) return { sent: false };
+    try {
+      const res = await fetch('/api/note-ready', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json', authorization: 'Bearer ' + Cloud.token },
+        body: JSON.stringify({ childId, kind: 'onboarding' })
+      });
+      return await res.json();
+    } catch (e) { return { sent: false, reason: 'offline' }; }
+  }
+
   w.API = { hasKey, usingOwnKey, key, modelFor, readDeck, enrich, topUp, onboardingReport,
-            memoryTricks, coachReport, topicList, test, estCost, RATES };
+            memoryTricks, coachReport, topicList, test, noteReady, estCost, RATES };
 })(window);

@@ -18,46 +18,20 @@
    ========================================================================== */
 
 import {
-  whoIs, askClaude, rpcAsUser, serviceCount, serviceGet,
-  emailOf, sendEmail, emailShell, APP_URL, ALLOWED_MODELS, send
+  whoIs, askClaude, rpcAsUser, serviceCount, ALLOWED_MODELS, send
 } from './_lib.js';
 
-const escHtml = t => String(t == null ? '' : t)
-  .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+/* NOTE ON THE STARTING-POINT EMAIL — moved out of this file deliberately.
 
-/* The starting-point note deserves the same knock on the door as the weekly
-   one: a short email saying it is ready, sent the moment it is written. The
-   note itself never travels by email — it stays behind the PIN. */
-async function emailOnboardingReady(who, childId) {
-  let kidName = 'your kid';
-  try {
-    if (childId && who.parent && who.parent.family_id) {
-      // constrained to the caller's own family — a childId from anywhere
-      // else simply finds nothing, and the email says "your kid"
-      const rows = await serviceGet(
-        `children?id=eq.${childId}&family_id=eq.${who.parent.family_id}&select=name`);
-      if (rows && rows[0] && rows[0].name) kidName = rows[0].name;
-    }
-  } catch (e) { /* the name is a nicety, not a requirement */ }
+   It used to be sent right here, the moment the model returned the note. That
+   is the wrong moment: the note has not been filed anywhere yet. If the device
+   then failed to save it — a bad connection, or the crash we hit on a
+   malformed result — the parent got an email about a note that did not exist
+   and never would. That is exactly what happened to Aradhana's first note.
 
-  const email = await emailOf(who.user.id);
-  if (!email) return;
-  const parentName = (who.parent && who.parent.full_name) || '';
-  await sendEmail(email, `${kidName}'s starting-point note is ready`, emailShell(`
-    <p style="margin:0 0 14px">Hi ${escHtml(parentName)},</p>
-    <p style="margin:0 0 14px">${escHtml(kidName)} finished the first check, and the
-       starting-point note is ready — a short read on where ${escHtml(kidName)} is
-       starting from and what the practice will aim at first.</p>
-    <p style="margin:0 0 20px;text-align:center">
-      <a href="${APP_URL}" style="display:inline-block;background:#B8862F;color:#fff;
-         text-decoration:none;padding:12px 28px;border-radius:999px">Open AraBuzz</a></p>
-    <p style="margin:0 0 14px;font-size:13px;color:#4C5D5A">Tap <b>Grown-ups</b>, enter
-       your PIN, and open <b>Coach Report</b>. The note never travels by email — it stays
-       behind your PIN.</p>
-    <p style="margin:0;font-size:13px;color:#4C5D5A">From here, a fresh note is published
-       every <b>Wednesday morning</b> — as long as ${escHtml(kidName)} has done a couple
-       of practice rounds in AraBuzz by then.</p>`));
-}
+   The email now belongs to /api/note-ready, which the app calls only AFTER
+   the note is safely in the `reports` table, and which checks the row is
+   really there before sending anything. */
 
 const ADMIN_JOBS  = new Set(['read-deck', 'enrich', 'topic-list']);
 const PARENT_JOBS = new Set(['coach-report', 'onboarding-report', 'memory-tricks', 'top-up', 'test']);
@@ -125,14 +99,6 @@ export default async function handler(req, res) {
       });
     } catch (e) {
       console.warn('usage not recorded', e.message);
-    }
-
-    /* The first check's note just got written — tell the parent, the same
-       way the Wednesday note does. Never fatal: the note itself is already
-       on its way into the app regardless. */
-    if (job === 'onboarding-report') {
-      try { await emailOnboardingReady(who, b.childId || null); }
-      catch (e) { console.warn('onboarding email not sent', e.message); }
     }
 
     return send(res, 200, { out: result, usage });

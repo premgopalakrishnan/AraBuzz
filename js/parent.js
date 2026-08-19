@@ -138,6 +138,14 @@
     if (!el) { clearInterval(syncPillTimer); syncPillTimer = null; return; }
     const st = (window.Sync && Sync.status) ? Sync.status() : null;
     if (!st || !st.live) { el.innerHTML = ''; }
+    else if (st.pending > 0 && !st.online) {
+      el.innerHTML = `<span class="pill honey" title="This device is offline. Everything is safe here and will go up on its own the moment you are back online.">
+        ${window.U.plural(st.pending, 'change')} waiting — no internet</span>`;
+    }
+    else if (st.pending > 0 && st.failing) {
+      el.innerHTML = `<span class="pill honey" title="${esc(st.error || 'The account did not answer')} — this device keeps trying on its own.">
+        ${window.U.plural(st.pending, 'change')} waiting — retrying</span>`;
+    }
     else if (st.pending > 0) {
       el.innerHTML = `<span class="pill honey" title="Still on this device — don't close the browser until this clears">
         ${window.U.plural(st.pending, 'change')} waiting to sync</span>`;
@@ -1206,6 +1214,29 @@ Reflex = A quick automatic response"></textarea>
 
   let onboardFixInFlight = false;
 
+  /** The starting-point answers, wherever they happen to be. Normally they
+   *  are right here in the profile. On a second device — a parent opening the
+   *  report on the iPad after the child did her first check on the phone —
+   *  they may only exist in the account, so fetch them and put them back
+   *  where they belong. Without this the report quietly decides there was no
+   *  first check and the starting-point note is never written. */
+  async function baselineFor(childId) {
+    const local = Store.db.profile && Store.db.profile.baseline;
+    if (local) return local;
+    if (!window.Cloud || !Cloud.signedIn() || !window.Sync || !Sync.isDbId(childId)) return null;
+    try {
+      const { data, error } = await Cloud.from('children')
+        .select('baseline').eq('id', childId).limit(1);
+      const bl = !error && data && data[0] ? data[0].baseline : null;
+      if (!bl) return null;
+      if (Store.db.activeChildId === childId && Store.db.profile) {
+        Store.db.profile.baseline = bl;
+        Store.save(true);
+      }
+      return bl;
+    } catch (e) { return null; }
+  }
+
   function tabReport() {
     const box = $('#ptab');
     const forChildId = Store.db.activeChildId;
@@ -1217,8 +1248,10 @@ Reflex = A quick automatic response"></textarea>
     mergeCloudReports().then(changed => {
       if (tab !== 'report' || Store.db.activeChildId !== forChildId) return;
       if (changed) { tabReport(); return; }
-      const bl2 = Store.db.profile && Store.db.profile.baseline;
-      const still = !!bl2 && !(Store.db.reports || []).some(x => x.kind === 'onboarding');
+      return baselineFor(forChildId);
+    }).then(bl2 => {
+      if (!bl2 || tab !== 'report' || Store.db.activeChildId !== forChildId) return;
+      const still = !(Store.db.reports || []).some(x => x.kind === 'onboarding');
       if (still && !onboardFixInFlight && API.hasKey()) {
         onboardFixInFlight = true;
         generateOnboardingReport(bl2)
@@ -1615,17 +1648,31 @@ Reflex = A quick automatic response"></textarea>
     };
     fileReportFor(forChildId, rec);
 
-    // …and into the account, so it is on whichever device the parent opens —
-    // under the child it belongs to, never whoever is active right now.
+    /* …and into the account, so it is on whichever device the parent opens —
+       under the child it belongs to, never whoever is active right now.
+
+       The email comes AFTER this, and only if this worked. It used to be sent
+       by the server the moment the note was written by the model, which meant
+       a parent could be told a note was ready while the save was still to
+       come — and if the save never came, the Coach Report sat empty with an
+       email in the inbox saying otherwise. */
+    let filed = false;
     try {
       if (window.Sync && Sync.isDbId(forChildId) && window.Cloud && Cloud.signedIn()) {
-        await Cloud.from('reports').insert({
+        const { error } = await Cloud.from('reports').insert({
           child_id: forChildId,
           payload: { kind: 'onboarding', result: r, metrics: rec.metrics },
           html
         });
+        if (error) throw error;
+        filed = true;
       }
     } catch (e) { console.warn('onboarding report not synced', e); }
+
+    if (filed) {
+      try { await API.noteReady(forChildId); }
+      catch (e) { console.warn('starting-point email not sent', e); }
+    }
     return rec;
   }
 

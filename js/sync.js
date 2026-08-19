@@ -63,6 +63,36 @@
   const state = { lastPush: 0, lastPull: 0, error: null, pending: 0 };
   const watchers = [];
 
+  /* Rows the database will never accept — an answer about a word that has
+     since been deleted, say. They are set aside here rather than retried for
+     ever, because a single one of them used to hold up everything queued
+     behind it and the count on screen would sit there, unmoving, all evening. */
+  const BLOCKED_KEY = 'arabuzz.sync.blocked.v1';
+  const MAX_BLOCKED = 60;
+  let blocked = [];
+  function loadBlocked() {
+    try { const r = localStorage.getItem(BLOCKED_KEY); blocked = r ? JSON.parse(r) : []; }
+    catch (e) { blocked = []; }
+    if (!Array.isArray(blocked)) blocked = [];
+  }
+  function saveBlocked() {
+    try { localStorage.setItem(BLOCKED_KEY, JSON.stringify(blocked.slice(-MAX_BLOCKED))); }
+    catch (e) {}
+  }
+  function setAside(table, row, err) {
+    blocked.push({
+      table: table,
+      id: (row && (row.id || row.child_id)) || null,
+      word_id: (row && row.word_id) || null,
+      code: (err && err.code) || '',
+      msg: (err && err.message) || String(err || ''),
+      at: Date.now()
+    });
+    if (blocked.length > MAX_BLOCKED) blocked = blocked.slice(-MAX_BLOCKED);
+    saveBlocked();
+    console.warn('[sync] set aside a row the database refused', table, err);
+  }
+
   function onChange(fn) { watchers.push(fn); }
   function announce() {
     state.pending = outbox.length + dirtyProg.size + dirtyGame.size;
@@ -75,6 +105,8 @@
       lastPush: state.lastPush,
       lastPull: state.lastPull,
       error: state.error,
+      failing: fails > 0,
+      blocked: blocked.length,
       online: navigator.onLine !== false,
       live: !!(w.Cloud && Cloud.signedIn())
     };
@@ -276,6 +308,47 @@
     return out;
   }
 
+  /* ----------------------------------------------------- refusal vs outage
+     Two very different failures wear the same coat. A dropped wifi, an
+     expired token or a server having a bad minute is TEMPORARY — the right
+     answer is to keep the rows and try again shortly. A broken foreign key,
+     a check constraint or a row-level-security refusal is PERMANENT — trying
+     again in five minutes, and every five minutes after that, changes
+     nothing except that everything queued behind it never leaves the device.
+     Postgres error codes tell the two apart: 22xxx (bad value), 23xxx
+     (constraint), 42xxx (permission / undefined) are all permanent. */
+  function isPermanent(err) {
+    const code = String((err && err.code) || '');
+    if (/^(22|23|42)/.test(code)) return true;
+    if (code === 'PGRST204' || code === 'PGRST301') return true;
+    const st = Number(err && (err.status || err.statusCode));
+    if (st === 400 || st === 403 || st === 404 || st === 409 || st === 422) return true;
+    return false;
+  }
+
+  /**
+   * Send rows without ever letting one bad row hold the rest hostage.
+   * If a batch is refused for a permanent reason it is split in half, and
+   * half again, until the offending row stands alone — that one is set aside
+   * and everything else goes through. A temporary failure is re-thrown, so
+   * the caller keeps the rows and backs off as before.
+   */
+  async function sendRows(table, rows, conflict) {
+    const work = [rows.slice()];
+    const rejected = [];
+    while (work.length) {
+      const part = work.shift();
+      if (!part.length) continue;
+      const { error } = await Cloud.from(table).upsert(part, { onConflict: conflict });
+      if (!error) continue;
+      if (!isPermanent(error)) throw error;          // outage — retry the lot later
+      if (part.length === 1) { setAside(table, part[0], error); rejected.push(part[0]); continue; }
+      const mid = Math.ceil(part.length / 2);
+      work.unshift(part.slice(0, mid), part.slice(mid));
+    }
+    return rejected;
+  }
+
   /**
    * Empty the outbox. Safe to call at any time and from anywhere — it does
    * nothing if it is already running, offline, or nobody is signed in.
@@ -311,12 +384,13 @@
       for (const kind of ['session', 'attempt']) {
         const sending = outbox.filter(o => o.t === kind);
         if (!sending.length) continue;
+        const table = kind === 'session' ? 'sessions' : 'attempts';
         for (const part of chunk(sending.map(o => o.r), BATCH)) {
-          const { error } = await Cloud.from(kind === 'session' ? 'sessions' : 'attempts')
-            .upsert(part, { onConflict: 'id' });
-          if (error) throw error;
+          await sendRows(table, part, 'id');
         }
-        // Only now is it safe to forget them.
+        /* Only now is it safe to forget them — including the ones the
+           database refused outright, which are recorded in `blocked` and
+           must not be queued again. */
         const sent = new Set(sending);
         outbox = outbox.filter(o => !sent.has(o));
         saveOutbox();
@@ -328,9 +402,7 @@
           .map(k => { const [c, wd] = k.split('::'); return progressRow(c, wd); })
           .filter(Boolean);
         for (const part of chunk(rows, BATCH)) {
-          const { error } = await Cloud.from('progress')
-            .upsert(part, { onConflict: 'child_id,word_id' });
-          if (error) throw error;
+          await sendRows('progress', part, 'child_id,word_id');
         }
         progKeys.forEach(k => dirtyProg.delete(k));
       }
@@ -338,11 +410,7 @@
       /* ---- 3 · game state ---- */
       if (gameKeys.length) {
         const rows = gameKeys.map(gameRow).filter(Boolean);
-        if (rows.length) {
-          const { error } = await Cloud.from('game_state')
-            .upsert(rows, { onConflict: 'child_id' });
-          if (error) throw error;
-        }
+        if (rows.length) await sendRows('game_state', rows, 'child_id');
         gameKeys.forEach(k => dirtyGame.delete(k));
       }
 
@@ -592,6 +660,12 @@
           db.profile.pronoun = kid.pronoun || db.profile.pronoun || 'they';
           if (kid.avatar) db.profile.emoji = kid.avatar;
           if (kid.colour) db.profile.colour = kid.colour;
+          /* The starting-point answers too. Without this line a child who
+             did her first quiz on one device arrives on the next one with no
+             baseline in the live profile, the coach report decides there is
+             nothing to write about, and the starting-point note is never
+             written at all — on any device. */
+          if (kid.baseline && !db.profile.baseline) db.profile.baseline = kid.baseline;
         }
       }
     });
@@ -688,6 +762,7 @@
         db0.weeks = []; db0.words = {};
         db0.game = S().blank().game;
         outbox = []; saveOutbox(); dirtyProg.clear(); dirtyGame.clear();
+        blocked = []; saveBlocked();
         S().save(true);
       }
       if (famId) { db0.familyId = famId; }
@@ -807,9 +882,12 @@
      a child carries on playing, and the first thing queued after that would
      otherwise be written over the top of everything already waiting to be sent. */
   loadOutbox();
+  loadBlocked();
 
   w.Sync = {
     start, pull, flush, status, onChange,
+    get blockedRows() { return blocked.slice(); },
+    clearBlocked() { blocked = []; saveBlocked(); announce(); },
     noteAttempt, noteSession, noteProgress, noteGame,
     createChild, saveChild,
     uuid, isDbId, wordIn, wordOut,
