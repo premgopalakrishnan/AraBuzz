@@ -265,6 +265,8 @@
       <div class="card" style="margin-top:14px">
         <h3>Common questions</h3>
         ${[
+          ['Does the voice reading to my child come from the internet too?',
+           'By default, yes — and this is worth two minutes of your attention. AraBuzz reads a lot aloud, and it used to borrow a voice from the device. On an iPad that voice is flat and robotic, and it cannot be improved: Apple lets a proper app use the Enhanced and Premium voices you download but does not share them with a web app, whatever you install. So AraBuzz now makes the audio itself through a speech service (Microsoft Azure) and the device plays it. That means the sentence being read aloud is sent there to be turned into sound — sometimes a line about what your child just typed — used for the recording and nothing else, and kept afterwards so the same sentence is never sent twice. Turn it off at any time under <b>Voice check</b> in Settings and the device\'s own voice takes over at once.'],
           ['Do they need the internet?',
            'Mostly no, with one exception worth knowing. The device needs to connect once to download the latest words and questions — after that, Spell Buzz, Word Rush, Listen &amp; Spell, Word Meanings, the crossword and the word search all run on the device itself, on a plane or in the car with the wifi off. <b>The exception is Spell Quest.</b> That is the game where your child can chat with Ara — Ara answers the letters she actually typed, and she can stop and ask a question in her own words — and that conversation is written in the moment by an AI engine (Anthropic\'s Claude Haiku), which needs a connection. It is not a general chatbot and cannot become one: Ara may only discuss this word, its letters, what it means <b>using your school\'s own definition</b>, and the game — the conversation stays inside the sheet your child chose. Attempts to talk her out of that are turned back, and the chatting is capped per word so it cannot replace the practice. Played offline, Spell Quest still works and every answer still counts; Ara simply falls back to the app\'s own shorter hints. Anything played offline is saved on the device and syncs to your family account the next time it connects. One honest caution: until that sync happens, the new answers exist only on that device — if the browser data is cleared before it reconnects, they are lost. The sync tracker at the top of this screen tells you whether anything is still waiting.'],
           ['Where does the data go?',
@@ -2043,7 +2045,17 @@ Reflex = A quick automatic response"></textarea>
         <h3>Voice check</h3>
         <p class="muted small" style="margin-top:0">Every device keeps a shorter list of voices for web apps than
            it shows in its own settings. This is the <b>real</b> list on this device — tap one to hear it.</p>
-        <p class="hint" style="margin:0 0 4px"><b>Open this screen on the device your child actually uses.</b>
+        <label class="ob-agree" for="cloudVoice" style="margin:12px 0 10px;padding:12px 14px;background:var(--jade-soft);border-color:rgba(47,107,88,.25)">
+          <input type="checkbox" id="cloudVoice" ${Store.db.settings.cloudVoice === false ? '' : 'checked'}>
+          <span><b>Use AraBuzz's own voice</b>
+            <span class="faint small">— a proper recorded voice, sent from AraBuzz rather than
+            taken from this device. Apple does not let a web app use the Premium voices you
+            download, so on an iPad this is the only way to get one. Needs a connection; when
+            there is none, the device's own voice steps in.</span></span></label>
+
+        <p class="hint" style="margin:0 0 4px"><b>The list below is this device's own voices</b> — used
+           when AraBuzz's voice is switched off, or when there is no connection.
+           <b>Open this screen on the device your child actually uses.</b>
            Both the list below and the steps at the bottom belong to whatever you are holding right now —
            and AraBuzz thinks that is <b>${esc(PLATFORM_NAME[plat] || 'this device')}</b>. The voice
            you choose is remembered per device, because each one offers a different set.</p>
@@ -2146,6 +2158,14 @@ Reflex = A quick automatic response"></textarea>
       window.U.speak('Well done. Now try spelling this one: necessary.');
       toast('That voice is now the one AraBuzz uses.', '', 2600);
     });
+    const cloud = $('#cloudVoice');
+    if (cloud) cloud.onchange = () => {
+      Store.db.settings.cloudVoice = cloud.checked;
+      Store.save(true);
+      window.U.unlockAudio && window.U.unlockAudio();
+      window.U.speak('Well done. Now try spelling this one: necessary.');
+    };
+
     const only = $('#voiceBest');
     if (only) only.onchange = () => { voiceBestOnly = only.checked; repaintVoiceCheck(); };
 

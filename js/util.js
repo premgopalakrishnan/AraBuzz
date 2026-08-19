@@ -359,11 +359,110 @@
       .map(x => x.trim()).filter(Boolean);
   }
 
+  /* ======================================================================
+     A REAL VOICE
+     Apple does not hand a web app the Enhanced or Premium voices a parent
+     downloads — that is an operating-system decision, not something AraBuzz
+     can ask permission for. So on any device where the built-in voice is
+     poor, the audio is made on our own server instead and simply played
+     here. Every line is spoken once ever and then cached, so this is not an
+     expensive thing to do; it is a slightly slower one, which is why the
+     browser's own voice remains the instant fallback for everything.
+     ====================================================================== */
+  const cloudCache = new Map();      // text|rate → object URL, for this session
+  let cloudOff = false;              // set once the server says it has no voice
+  let audioEl = null;                // ONE element, unlocked once (see below)
+  let audioReady = false;
+
+  function cloudWanted() {
+    const s = (window.Store && Store.db && Store.db.settings) || {};
+    if (s.cloudVoice === false) return false;      // a parent turned it off
+    if (cloudOff) return false;
+    if (navigator.onLine === false) return false;
+    return !!(window.Cloud && Cloud.signedIn && Cloud.signedIn() && Cloud.token);
+  }
+
+  /* iOS will not let a page play audio it did not ask for. An element that
+     has been played once inside a real tap is trusted from then on, so the
+     first touch anywhere in the app quietly plays a moment of silence and
+     buys every later line the right to speak. Without this the first hint of
+     a game is silent on every iPhone and iPad, and only that one. */
+  const SILENCE = 'data:audio/mpeg;base64,//uQxAAAAAAAAAAAAAAAAAAAAAAAWGluZwAAAA8AAAACAAACcQCA';
+  function unlockAudio() {
+    if (audioReady) return;
+    try {
+      audioEl = audioEl || new Audio();
+      audioEl.playsInline = true;
+      audioEl.src = SILENCE;
+      const p = audioEl.play();
+      if (p && p.then) p.then(() => { audioReady = true; }).catch(() => {});
+      else audioReady = true;
+    } catch (e) {}
+  }
+  ['touchend', 'pointerup', 'click', 'keydown'].forEach(ev =>
+    document.addEventListener(ev, unlockAudio, { once: true, passive: true, capture: true }));
+
+  async function cloudUrl(text, rate) {
+    const key = rate.toFixed(2) + '|' + text;
+    if (cloudCache.has(key)) return cloudCache.get(key);
+    const res = await fetch('/api/speak', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', authorization: 'Bearer ' + Cloud.token },
+      body: JSON.stringify({ text, rate,
+        childId: (window.Sync && Store.db && Sync.isDbId(Store.db.activeChildId)) ? Store.db.activeChildId : null })
+    });
+    if (res.status === 503) { cloudOff = true; return null; }   // no voice service configured
+    if (!res.ok) return null;
+    const url = URL.createObjectURL(await res.blob());
+    if (cloudCache.size > 120) {                                 // a sitting's worth
+      const first = cloudCache.keys().next().value;
+      URL.revokeObjectURL(cloudCache.get(first));
+      cloudCache.delete(first);
+    }
+    cloudCache.set(key, url);
+    return url;
+  }
+
+  /** Returns true if it managed to speak. Never throws, never waits long. */
+  async function speakCloud(text, rate, onend) {
+    try {
+      const url = await cloudUrl(text, rate);
+      if (!url) return false;
+      audioEl = audioEl || new Audio();
+      audioEl.playsInline = true;
+      audioEl.onended = null;
+      audioEl.src = url;
+      if (onend) audioEl.onended = onend;
+      await audioEl.play();
+      return true;
+    } catch (e) { return false; }
+  }
+
+  function stopCloud() {
+    try { if (audioEl) { audioEl.pause(); audioEl.currentTime = 0; } } catch (e) {}
+  }
+
   function speak(text, opts) {
     const o = opts || {};
-    if (!('speechSynthesis' in window)) { toast('This device cannot read words aloud.'); return; }
     const full = String(text || '').trim();
     if (!full) return;
+    const rate = o.rate || (window.Store && Store.db.settings.speakRate) || 0.85;
+
+    /* Try the good voice first, and fall back the moment anything is not
+       perfect — no signal, no account, a slow server, a device that refuses
+       to play. She never waits on it, and she never notices which one spoke. */
+    if (cloudWanted() && full.length <= 600) {
+      stopCloud();
+      if ('speechSynthesis' in window) speechSynthesis.cancel();
+      speakCloud(full, rate, o.onend).then(done => { if (!done) deviceSpeak(full, o); });
+      return;
+    }
+    deviceSpeak(full, o);
+  }
+
+  function deviceSpeak(full, opts) {
+    const o = opts || {};
+    if (!('speechSynthesis' in window)) { toast('This device cannot read words aloud.'); return; }
     try {
       speechSynthesis.cancel();
       const v = bestVoice();
@@ -771,6 +870,7 @@
   w.U = {
     $, $$, el, esc, toast, modal, closeAllModals, confirmBox, promptBox, confetti, floatPoints,
     beep, speak, speakWordThen, spellOut, loadVoices, bestVoice, voiceList, voiceGrade,
+    unlockAudio, stopCloud,
     noveltyCount, variantCount, onVoices,
     speedBtn, sayMeaningBtn,
     fmtDate, fmtDay, pct, plural, daysBetween, noAutoCorrect,
