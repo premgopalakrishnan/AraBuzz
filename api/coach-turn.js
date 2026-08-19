@@ -175,7 +175,7 @@ function leaksTheWord(line, word) {
   /* The dangerous pieces are the ones she could build on: the beginning of
      the word and the end of it. An interior fragment ("cess" inside a long
      word) tells her almost nothing, and blocking those would gag Ara for no
-     gain — he would fall back to a canned line half the time, which is the
+     gain — she would fall back to a canned line half the time, which is the
      very thing we are fixing. */
   const MIN = 4;
   for (let n = MIN; n < w.length; n++) {
