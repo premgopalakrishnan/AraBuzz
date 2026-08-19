@@ -247,31 +247,90 @@
     speechSynthesis.onvoiceschanged = loadVoices;
   }
 
+  /* Devices ship several grades of the same voice and hand the plainest one
+     over first. The plain grade is the robotic one — the "Enhanced",
+     "Premium", "Natural" and "Neural" builds are recorded from a person and
+     sound like one. Prefer them everywhere, on every platform, before
+     falling back to accent. */
+  const NICE = /\b(enhanced|premium|natural|neural|siri|eloquence)\b/i;
+  function voiceGrade(v) {
+    const n = (v && v.name) || '';
+    if (/premium|neural|natural/i.test(n)) return 3;
+    if (/enhanced|siri/i.test(n)) return 2;
+    if (/compact|eloquence|novelty|whisper|bells|bubbles|organ|zarvox|trinoids/i.test(n)) return -1;
+    return 0;
+  }
+  function englishVoices() {
+    if (!voices.length) loadVoices();
+    return voices.filter(v => /^en/i.test(v.lang || ''));
+  }
   function bestVoice() {
     if (!voices.length) loadVoices();
     const want = Store.db.settings.voiceURI;
     if (want) { const v = voices.find(x => x.voiceURI === want); if (v) return v; }
     const prefs = [/en-GB/i, /en-IN/i, /en-AU/i, /en-US/i, /^en/i];
-    for (const p of prefs) {
-      const v = voices.find(x => p.test(x.lang) && /female|samantha|karen|serena|kate|fiona|moira|google uk/i.test(x.name))
-             || voices.find(x => p.test(x.lang));
-      if (v) return v;
-    }
+    /* Grade first, accent second: a Premium American reads a spelling far
+       better than a robotic British one. */
+    const ranked = englishVoices().slice().sort((a, b) => {
+      const g = voiceGrade(b) - voiceGrade(a);
+      if (g) return g;
+      const rank = v => { for (let i = 0; i < prefs.length; i++) if (prefs[i].test(v.lang)) return i; return 9; };
+      return rank(a) - rank(b);
+    });
+    if (ranked.length) return ranked[0];
+    for (const p of prefs) { const v = voices.find(x => p.test(x.lang)); if (v) return v; }
     return voices[0] || null;
+  }
+
+  /** Every English voice this device is willing to hand to AraBuzz, best
+   *  first — which is not the same list the device shows in its own
+   *  settings, and that difference is worth being able to see. */
+  function voiceList() {
+    return englishVoices().slice().sort((a, b) => voiceGrade(b) - voiceGrade(a) || a.name.localeCompare(b.name))
+      .map(v => ({ uri: v.voiceURI, name: v.name, lang: v.lang, grade: voiceGrade(v),
+                   nice: NICE.test(v.name) }));
+  }
+
+  /* One long flat utterance is most of what makes a synthetic voice sound
+     like a machine — a person breathes between sentences. So anything longer
+     than a phrase is spoken sentence by sentence, with a small gap, and the
+     pitch drifts a hair between them. Same voice, far less robot. */
+  function sentencesOf(text) {
+    return String(text).replace(/\s+/g, ' ').trim()
+      .split(/(?<=[.!?])\s+|(?<=[:;—])\s+/)
+      .map(x => x.trim()).filter(Boolean);
   }
 
   function speak(text, opts) {
     const o = opts || {};
     if (!('speechSynthesis' in window)) { toast('This device cannot read words aloud.'); return; }
+    const full = String(text || '').trim();
+    if (!full) return;
     try {
       speechSynthesis.cancel();
-      const u = new SpeechSynthesisUtterance(String(text));
-      const v = bestVoice(); if (v) { u.voice = v; u.lang = v.lang; }
-      u.rate = o.rate || Store.db.settings.speakRate || 0.85;
-      u.pitch = o.pitch || 1.05;
-      u.volume = 1;
-      if (o.onend) u.onend = o.onend;
-      speechSynthesis.speak(u);
+      const v = bestVoice();
+      const rate = o.rate || Store.db.settings.speakRate || 0.85;
+      const parts = o.whole ? [full] : sentencesOf(full);
+
+      const utter = (str, i) => {
+        const u = new SpeechSynthesisUtterance(str);
+        if (v) { u.voice = v; u.lang = v.lang; }
+        u.rate = rate;
+        u.pitch = (o.pitch || 1.05) + (i % 2 ? -0.03 : 0.03);   // a breath of variation
+        u.volume = 1;
+        return u;
+      };
+
+      /* Queue every sentence NOW rather than chaining each one off the end of
+         the last. Safari's `onend` is unreliable — chaining means one missed
+         event and she is left with half a sentence and silence. The browser's
+         own queue plays them in order, and it puts a natural breath between
+         utterances for free. */
+      parts.forEach((str, i) => {
+        const u = utter(str, i);
+        if (o.onend && i === parts.length - 1) u.onend = o.onend;
+        speechSynthesis.speak(u);
+      });
     } catch (e) { console.warn('speak', e); }
   }
 
@@ -653,7 +712,7 @@
 
   w.U = {
     $, $$, el, esc, toast, modal, closeAllModals, confirmBox, promptBox, confetti, floatPoints,
-    beep, speak, speakWordThen, spellOut, loadVoices, bestVoice,
+    beep, speak, speakWordThen, spellOut, loadVoices, bestVoice, voiceList, voiceGrade,
     speedBtn, sayMeaningBtn,
     fmtDate, fmtDay, pct, plural, daysBetween, noAutoCorrect,
     PRONOUNS, pronouns, pronounNote,

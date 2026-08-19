@@ -1578,6 +1578,7 @@
         `again — I never just hand you the answer. 😉`);
     say(`<b>${words.length} words.</b> Ready? Here we go! 👇`);
     paintQuest();
+    clearIdle();
     setTimeout(askClue, 260);
   }
 
@@ -1632,6 +1633,136 @@
                    8: '⚡ Eight in a row! Ara can barely keep up.',
                    10: '🏅 TEN in a row. That is showing off (keep going).' };
 
+  /* ======================================================================
+     ARA, LIVE
+     What Aradhana missed was not cleverness — it was being HEARD. She typed
+     "wel byng" and was told the word had ten letters and started with W. She
+     had written the W herself.
+
+     So the reply is now written, in the moment, by a model that is shown
+     exactly what she typed and what the app worked out about it. The app's
+     own line still exists — but as the safety net underneath, not the thing
+     she normally reads. If there is no signal, no account, or the model is
+     slow, she never notices: the net catches it in the same bubble.
+     ====================================================================== */
+
+  const flatten = t => String(t || '').toLowerCase().replace(/[^a-z]/g, '');
+
+  /** Everything the app knows about her answer, as plain facts a model can
+   *  be trusted with. Note what is NOT here: no praise, no phrasing, no
+   *  teaching. Facts only — the wording is Ara's job. */
+  function questFacts(wd, given, an) {
+    const C = flatten(wd.word), G = flatten(given);
+    let p = 0;
+    while (p < C.length && p < G.length && C[p] === G[p]) p++;
+    return {
+      rightPrefix: p >= 2 ? p : 0,
+      prefixText: p >= 2 ? C.slice(0, p).split('').join('-') : '',
+      soundsRight: !!(an && an.soundsRight),
+      note: (an && an.note) || '',
+      sameFirst: !!(C[0] && G[0] && C[0] === G[0]),
+      sameLength: !!G && C.length === G.length,
+      trickyBit: wd.trickyBit || '',
+      twoParts: /[\s-]/.test(String(wd.word).trim())
+    };
+  }
+
+  /** Is she spelling, or has she stopped to talk to me? A word with no
+   *  spaces is an attempt. A question mark, or a sentence that opens the way
+   *  questions open, is her talking — and being answered instead of marked
+   *  wrong is most of what she liked about the chat she was using before. */
+  function isTalking(text) {
+    const t = String(text || '').trim();
+    if (!t) return false;
+    if (/[?？]$/.test(t)) return true;
+    if (!/\s/.test(t)) return false;                 // one word: a spelling
+    return /^(why|what|how|who|when|where|can|could|is|are|do|does|did|should|i (don|dont|do not|am|think|need)|help|tell|explain|say|repeat)\b/i.test(t);
+  }
+
+  /* A bubble that is being written. She sees the dots straight away, so the
+     game feels alive while Ara thinks — and the dots are replaced in place,
+     never stacked on top of each other. */
+  let thinkSeq = 0;
+  function thinking() {
+    if (!quest) return null;
+    const id = 'tk' + (++thinkSeq);
+    quest.log.push({ who: 'ara', thinking: true, id, html: '', cls: '' });
+    paintQuest();
+    return id;
+  }
+  function resolveBubble(id, html, cls, voice) {
+    if (!quest) return;
+    const at = quest.log.findIndex(m => m.id === id);
+    const plain = voice != null ? String(voice) : plainOf(html);
+    const row = { who: 'ara', html, cls: cls || '', voice: plain };
+    if (at < 0) quest.log.push(row); else quest.log[at] = row;
+    paintQuest();
+    if (cls === 'hint' || cls === 'good' || cls === 'final' || cls === 'chat') {
+      setTimeout(() => window.U.speak(plain), cls === 'good' ? 700 : 220);
+    }
+  }
+  const plainOf = html => String(html).replace(/<[^>]*>/g, ' ').replace(/&[a-z]+;/g, ' ')
+    .replace(/[\u{1F300}-\u{1FAFF}\u{2600}-\u{27BF}]/gu, '').replace(/\s+/g, ' ').trim();
+
+  /**
+   * Ask Ara for a line, show it when it lands, and fall back to the app's own
+   * words if it does not. Always resolves — the game never waits on a network.
+   */
+  async function araLine(kind, wd, given, facts, fallbackHTML, cls) {
+    const id = thinking();
+    let line = null;
+    try {
+      if (window.API && API.coachTurn) {
+        line = await API.coachTurn({
+          kind,
+          childId: (window.Sync && Sync.isDbId(Store.db.activeChildId)) ? Store.db.activeChildId : null,
+          word: wd ? wd.word : '',
+          definition: wd ? (wd.meaning || wd.kidMeaning || '') : '',
+          attempt: given || '',
+          tries: quest ? quest.tries : 1,
+          facts: facts || {},
+          history: (quest ? quest.log : []).filter(m => !m.thinking).slice(-4)
+            .map(m => ({ who: m.who, text: m.who === 'kid' ? plainOf(m.html) : (m.voice || plainOf(m.html)) }))
+        }, 6000);
+      }
+    } catch (e) { line = null; }
+    if (!quest) return;
+    if (line) resolveBubble(id, esc(line), cls || 'hint', line);
+    else resolveBubble(id, fallbackHTML, cls || 'hint');
+  }
+
+  /* ---- the safety net -------------------------------------------------
+     Only read when Ara cannot be reached. Even so it must never again say
+     something she has already proved she knows. */
+  function localWrongHTML(wd, given, an, tries) {
+    const f = questFacts(wd, given, an);
+    const letters = flatten(wd.word).length;
+
+    const opener = f.soundsRight
+      ? 'That is <b>exactly how it sounds</b> — your ears are right, English is just being English. 🙃'
+      : (f.rightPrefix
+          ? `You have got <b>${esc(f.prefixText.toUpperCase())}</b> — that start is right.`
+          : pick(NEARLY));
+
+    /* Say the one useful thing. Never the first letter if she wrote it,
+       never the letter count if she already has it. */
+    let tip = '';
+    if (f.note) tip = `The bit to change: <b>${esc(f.note)}</b>.`;
+    else if (!f.sameFirst) tip = `It starts with <b>${esc(String(wd.word)[0].toUpperCase())}</b>.`;
+    else if (f.twoParts) tip = `It is really <b>two small words</b> joined together.`;
+    else if (!f.sameLength) tip = `It is <b>${letters}</b> letters long.`;
+    else tip = `Every letter is in there — two of them have swapped places.`;
+
+    const tricky = (tries >= 2 && wd.trickyBit)
+      ? `<br><b>The bit that catches everyone:</b> ${esc(wd.trickyBit)}` : '';
+    const diff = tries >= 2
+      ? `<div class="diff" style="margin:8px 0">${Phonics.diffHTML(wd.word, given)}</div>` : '';
+
+    return `${opener}<br>${tip}${tricky}${diff}` +
+      `<p style="margin:6px 0 0">${pick(['Have another go 👇', 'One more — you have got this. 👇',
+        'Fix that bit and it is yours. 👇'])}</p>`;
+  }
+
   function questWord() {
     if (!quest) return null;
     return quest.round === 1 ? quest.words[quest.i] : quest.parked[quest.i];
@@ -1663,21 +1794,43 @@
         (school ? `<p class="q-from">— from your Spell Buzz sheet 📄</p>` : '') +
         `<p class="q-ask">⌨️ Type the spelling below</p>`, '', clue);
     paintQuest();
+    armIdle();
   }
 
   /** Her answer, checked letter by letter — the heart of the game. */
-  function answerQuest(raw) {
-    if (!quest) return;
+  async function answerQuest(raw) {
+    if (!quest || quest.busy) return;
     const given = String(raw || '').trim();
     if (!given) return;
     const wd = questWord();
     if (!wd) return;
 
+    clearIdle();
+
+    /* She has stopped to ask something. Answer her — do not mark it wrong.
+       This is the single biggest difference between a game and a
+       conversation, and it is the thing she was really asking for. */
+    if (isTalking(given) && !Phonics.analyse(wd.word, given).ok) {
+      heard(given);
+      quest.busy = true;
+      paintQuest();
+      await araLine('chat', wd, given, questFacts(wd, '', null),
+        `Good question! Have a look at the clue again — the answer is hiding in what it means. 👇`, 'chat');
+      quest.busy = false;
+      paintQuest();
+      armIdle();
+      return;
+    }
+
     heard(given);
     quest.tries++;
+    quest.busy = true;
+    paintQuest();
+
     const ms = Date.now() - quest.qStart;
     const q = { wordId: wd.id, word: wd.word, mode: 'quest', kind: 'type', answer: wd.word, meta: {} };
-    const ok = Phonics.analyse(wd.word, given).ok;
+    const an = Phonics.analyse(wd.word, given);
+    const ok = an.ok;
 
     /* Every answer counts, right or wrong, first try or fifth — this is what
        feeds the boxes, the tricky list and the parent's note. */
@@ -1693,52 +1846,107 @@
       window.U.speak(wd.word);
 
       const firstGo = quest.tries === 1;
-      const long = wd.word.replace(/\s/g, '').length >= 10;
-      say(`<b>${pick(firstGo ? CHEER_FIRST : CHEER_FOUGHT)}</b> ` +
-          `<span class="q-word">${esc(wd.word)}</span> — ${pick(firstGo ? PRAISE_FIRST : PRAISE_FOUGHT)}` +
-          (firstGo && long ? `<p style="margin:6px 0 0">And that was a <b>long</b> one — ${wd.word.replace(/\s/g, '').length} letters, no wobble. 😮</p>` : '') +
-          (STREAK[quest.run] ? `<p style="margin:6px 0 0">${STREAK[quest.run]}</p>` : '') +
-          `<p class="q-score">⭐ ${quest.correct}/${questTotal()} · +${pts} points</p>`, 'good');
+      const long = flatten(wd.word).length >= 10;
+      const scoreLine = `<p class="q-score">⭐ ${quest.correct}/${questTotal()} · +${pts} points</p>`;
+      const localGood =
+        `<b>${pick(firstGo ? CHEER_FIRST : CHEER_FOUGHT)}</b> ` +
+        `<span class="q-word">${esc(wd.word)}</span> — ${pick(firstGo ? PRAISE_FIRST : PRAISE_FOUGHT)}` +
+        (firstGo && long ? `<p style="margin:6px 0 0">And that was a <b>long</b> one — ${flatten(wd.word).length} letters, no wobble. 😮</p>` : '') +
+        (STREAK[quest.run] ? `<p style="margin:6px 0 0">${STREAK[quest.run]}</p>` : '');
+
+      /* A word she had to fight for deserves a reaction about THAT word —
+         what she fixed, not a stock cheer. A first-try win is fast and
+         should stay fast, so it keeps the local line and costs nothing. */
+      if (firstGo) {
+        say(localGood + scoreLine, 'good');
+      } else {
+        const id = thinking();
+        let line = null;
+        try {
+          line = (window.API && API.coachTurn) ? await API.coachTurn({
+            kind: 'right', childId: (window.Sync && Sync.isDbId(Store.db.activeChildId)) ? Store.db.activeChildId : null,
+            word: wd.word, definition: wd.meaning || wd.kidMeaning || '',
+            attempt: given, tries: quest.tries, facts: questFacts(wd, given, an),
+            history: []
+          }, 5000) : null;
+        } catch (e) { line = null; }
+        if (!quest) return;
+        resolveBubble(id,
+          line ? `<b>${pick(CHEER_FOUGHT)}</b> <span class="q-word">${esc(wd.word)}</span> — ${esc(line)}${scoreLine}`
+               : localGood + scoreLine,
+          'good',
+          line ? `${wd.word}. ${line}` : null);
+      }
+      quest.busy = false;
       nextQuest();
       return;
     }
 
-    /* Wrong. The hints get bigger, never the answer — until the third try,
-       when the word is shown and parked for the end. */
+    /* Not yet. Ara answers her, in his own words, about what she actually
+       typed. The app's line waits underneath in case he cannot be reached. */
     window.U.beep('bad');
     quest.run = 0;
-    const an = Phonics.analyse(wd.word, given);
-    if (quest.tries === 1) {
-      const letters = wd.word.replace(/\s/g, '').length;
-      /* Notice what she actually did. Spelling it the way it sounds is a
-         real skill, not a failure, and being told so is the difference
-         between "I got it wrong" and "I nearly had it". */
-      const kind = an && an.soundsRight
-        ? `That is <b>exactly how it sounds</b> — your ears are right, English is just being English. 🙃`
-        : pick(NEARLY);
-      say(`${kind}<br><b>Hint:</b> it has <b>${letters}</b> letters and starts with ` +
-          `<b>${esc(wd.word[0].toUpperCase())}</b>. Have another go! 👇`, 'hint');
-    } else if (quest.tries === 2) {
-      say(`You are nearly there — look at what you wrote:` +
-          `<div class="diff" style="margin:8px 0">${Phonics.diffHTML(wd.word, given)}</div>` +
-          `${wd.trickyBit ? `<b>The bit that catches everyone:</b> ${esc(wd.trickyBit)}<br>` : ''}` +
-          `${pick(['One more go — you have got this. 👇', 'Fix that bit and it is yours. 👇',
-                   'So close I can hear it. One more. 👇'])}`, 'hint');
-    } else {
-      say(`${pick(['This one is a tricky customer! 🦜', 'Right — this word is being difficult. 😤',
-                   'That word is putting up a fight!'])} Here it is: ` +
-          `<span class="q-word">${esc(wd.word)}</span>` +
-          `${wd.memoryTrick ? `<p style="margin:6px 0 0">💡 ${esc(wd.memoryTrick)}</p>` : ''}` +
-          `<p style="margin:6px 0 0">${quest.round === 1
-            ? 'Say it out loud once, and we will come back to it at the end. 😉'
-            : 'It got away this time — it will be back in your next game. 😉'}</p>`, 'hint');
+
+    if (quest.tries >= 3) {
+      const localGiveUp =
+        `${pick(['This one is a tricky customer! 🦜', 'Right — this word is being difficult. 😤',
+                 'That word is putting up a fight!'])} Here it is: ` +
+        `<span class="q-word">${esc(wd.word)}</span>` +
+        `${wd.memoryTrick ? `<p style="margin:6px 0 0">💡 ${esc(wd.memoryTrick)}</p>` : ''}` +
+        `<p style="margin:6px 0 0">${quest.round === 1
+          ? 'Say it out loud once, and we will come back to it at the end. 😉'
+          : 'It got away this time — it will be back in your next game. 😉'}</p>`;
+
+      const id = thinking();
+      let line = null;
+      try {
+        line = (window.API && API.coachTurn) ? await API.coachTurn({
+          kind: 'parked', childId: (window.Sync && Sync.isDbId(Store.db.activeChildId)) ? Store.db.activeChildId : null,
+          word: wd.word, definition: wd.meaning || wd.kidMeaning || '',
+          attempt: given, tries: quest.tries, facts: questFacts(wd, given, an), history: []
+        }, 5000) : null;
+      } catch (e) { line = null; }
+      if (!quest) return;
+      /* The word itself is shown here on purpose — three tries are up, and
+         seeing it is the lesson. Ara's line goes above it. */
+      resolveBubble(id,
+        (line ? `${esc(line)}<p style="margin:8px 0 0">Here it is: <span class="q-word">${esc(wd.word)}</span></p>`
+              : localGiveUp) +
+        `${line && wd.memoryTrick ? `<p style="margin:6px 0 0">💡 ${esc(wd.memoryTrick)}</p>` : ''}`,
+        'hint',
+        (line ? line + '. ' : '') + 'Here it is. ' + wd.word);
       window.U.speak(wd.word, { rate: 0.6 });
       window.U.spellOut(wd.word);
       if (quest.round === 1) quest.parked.push(wd);
+      quest.busy = false;
       nextQuest();
       return;
     }
+
+    await araLine('wrong', wd, given, questFacts(wd, given, an),
+                  localWrongHTML(wd, given, an, quest.tries), 'hint');
+    quest.busy = false;
     paintQuest();
+    armIdle();
+  }
+
+  /* ---- gone quiet -----------------------------------------------------
+     A nine-year-old who is stuck goes silent, not loud. After a while Ara
+     notices, the way a person sitting next to her would. Once per word, so
+     it is company and not nagging. */
+  let idleTimer = null;
+  function clearIdle() { if (idleTimer) { clearTimeout(idleTimer); idleTimer = null; } }
+  function armIdle() {
+    clearIdle();
+    if (!quest || quest.over) return;
+    idleTimer = setTimeout(async () => {
+      if (!quest || quest.over || quest.busy || quest.nudged === quest.i + ':' + quest.round) return;
+      const wd = questWord();
+      if (!wd) return;
+      quest.nudged = quest.i + ':' + quest.round;
+      await araLine('stuck', wd, '', questFacts(wd, '', null),
+        `Take your time — read the clue once more and write what you hear. 👂`, 'hint');
+    }, 32000);
   }
 
   function nextQuest() {
@@ -1770,6 +1978,7 @@
 
   function finishQuest() {
     if (!quest) return;
+    clearIdle();
     const q = quest;
     const total = q.words.length;
     const pct = total ? q.correct / total : 0;
@@ -1829,7 +2038,10 @@
       }).join('')}</div>
 
       <div class="quest-log" id="qlog">
-        ${quest.log.map(m => m.who === 'ara'
+        ${quest.log.map(m => m.thinking
+          ? `<div class="q-row"><div class="q-ara">${Ara.svg({ level: Game.levelFor(Store.db.game.points), width: 34, mood: 'happy', plain: true })}</div>
+               <div class="q-bubble thinking" aria-label="Ara is writing"><span class="q-dots"><i></i><i></i><i></i></span></div></div>`
+          : m.who === 'ara'
           ? `<div class="q-row"><div class="q-ara">${Ara.svg({ level: Game.levelFor(Store.db.game.points), width: 34, mood: 'happy', plain: true })}</div>
                <div class="q-bubble ${m.cls}">${m.html}
                  ${m.voice ? `<button type="button" class="q-say" data-say-text="${esc(m.voice)}"
@@ -1844,16 +2056,17 @@
         </div>`
       : `
         <div class="quest-compose">
-          <input type="text" id="qIn" class="quest-input" placeholder="type the spelling…"
+          <input type="text" id="qIn" class="quest-input" placeholder="type the spelling — or ask me anything…"
                  autocomplete="off" autocapitalize="off" spellcheck="false" enterkeyhint="send">
-          <button class="btn-primary" id="qSend">Send</button>
+          <button class="btn-primary" id="qSend"${quest.busy ? ' disabled' : ''}>Send</button>
         </div>
         <div class="row center wrap" style="gap:8px;margin-top:10px">
           <button class="btn-quiet btn-s" id="qHear">${Icon.icon('speaker', { size: 15 })} Read the clue again</button>
           ${quest.extraClue ? `<button class="btn-quiet btn-s" id="qMore">💡 Another clue</button>` : ''}
           ${window.U.speedBtn()}
         </div>
-        <p class="hint center-text" style="margin-top:8px">No rush — spelling it yourself is the whole point.</p>`}`;
+        <p class="hint center-text" style="margin-top:8px">No rush — spelling it yourself is the whole point.
+           Stuck? Just ask me, like <i>“why two Ls?”</i> 💬</p>`}`;
 
     const log = $('#qlog');
     if (log) log.scrollTop = log.scrollHeight;
@@ -1885,6 +2098,7 @@
   }
 
   async function confirmQuitQuest() {
+    clearIdle();
     const yes = await window.U.confirmBox('Stop the quest?',
       'Every word you got right still counts, and Ara keeps what you practised.', 'Yes, stop');
     if (!yes) return;

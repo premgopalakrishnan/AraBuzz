@@ -680,6 +680,29 @@ Use British English. Mix single words and short terms. Avoid words that are triv
     } catch (e) { return { sent: false, reason: 'offline' }; }
   }
 
+  /** One live line from Ara, mid-game. Costs about a tenth of a penny and
+   *  is allowed to fail: the game always has its own line ready, so this
+   *  returns null rather than throwing when there is no signal, no account,
+   *  or the model is slow. `ms` is how long the game is willing to wait. */
+  async function coachTurn(payload, ms) {
+    if (!window.Cloud || !Cloud.signedIn() || !Cloud.token) return null;
+    if (navigator.onLine === false) return null;
+    const ctl = ('AbortController' in window) ? new AbortController() : null;
+    const timer = setTimeout(() => { try { ctl && ctl.abort(); } catch (e) {} }, ms || 6000);
+    try {
+      const res = await fetch('/api/coach-turn', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json', authorization: 'Bearer ' + Cloud.token },
+        body: JSON.stringify(payload),
+        signal: ctl ? ctl.signal : undefined
+      });
+      const j = await res.json();
+      return (j && j.line) ? String(j.line) : null;
+    } catch (e) {
+      return null;
+    } finally { clearTimeout(timer); }
+  }
+
   w.API = { hasKey, usingOwnKey, key, modelFor, readDeck, enrich, topUp, onboardingReport,
-            memoryTricks, coachReport, topicList, test, noteReady, estCost, RATES };
+            memoryTricks, coachReport, topicList, test, noteReady, coachTurn, estCost, RATES };
 })(window);

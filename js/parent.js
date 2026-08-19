@@ -1114,7 +1114,7 @@ Reflex = A quick automatic response"></textarea>
         const kidName = stillActive
           ? (Store.db.profile && Store.db.profile.name)
           : (bag.profile && bag.profile.name);
-        const html = row.html || (res ? renderCloudNote(res, pay, row, kidName) : null);
+        const html = noteFragment(row.html) || (res ? renderCloudNote(res, pay, row, kidName) : null);
         if (!html) return;
         bag.reports.push({
           id: Store.uid('r'), cloudId: row.id,
@@ -1209,7 +1209,40 @@ Reflex = A quick automatic response"></textarea>
         <p>${esc(r.motivation || '')}</p>
         ${r.sayToThem ? `<blockquote>Something worth saying:<br><b>“${esc(r.sayToThem)}”</b></blockquote>` : ''}
       </div>`;
-    return wrapReportHTML(inner);
+    /* A fragment, not a document. wrapReportHTML() belongs to the export
+       path alone — see noteFragment() above for what wrapping here cost. */
+    return inner;
+  }
+
+  /* ----------------------------------------------------------------------
+     A note is stored as a PIECE of a page, never a whole one.
+
+     This is the bug Prem photographed. Notes used to be saved as a complete
+     HTML document — doctype, <head>, the export stylesheet, the lot — and
+     then dropped into the live app with innerHTML. The browser throws away
+     the <html> and <body> wrappers but KEEPS the <style>, so an export sheet
+     meant for a printed page took over the whole screen: a white page in the
+     middle of the dark theme, and `.no-print{display:none}` quietly hiding
+     the Download-as-PDF buttons everywhere. The blockquotes were the worst of
+     it — they kept the theme's dark background and inherited the export
+     sheet's dark text, which is two dark greys on top of each other.
+
+     Notes are now stored as a fragment. This function repairs the ones that
+     were already saved the old way, so nothing has to be written again. */
+  function noteFragment(html) {
+    const s = String(html || '');
+    if (!/<!DOCTYPE|<html[\s>]/i.test(s)) return s;      // already a fragment
+    try {
+      const doc = new DOMParser().parseFromString(s, 'text/html');
+      doc.querySelectorAll('style, .ab-disclaimer').forEach(n => n.remove());
+      const node = doc.querySelector('.report') || doc.body.firstElementChild;
+      if (!node) return doc.body.innerHTML;
+      node.classList.add('card');                         // the wrapper drops it
+      node.classList.add('report');
+      return node.outerHTML;
+    } catch (e) {
+      return s.replace(/<style[\s\S]*?<\/style>/gi, '');
+    }
   }
 
   let onboardFixInFlight = false;
@@ -1304,7 +1337,7 @@ Reflex = A quick automatic response"></textarea>
       const out = $('#reportOut');
       out.innerHTML = `<div class="card" style="margin-top:14px">
           ${reportToolbar(r.range || 'Note')}
-        </div>${r.html}`;
+        </div>${noteFragment(r.html)}`;
       wireReport(out);
       out.scrollIntoView({ behavior: 'smooth', block: 'start' });
     });
@@ -1701,7 +1734,9 @@ Reflex = A quick automatic response"></textarea>
         <p class="small muted">Written from the twenty answers of the first check — a strong
            starting sketch that daily practice now sharpens. The weekly notes take it from here.</p>
       </div>`;
-    return wrapReportHTML(inner);
+    /* A fragment, not a document. wrapReportHTML() belongs to the export
+       path alone — see noteFragment() above for what wrapping here cost. */
+    return inner;
   }
 
   async function generateReport() {
@@ -1916,6 +1951,131 @@ Reflex = A quick automatic response"></textarea>
      with it, in a box nobody can skim past. The words match the promises
      made on the consent screen, deliberately.
      ====================================================================== */
+  /* ======================================================================
+     VOICE CHECK
+     Every device keeps two different lists: the voices it shows in its own
+     settings, and the shorter list it is willing to hand to a web app. They
+     are not the same, and on some devices they are not even close — which is
+     why "go and download a better voice" is advice that can quietly fail.
+
+     So rather than tell a parent what should be there, show them what IS
+     there, on the device in their hand, with a play button on each.
+     ====================================================================== */
+  function platformGuess() {
+    const ua = navigator.userAgent || '';
+    const touchMac = /Macintosh/.test(ua) && navigator.maxTouchPoints > 1;   // iPad pretending
+    if (/iPhone|iPad|iPod/.test(ua) || touchMac) return 'ios';
+    if (/Android/.test(ua)) return 'android';
+    if (/Macintosh/.test(ua)) return 'mac';
+    if (/Windows/.test(ua)) return 'windows';
+    return 'other';
+  }
+
+  const VOICE_HELP = {
+    ios: {
+      title: 'On an iPad or iPhone',
+      steps: [
+        'Open <b>Settings</b> and pull the list down to reveal the <b>search box</b> at the very top.',
+        'Type <b>Voices</b> — it goes straight to the right screen. (On iPadOS 26 the long way round is Accessibility → <b>Read &amp; Speak</b> → Voices; on older versions it is Accessibility → <b>Spoken Content</b> → Voices.)',
+        'Tap <b>English</b>, then tap a voice marked <b>Enhanced</b> or <b>Premium</b> and let it download.',
+        'Come back here and press <b>Check again</b> — if the new voice appears in the list above, choose it.'
+      ],
+      note: 'Apple only shares some of its voices with web apps, and on iOS 26 downloads sometimes stall. If nothing new appears here, nothing is wrong at your end — the device is simply not offering it.'
+    },
+    android: {
+      title: 'On an Android phone or tablet',
+      steps: [
+        'Open <b>Settings</b> → <b>Accessibility</b> → <b>Text-to-speech output</b> (on some phones: Settings → General management → Text-to-speech).',
+        'Make sure the engine is <b>Google Speech Services</b>, then tap the <b>gear</b> beside it.',
+        'Tap <b>Install voice data</b> → <b>English</b> and download a voice — the ones ending in a higher number are the better recordings.',
+        'Come back here and press <b>Check again</b>.'
+      ],
+      note: 'Chrome and Samsung Internet both read from this same list, so doing it once fixes every browser on the device.'
+    },
+    windows: {
+      title: 'On a Windows computer',
+      steps: [
+        'Open <b>Settings</b> → <b>Time &amp; language</b> → <b>Speech</b> → <b>Manage voices</b> → <b>Add voices</b>, and add an English voice.',
+        'Use <b>Microsoft Edge</b> if you can — on Windows 11 it offers the <b>Natural</b> voices, which are the best free ones anywhere.',
+        'Come back here and press <b>Check again</b>.'
+      ],
+      note: 'If you see a voice with "Natural" in its name, choose it — it is recorded from a person rather than assembled from fragments.'
+    },
+    mac: {
+      title: 'On a Mac',
+      steps: [
+        'Open <b>System Settings</b> → <b>Accessibility</b> → <b>Spoken Content</b> → <b>System Voice</b> → <b>Manage Voices…</b>',
+        'Download an English voice marked <b>Enhanced</b> or <b>Premium</b>.',
+        'Come back here and press <b>Check again</b>.'
+      ],
+      note: ''
+    },
+    other: { title: 'On this device', steps: ['Look for “text to speech” or “spoken content” in your system settings and add an English voice.'], note: '' }
+  };
+
+  function voiceCheckHTML() {
+    const list = (window.U.voiceList ? window.U.voiceList() : []);
+    const help = VOICE_HELP[platformGuess()] || VOICE_HELP.other;
+    const best = list.filter(v => v.grade > 0);
+
+    return `
+      <div class="card" id="voiceCheck" style="margin-top:14px;background:var(--paper-2)">
+        <h3>Voice check</h3>
+        <p class="muted small" style="margin-top:0">Every device keeps a shorter list of voices for web apps than
+           it shows in its own settings. This is the <b>real</b> list on this device — tap one to hear it.</p>
+
+        ${list.length ? `<div class="row wrap" style="gap:8px;margin:12px 0">
+          ${list.map(v => `<button class="btn-quiet btn-s" data-tryvoice="${esc(v.uri)}"
+             title="${esc(v.lang)}">${v.grade > 0 ? '★ ' : ''}${esc(v.name)}</button>`).join('')}
+        </div>` : `<p class="small" style="margin:12px 0"><b>This device is not offering AraBuzz any voices yet.</b>
+           On an iPad this sometimes clears after the app is closed and opened once.</p>`}
+
+        <p class="small ${best.length ? 'sage-text' : 'muted'}" style="margin:0 0 12px">
+          ${best.length
+            ? `★ ${window.U.plural(best.length, 'better voice')} available here — those are the ones recorded from a real person. AraBuzz already prefers them.`
+            : 'None of these are the higher-quality recordings. The steps below add one.'}</p>
+
+        <details${best.length ? '' : ' open'}>
+          <summary><b>${help.title}</b> — how to add a better voice</summary>
+          <ol class="small" style="margin:10px 0 0;padding-left:20px">
+            ${help.steps.map(x => `<li style="margin-bottom:6px">${x}</li>`).join('')}
+          </ol>
+          ${help.note ? `<p class="hint" style="margin-top:10px">${help.note}</p>` : ''}
+        </details>
+
+        <div class="row wrap" style="gap:8px;margin-top:12px">
+          <button class="btn-ghost btn-s" id="voiceAgain">Check again</button>
+          <button class="btn-quiet btn-s" id="voiceFullGuide">Full guide, device by device</button>
+        </div>
+      </div>`;
+  }
+
+  function wireVoiceCheck() {
+    window.U.$$('[data-tryvoice]').forEach(b => b.onclick = () => {
+      const s = Store.db.settings;
+      s.voiceURI = b.dataset.tryvoice;
+      Store.save(true);
+      const sel = $('#voice'); if (sel) sel.value = s.voiceURI;
+      window.U.speak('Well done. Now try spelling this one: necessary.');
+      toast('That voice is now the one AraBuzz uses.', '', 2600);
+    });
+    const again = $('#voiceAgain');
+    if (again) again.onclick = () => {
+      window.U.loadVoices();
+      const box = $('#voiceCheck');
+      if (box) { box.outerHTML = voiceCheckHTML(); wireVoiceCheck(); }
+    };
+    /* The device-by-device guide lives in the sign-up flow, which a family
+       who joined months ago will never walk through again. It is the same
+       page — reached from here, and it comes straight back. */
+    const full = $('#voiceFullGuide');
+    if (full) full.onclick = () => {
+      if (window.Onboard && Onboard.installGuide) {
+        Onboard.installGuide(() => { Onboard.close(); paint({ tab: 'settings' }); });
+      }
+    };
+  }
+
   function disclaimerHTML() {
     return `
     <div class="ab-disclaimer">
@@ -2386,6 +2546,7 @@ ${disclaimerHTML()}</body></html>`;
           </select>
           <button class="btn-ghost btn-s" id="testVoice" style="margin-top:8px">Test</button>
         </div>
+        ${voiceCheckHTML()}
         <label class="row" style="gap:10px;cursor:pointer;margin-top:6px">
           <input type="checkbox" id="sound" ${s.sound ? 'checked' : ''} style="width:auto"> Sound effects
         </label>
@@ -2489,7 +2650,9 @@ ${disclaimerHTML()}</body></html>`;
       document.documentElement.setAttribute('data-theme', s.theme === 'dark' ? 'dark' : '');
       if (window.Scene) Scene.update(true);
     });
-    $('#testVoice').onclick = () => { s.voiceURI = $('#voice').value; window.U.speak('Cerebellum'); };
+    $('#testVoice').onclick = () => { s.voiceURI = $('#voice').value; Store.save(true);
+      window.U.speak('Well done. Now try spelling this one: cerebellum.'); };
+    wireVoiceCheck();
     if ($('#kidName')) $('#kidName').onchange = e => { Store.db.profile.name = e.target.value.trim() || 'Speller'; Store.save(true); UI.syncVault(); };
 
     if ($('#changePin')) $('#changePin').onclick = async () => {

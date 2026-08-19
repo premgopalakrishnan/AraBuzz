@@ -1154,3 +1154,17 @@ body.bootwait #madeBy { display: none !important; }
          color: var(--ink-faint); vertical-align: middle; line-height: 1; }
 .q-say:hover { color: var(--gold-deep); }
 .q-from { font-size: .78rem; color: var(--ink-faint); margin: 6px 0 0 !important; font-style: italic; }
+
+/* --- Ara, writing -------------------------------------------------------
+   Three dots while a live reply is on its way. She sees them the instant she
+   presses Send, so the game is never silently waiting on a network. */
+.q-bubble.thinking { padding: 14px 18px; }
+.q-dots { display: inline-flex; gap: 5px; align-items: center; }
+.q-dots i { width: 7px; height: 7px; border-radius: 50%; background: var(--ink-faint);
+  display: block; animation: qdot 1.05s infinite ease-in-out; }
+.q-dots i:nth-child(2) { animation-delay: .16s; }
+.q-dots i:nth-child(3) { animation-delay: .32s; }
+@keyframes qdot { 0%, 60%, 100% { opacity: .28; transform: translateY(0); }
+                  30% { opacity: 1; transform: translateY(-3px); } }
+@media (prefers-reduced-motion: reduce) { .q-dots i { animation: none; opacity: .55; } }
+.sage-text { color: var(--jade); }

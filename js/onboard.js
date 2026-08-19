@@ -649,6 +649,39 @@
         </details>`).join('')}
       <p class="hint">Why it matters on an iPad: Safari can delete saved data for sites that
          only ever live in a browser tab. An installed AraBuzz is safe from that.</p>
+
+      <h2 style="margin-top:26px">While you are here: a better reading voice</h2>
+      <p class="muted small">AraBuzz reads clues and corrections aloud using a voice that belongs to the
+         device, not to us. Most devices arrive with the plainest one switched on — the robotic one. The
+         better recordings are free, already on the device or a short download away, and they make a real
+         difference to a child who is listening rather than reading.</p>
+      ${[
+        ['iPhone & iPad', [
+          `Open <b>Settings</b>, pull the list down to reveal the <b>search box</b> at the top, and type <b>Voices</b>.`,
+          `(The long way: Accessibility → <b>Read &amp; Speak</b> → Voices on iPadOS 26, or Accessibility → <b>Spoken Content</b> → Voices on older versions.)`,
+          `Tap <b>English</b>, then a voice marked <b>Enhanced</b> or <b>Premium</b>, and let it download.`
+        ]],
+        ['Android', [
+          `<b>Settings</b> → <b>Accessibility</b> → <b>Text-to-speech output</b> (some phones: Settings → General management → Text-to-speech).`,
+          `Set the engine to <b>Google Speech Services</b>, tap the <b>gear</b> beside it.`,
+          `<b>Install voice data</b> → <b>English</b>, and download a voice. Chrome and Samsung Internet both use this list.`
+        ]],
+        ['Windows — Edge or Chrome', [
+          `<b>Settings</b> → <b>Time &amp; language</b> → <b>Speech</b> → <b>Manage voices</b> → <b>Add voices</b>.`,
+          `On Windows 11, <b>Edge</b> offers the <b>Natural</b> voices — the best free ones available in a browser.`
+        ]],
+        ['Mac — Safari or Chrome', [
+          `<b>System Settings</b> → <b>Accessibility</b> → <b>Spoken Content</b> → <b>System Voice</b> → <b>Manage Voices…</b>`,
+          `Download an English voice marked <b>Enhanced</b> or <b>Premium</b>.`
+        ]]
+      ].map(([name, steps]) => `
+        <details style="border-bottom:1px solid var(--line);padding:11px 0">
+          <summary style="cursor:pointer;font-weight:600">${name}</summary>
+          <ol class="ob-steps" style="margin-top:10px">${steps.map(t => `<li>${t}</li>`).join('')}</ol>
+        </details>`).join('')}
+      <p class="hint">Afterwards, open <b>Grown-ups → Settings → Voice check</b> to hear every voice this
+         device is actually offering and choose the one you like. Devices do not always hand a web app
+         everything they have, so that panel is the honest answer rather than the hopeful one.</p>
       <button class="btn-quiet btn-wide" id="obBackBtn" style="margin-top:14px">← Back</button>`,
       { tag: 'Install the app' });
 
