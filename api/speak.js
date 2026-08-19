@@ -24,7 +24,7 @@
    falls straight back to the device's own voice. Nothing breaks.
    ========================================================================== */
 
-import { whoIs, serviceCount, rpcAsUser, send } from './_lib.js';
+import { whoIs, serviceCount, rpcAsUser, rpcAsServer, send } from './_lib.js';
 import crypto from 'node:crypto';
 
 const SUPA    = process.env.SUPABASE_URL;
@@ -47,6 +47,19 @@ const VOICE     = process.env.TTS_VOICE || 'en-GB-SoniaNeural';
 const BUCKET    = 'tts';
 const MAX_CHARS = 600;                  // one line of Ara, generously
 const DAY_LINES = 400;                  // per family, per day
+
+/* --------------------------------------------------------- the hard ceiling
+   Prem's rule, and the right one: this may cost nothing, ever. The service
+   gives 500,000 characters a month; AraBuzz stops at 460,000 and spends the
+   rest of the month on the device's own voice. The margin is deliberate —
+   the count here is what AraBuzz asked for, and a service may round or bill
+   a little differently, so the last 8% is left as air rather than trusted.
+
+   Counted across every family, because the allowance is one allowance. Only
+   NEW lines count: anything already recorded is served from storage and
+   never reaches the service at all, which is what keeps the number low. */
+const MONTHLY_FREE  = Number(process.env.TTS_MONTHLY_CHARS || 500000);
+const MONTHLY_STOP  = Math.floor(MONTHLY_FREE * 0.92);
 
 const hash = (s) => crypto.createHash('sha256').update(s).digest('hex').slice(0, 40);
 const xml  = (t) => String(t).replace(/&/g, '&amp;').replace(/</g, '&lt;')
@@ -143,6 +156,17 @@ export default async function handler(req, res) {
     const spoken = await serviceCount(
       `api_usage?family_id=eq.${who.parent.family_id}&kind=eq.speak&ts=gte.${encodeURIComponent(since)}&select=id`);
     if (spoken >= DAY_LINES) return send(res, 429, { error: 'daily-limit' });
+
+    /* The month's allowance, across everybody. Once it is gone the device's
+       own voice finishes the month — a plainer voice is a far better outcome
+       than a surprise bill, and nothing else about the app changes. */
+    let used = 0;
+    try { used = Number(await rpcAsServer('speak_chars_this_month')) || 0; }
+    catch (e) { console.warn('[speak] could not read the month', e.message); }
+    if (used + text.length > MONTHLY_STOP) {
+      console.warn(`[speak] monthly allowance reached (${used} characters) — device voices until next month`);
+      return send(res, 503, { error: 'monthly-limit', used, ceiling: MONTHLY_STOP });
+    }
 
     const audio = await synthesise(text, rate);
     await toStore(name, audio);

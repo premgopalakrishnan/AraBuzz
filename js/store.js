@@ -40,7 +40,7 @@
       sound: true,
       speakRate: 0.85,
       voiceURI: '',
-      cloudVoice: true,        // use the good voice when the app can reach it
+      cloudVoice: false,       // off until a parent turns it on, eyes open
       dailyGoal: 1,
       allowSpotSpelling: true,
       warnCallsPerWeek: 40

@@ -371,12 +371,26 @@
      ====================================================================== */
   const cloudCache = new Map();      // text|rate → object URL, for this session
   let cloudOff = false;              // set once the server says it has no voice
+  let cloudWhy = '';                 // …and why, so a parent can be told
   let audioEl = null;                // ONE element, unlocked once (see below)
   let audioReady = false;
 
+  /* This is an Apple problem and nowhere else's. Android hands Chrome the
+     full Google voice list, Windows gives Edge the Natural voices, a Mac has
+     its Enhanced ones — all of them good, all of them instant, none of them
+     costing a thing. Only iPhone and iPad are fenced off from the voices
+     their owner downloaded. So AraBuzz's own voice is offered THERE, and the
+     allowance is not spent on devices that never needed it. */
+  function appleTouch() {
+    const ua = navigator.userAgent || '';
+    return /iPhone|iPad|iPod/.test(ua) ||
+           (/Macintosh/.test(ua) && navigator.maxTouchPoints > 1);   // iPad in disguise
+  }
+
   function cloudWanted() {
     const s = (window.Store && Store.db && Store.db.settings) || {};
-    if (s.cloudVoice === false) return false;      // a parent turned it off
+    if (s.cloudVoice !== true) return false;       // off unless a parent said yes
+    if (!appleTouch() && s.cloudVoiceAnywhere !== true) return false;
     if (cloudOff) return false;
     if (navigator.onLine === false) return false;
     return !!(window.Cloud && Cloud.signedIn && Cloud.signedIn() && Cloud.token);
@@ -411,7 +425,14 @@
       body: JSON.stringify({ text, rate,
         childId: (window.Sync && Store.db && Sync.isDbId(Store.db.activeChildId)) ? Store.db.activeChildId : null })
     });
-    if (res.status === 503) { cloudOff = true; return null; }   // no voice service configured
+    if (res.status === 503) {
+      /* Either no voice service is set up, or the month's allowance is spent.
+         Both mean the same thing to a child — the device speaks instead —
+         but a parent deserves to know which. */
+      cloudOff = true;
+      try { cloudWhy = (await res.json()).error || 'unavailable'; } catch (e) { cloudWhy = 'unavailable'; }
+      return null;
+    }
     if (!res.ok) return null;
     const url = URL.createObjectURL(await res.blob());
     if (cloudCache.size > 120) {                                 // a sitting's worth
@@ -871,6 +892,7 @@
     $, $$, el, esc, toast, modal, closeAllModals, confirmBox, promptBox, confetti, floatPoints,
     beep, speak, speakWordThen, spellOut, loadVoices, bestVoice, voiceList, voiceGrade,
     unlockAudio, stopCloud,
+    cloudVoiceState: () => ({ off: cloudOff, why: cloudWhy, needed: appleTouch() }),
     noveltyCount, variantCount, onVoices,
     speedBtn, sayMeaningBtn,
     fmtDate, fmtDay, pct, plural, daysBetween, noAutoCorrect,

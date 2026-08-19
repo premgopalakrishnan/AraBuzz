@@ -28,7 +28,7 @@
      reads only the bold parts they still know the six things that matter.
      ========================================================================== */
   const CONSENT = {
-    version: '1.3',   // 1.2 the live conversation; 1.3 the voice that reads aloud
+    version: '1.2',   // the live conversation in Spell Quest
     title: 'Before you start',
     intro: [
       `AraBuzz is a small spelling app, made by a parent, for a handful of children
@@ -103,18 +103,20 @@
             this</b> — every other game runs entirely on the device, with no connection
             at all. Played with no connection, Spell Quest still works and every answer
             still counts: Ara simply gives shorter hints written by the app itself.` },
-      { h: 'The voice that reads to your child.',
-        p: `AraBuzz reads a lot aloud — the word, your school's definition, the correction when a
-            spelling goes wrong. Normally it uses a voice belonging to the device itself, and
-            nothing leaves. On an iPad that voice is poor and cannot be improved: Apple lets a
-            proper app use the better voices you download but does not share them with a web app
-            like this one, whatever you install. So AraBuzz can make the audio itself instead,
-            through a speech service (Microsoft Azure), which means the <b>sentence being read
-            aloud</b> is sent there to be turned into sound — sometimes including a line about
-            what your child just typed. It is used to make that recording and nothing else, and
-            the recording is then kept so the same sentence is never sent twice. You can turn
-            this off in <b>Grown-ups → Settings → Voice check</b>, and the device's own voice
-            takes over immediately.` },
+      { h: 'The voice that reads to your child — and one thing you may switch on.',
+        p: `AraBuzz reads a lot aloud: the word, your school's definition, the correction when a
+            spelling goes wrong. It uses a voice belonging to the device itself, and none of that
+            leaves the device. <b>That is how it works unless you decide otherwise.</b>
+            On an iPad the built-in voice is poor and cannot be improved — Apple lets a proper app
+            use the better voices you download but does not share them with a web app like this
+            one, whatever you install. So there is an <b>optional</b> switch under
+            <b>Grown-ups → Settings → Voice check</b> that has AraBuzz make the audio itself
+            through a speech service (Microsoft Azure). It is <b>off</b>, and stays off until you
+            turn it on. If you do, the sentence being read aloud is sent there to become sound —
+            sometimes a line quoting what your child just typed — used for the recording and
+            nothing else, and kept so the same sentence is never sent twice. The switch explains
+            all of this again at the moment you use it, and switching it back off returns to the
+            device's own voice at once.` },
       { h: 'What we collect, which is deliberately very little.',
         p: `Your name, email and mobile. Your child’s first name only, a chosen avatar,
             and their answers to spelling questions. No photographs, no address, no date of
