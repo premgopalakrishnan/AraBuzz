@@ -1572,10 +1572,23 @@
     };
 
     UI.go('puzzle');
+    watchNetwork();
     say(`<b>🏆 ${esc(quest.title)}</b>`);
     say(`Here is how it works: I give you a clue, you type the spelling. ` +
         `Get it and you earn a star ⭐. Miss it and I give you a hint, then you try ` +
         `again — I never just hand you the answer. 😉`);
+
+    /* This is the one game that talks back, and talking back needs a line to
+       the outside world. Say so at the door, in her language, rather than
+       letting her wonder later why I have gone quiet and simple. */
+    if (araIsLive()) {
+      say(`You can <b>talk to me</b> in here too — ask me anything about a word and I will ` +
+          `answer properly. <span class="q-from">Just this game needs the internet for that. 📶</span>`);
+    } else {
+      say(`⚠️ <b>No internet right now</b>, so I cannot chat properly — my hints will be ` +
+          `shorter and simpler than usual. Everything still counts, and every star is ` +
+          `still yours. Come back online when you can and I will be my chatty self again. 😊`, 'hint');
+    }
     say(`<b>${words.length} words.</b> Ready? Here we go! 👇`);
     paintQuest();
     clearIdle();
@@ -1646,6 +1659,15 @@
      slow, she never notices: the net catches it in the same bubble.
      ====================================================================== */
 
+  /** Can Ara actually hold a conversation right now? He needs three things:
+   *  a connection, a signed-in family account, and the app's own server. Any
+   *  one missing and the game still plays perfectly — he is simply briefer. */
+  function araIsLive() {
+    if (navigator.onLine === false) return false;
+    if (!window.API || !API.coachTurn) return false;
+    return !!(window.Cloud && Cloud.signedIn && Cloud.signedIn() && Cloud.token);
+  }
+
   const flatten = t => String(t || '').toLowerCase().replace(/[^a-z]/g, '');
 
   /** Everything the app knows about her answer, as plain facts a model can
@@ -1709,6 +1731,16 @@
    * words if it does not. Always resolves — the game never waits on a network.
    */
   async function araLine(kind, wd, given, facts, fallbackHTML, cls) {
+    /* No connection, no pretending. Skipping the dots entirely is what makes
+       an offline game feel finished rather than broken — she never waits for
+       something that was never coming. */
+    if (!araIsLive()) {
+      const plain = plainOf(fallbackHTML);
+      quest.log.push({ who: 'ara', html: fallbackHTML, cls: cls || 'hint', voice: plain });
+      paintQuest();
+      setTimeout(() => window.U.speak(plain), 220);
+      return;
+    }
     const id = thinking();
     let line = null;
     try {
@@ -2032,6 +2064,9 @@
         </div>
       </div>
 
+      ${araIsLive() ? '' : `<div class="q-offline" id="qOffline">
+        <b>No internet</b> — connect for better answers</div>`}
+
       <div class="qbar" style="margin-bottom:10px">${quest.words.map((_, k) => {
         const done = quest.round === 2 || k < quest.i;
         return `<span class="${done ? 'done' : (quest.round === 1 && k === quest.i ? 'now' : '')}"></span>`;
@@ -2095,6 +2130,18 @@
     inp.onkeydown = e => { if (e.key === 'Enter') { e.preventDefault(); send(); } };
     window.U.noAutoCorrect(inp);
     setTimeout(() => { try { inp.focus({ preventScroll: true }); } catch (e) { inp.focus(); } }, 80);
+  }
+
+  /* The connection can come and go mid-game. Repaint when it does, so the
+     pill is never a stale claim — and so Ara starts talking again the moment
+     he can, without her having to restart anything. */
+  let netWatch = false;
+  function watchNetwork() {
+    if (netWatch) return;
+    netWatch = true;
+    const onNet = () => { if (quest && !quest.over) paintQuest(); };
+    w.addEventListener('online', onNet);
+    w.addEventListener('offline', onNet);
   }
 
   async function confirmQuitQuest() {

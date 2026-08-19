@@ -1168,3 +1168,15 @@ body.bootwait #madeBy { display: none !important; }
                   30% { opacity: 1; transform: translateY(-3px); } }
 @media (prefers-reduced-motion: reduce) { .q-dots i { animation: none; opacity: .55; } }
 .sage-text { color: var(--jade); }
+
+/* --- the one game that wants a connection ------------------------------
+   Small enough to ignore while she plays, clear enough that nobody wonders
+   why Ara has gone quiet. Only Spell Quest ever shows it. */
+.q-offline {
+  display: block; text-align: center; margin: 0 0 10px;
+  font-size: .72rem; line-height: 1.5; letter-spacing: .01em;
+  padding: 5px 12px; border-radius: 999px;
+  background: var(--clay-soft); color: var(--clay);
+  border: 1px solid rgba(199,106,74,.22);
+}
+.q-offline b { font-weight: 650; }

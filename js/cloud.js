@@ -22,7 +22,11 @@
   const SCHEMA = 'arabuzz';
 
   /** The wording currently in force. Bump this and every parent is asked again. */
-  const CONSENT_VERSION = '1.1';
+  /* 1.2 — Spell Quest now sends a child's attempt to Anthropic live, mid-game,
+     to be answered. That is a real change to where her words go, so every
+     family is asked again rather than being moved onto it quietly. Bumping
+     this is what makes the ask happen; the wording lives in onboard.js. */
+  const CONSENT_VERSION = '1.2';
 
   let sb = null;          // the Supabase client
   let session = null;     // the signed-in session, or null

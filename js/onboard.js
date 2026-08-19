@@ -28,7 +28,7 @@
      reads only the bold parts they still know the six things that matter.
      ========================================================================== */
   const CONSENT = {
-    version: '1.1',
+    version: '1.2',   // 1.2 adds the live conversation in Spell Quest
     title: 'Before you start',
     intro: [
       `AraBuzz is a small spelling app, made by a parent, for a handful of children
@@ -76,6 +76,16 @@
             (Anthropic’s API), so your child’s spelling attempts are sent there to
             produce them. Anthropic does not use this to train their models. Everything
             else stays on your device and in a private database.` },
+      { h: 'One game talks back, and that one needs the internet.',
+        p: `<b>Spell Quest</b> is a conversation: your child types a spelling, and Ara
+            replies about the letters <i>she actually wrote</i> — and she can ask him
+            questions mid-game. Those replies are written in the moment by an AI engine
+            (Anthropic’s Claude Haiku), so while she plays that game her attempt, the
+            word, and the school’s own definition of it are sent there to be answered.
+            Nothing else about her goes with it, and no reply is ever allowed to contain
+            the word she is trying to spell. Every other game runs entirely on the
+            device. Played with no connection, Spell Quest still works and every answer
+            still counts — Ara simply gives shorter hints written by the app itself.` },
       { h: 'What we collect, which is deliberately very little.',
         p: `Your name, email and mobile. Your child’s first name only, a chosen avatar,
             and their answers to spelling questions. No photographs, no address, no date of
@@ -732,6 +742,20 @@
            <a href="#" id="obInstallHow"><b>How to install it \u2192</b></a></p>
       </div>
 
+      <div class="ob-warn" style="border-color:var(--jade);margin-top:12px">
+        <b>Two minutes that make a real difference: a better reading voice.</b>
+        <p><b>On an iPad or iPhone:</b> open <b>Settings</b>, pull the list down to reveal
+           the <b>search box</b> at the top, type <b>Voices</b>, tap <b>English</b>, and
+           download a voice marked <b>Enhanced</b> or <b>Premium</b>. AraBuzz reads clues
+           and corrections aloud, and the voice a device arrives with is the flat robotic
+           one — the better recordings are free and sound like a person.</p>
+        <p class="hint" style="margin:8px 0 0">Ignore anything called <b>Siri Voice</b>; Apple
+           keeps those for Siri and never shares them with an app like this. Other devices,
+           and a live check of which voices actually reached AraBuzz, are under
+           <b>Grown-ups → Settings → Voice check</b>.
+           <a href="#" id="obVoiceHow"><b>All devices \u2192</b></a></p>
+      </div>
+
       <button class="btn-primary btn-wide" id="obGo" data-label="I’ve handed it over">
         I’ve handed it over</button>
       <button class="btn-quiet btn-wide" id="obBackBtn" style="margin-top:10px">← Back</button>`,
@@ -740,6 +764,7 @@
     $('#obGo').onclick = () => finish();
     $('#obBackBtn').onclick = () => askDevice();
     $('#obInstallHow').onclick = (e) => { e.preventDefault(); installGuide(handOver); };
+    $('#obVoiceHow').onclick = (e) => { e.preventDefault(); installGuide(handOver); };
   }
 
   function finish() {

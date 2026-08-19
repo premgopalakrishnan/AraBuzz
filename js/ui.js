@@ -633,7 +633,7 @@
     // it is everything combined, including a small crossword, so it reads as the
     // real thing to work up to.
     const modes = [
-      { k: 'quest', ic: 'trophy', t: 'Spell Quest', d: 'Ara gives you a clue, you type the spelling — the whole list, one at a time, until you beat it.', ribbon: 'NEW' },
+      { k: 'quest', ic: 'trophy', t: 'Spell Quest', d: 'Ara gives you a clue, you type the spelling — the whole list, one at a time, until you beat it. Talk to him back; this one is better with the internet on. 📶', ribbon: 'NEW' },
       { k: 'spellbuzz', ic: 'pencil', t: 'Spell Buzz', d: 'Read the clue, spell the word. Just like the test at school.', ribbon: 'START HERE' },
       { k: 'rush', ic: 'keys', t: 'Word Rush', d: 'Typing game. Copy it, watch it vanish, then type it from memory.' },
       { k: 'listen', ic: 'ear', t: 'Listen & Spell', d: 'I say the word out loud. You spell it.' },
