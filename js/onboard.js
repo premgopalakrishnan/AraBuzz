@@ -124,14 +124,6 @@
             you approve are kept, and they belong to that child alone — not to another family, and
             not to a brother or sister on your own account. This is entirely optional; ignore it and
             AraBuzz works exactly as before.` },
-      { h: 'What Prem can see, and how you know when he looks.',
-        p: `Prem runs AraBuzz. When something goes wrong he can open your family's screens and see
-            them exactly as you see them — your child's progress, their notes, their words,
-            including any you approved from a photographed page. He cannot see the photograph,
-            because no photograph is ever kept. <b>Every time he opens your family, it is recorded
-            with the time</b>, and he cannot open it at all unless that record is written first.
-            Looking is all he can do by default; changing anything on your behalf takes a second,
-            deliberate step, and that is recorded too.` },
       { h: 'What we collect, which is deliberately very little.',
         p: `Your name, email and mobile. Your child’s first name only, a chosen avatar,
             and their answers to spelling questions. No photographs, no address, no date of

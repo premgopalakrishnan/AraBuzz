@@ -65,6 +65,14 @@
     paint(opts);
   }
 
+  /** "Her own work", "His own work", "Their own work" — whichever is true of
+   *  the child on screen. It was hardcoded to "Her", which is fine for
+   *  Aradhana and wrong for every boy in the group. */
+  function ownWorkLabel() {
+    const p = window.U.pronouns(Store.db.profile && Store.db.profile.pronoun);
+    return `${p.Cap.their()} own work`;
+  }
+
   function paint(opts) {
     host = 'parent'; hostedTab = null;
     if (opts && opts.tab) tab = opts.tab;
@@ -102,7 +110,7 @@
         ${(admin
           ? [['about', 'sparkle', 'Start here'], ['words', 'book', 'Word lists'],
              ['settings', 'gear', 'Settings']]
-          : [['about', 'sparkle', 'Start here'], ['ownwork', 'book', 'Her own work'],
+          : [['about', 'sparkle', 'Start here'], ['ownwork', 'book', ownWorkLabel()],
              ['progress', 'chart', 'Progress'], ['report', 'doc', 'Coach Report'],
              ['usage', 'chart', 'Usage'], ['settings', 'gear', 'Settings']])
           .map(([k, i, t]) => `<button data-t="${k}" class="${tab === k ? 'on' : ''}">
@@ -218,6 +226,21 @@
         </div>
       </div>
 
+      ${admin ? '' : `<div class="card" style="margin-top:14px">
+        <h3>${ownWorkLabel()} — the sheet the school never sends</h3>
+        <p class="muted small" style="margin-top:0">The weekly sheet tells you what the class is
+           learning. A page of ${esc(name)}'s own writing tells you what <b>${esc(name)}</b> is
+           actually getting wrong — and those are usually different words entirely. A real example
+           from one workbook: <i>spayder, dayd, haul, moching, smol, asced</i>. Not one of them was
+           ever on a spelling sheet, and every one is the same child spelling what she hears.</p>
+        <p class="muted small">Photograph any page ${esc(name)} has written. If a teacher has marked
+           it, AraBuzz reads their corrections. If nobody has marked it, AraBuzz reads it through and
+           says which words <i>it</i> thinks are wrong — shown separately, because that is its opinion
+           and not a teacher's. <b>You tick what is worth practising</b> before anything is added, and
+           the photo is never kept: it is read and then gone.</p>
+        <button class="btn-ghost btn-s" data-goto="ownwork">Open it →</button>
+      </div>`}
+
       <div class="card" style="margin-top:14px">
         <h3>Why it works — the four things that actually matter</h3>
         <p class="muted small">There is a lot of noise in educational apps. These are the only four
@@ -271,8 +294,6 @@
            'From the device itself. There is no third-party speech service behind it — every sentence your child hears is spoken by the device they are using, and nothing is sent anywhere to be read aloud. On <b>Apple devices</b>, Apple does not allow its Enhanced and Premium voices to be used by web apps like this one, so the list AraBuzz offers is everything the device will give it, and it might sound robotic at times — choose the voice and the pace that suit your child. On <b>Android</b> you can choose from the full Google voice list, so adding a voice that suits your child makes AraBuzz sound better. Both are under <b>Voice check</b> in Settings.'],
           ['What happens to a photo of my child\'s schoolwork?',
            'It is read, and then it is gone. When you photograph a page under <b>Her own work</b>, the picture is shrunk on your own device, sent to the AI service to be read, and never stored — not by AraBuzz, not in the account, not anywhere. If a teacher has marked the page, what comes back is their corrections. If nobody has marked it, AraBuzz says which words <b>it</b> thinks are misspelled — listed separately and left unticked, because that is its opinion and not a teacher\'s mark. Either way <b>you</b> tick what is worth practising before a single word is added. Approved words belong to that child alone: no other family sees them, and neither does a brother or sister on your own account. The whole thing is optional.'],
-          ['Can Prem see my child\'s screens?',
-           'Yes, and you will always be able to tell. Prem runs AraBuzz, and when something goes wrong he can open your family and see these pages exactly as you see them — including any words you approved from a photographed page. He never sees the photograph, because none is kept. <b>Every time he opens your family it is recorded with the time</b>, and if that record cannot be written he cannot open it at all. By default he can only look: nothing he touches while looking is saved. Doing something on your behalf — fixing a setting, removing a word — takes a second deliberate step that is recorded separately.'],
           ['Do they need the internet?',
            'Mostly no, with one exception worth knowing. The device needs to connect once to download the latest words and questions — after that, Spell Buzz, Word Rush, Listen &amp; Spell, Word Meanings, the crossword and the word search all run on the device itself, on a plane or in the car with the wifi off. <b>The exception is Spell Quest.</b> That is the game where your child can chat with Ara — Ara answers the letters she actually typed, and she can stop and ask a question in her own words — and that conversation is written in the moment by an AI engine (Anthropic\'s Claude Haiku), which needs a connection. It is not a general chatbot and cannot become one: Ara may only discuss this word, its letters, what it means <b>using your school\'s own definition</b>, and the game — the conversation stays inside the sheet your child chose. Attempts to talk her out of that are turned back, and the chatting is capped per word so it cannot replace the practice. Played offline, Spell Quest still works and every answer still counts; Ara simply falls back to the app\'s own shorter hints. Anything played offline is saved on the device and syncs to your family account the next time it connects. One honest caution: until that sync happens, the new answers exist only on that device — if the browser data is cleared before it reconnects, they are lost. The sync tracker at the top of this screen tells you whether anything is still waiting.'],
           ['Where does the data go?',
@@ -2459,7 +2480,8 @@ ${disclaimerHTML()}</body></html>`;
     'read-deck': 'Reading the week\u2019s sheet', 'enrich': 'Building practice material',
     'topic-list': 'A topic word list', 'coach-report': 'A coach note',
     'onboarding-report': 'The starting-point note', 'top-up': 'Fresh question variety',
-    'memory-tricks': 'Memory tricks', 'test': 'Connection test'
+    'memory-tricks': 'Memory tricks', 'test': 'Connection test',
+    'quest-turn': 'Ara answering in a Spell Quest', 'read-work': 'Reading a page of schoolwork'
   };
   const usd = n => '$' + (Math.round((+n || 0) * 10000) / 10000).toFixed(4).replace(/0+$/, '').replace(/\.$/, '.00');
   /** 1234 → "1.2k", 2500000 → "2.5M" — tokens, readable at a glance. */

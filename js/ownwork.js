@@ -69,12 +69,13 @@
     const box = $('#ptab');
     const db = Store.db;
     const name = (db.profile && db.profile.name) || 'your child';
+    const p = window.U.pronouns(db.profile && db.profile.pronoun);
     const own = Store.ownWeek();
     const kept = own ? (own.wordIds || []).length : 0;
 
     box.innerHTML = `
       <div class="card">
-        <h2>${esc(name)}'s own work</h2>
+        <h2>${esc(name)}&rsquo;s own work</h2>
         <p class="muted">The weekly sheet tells you what the class is learning. A page her
            teacher has marked tells you what <b>${esc(name)}</b> is actually getting wrong — and
            those are usually different words entirely.</p>
@@ -103,7 +104,8 @@
         <h3>Words kept so far <span class="pill tiny">${kept}</span></h3>
         ${kept ? `
           <p class="muted small">These sit alongside the school's sheets. ${esc(name)} can choose
-             them in any game, and the coach note counts them like any other practice.</p>
+             them in any game, and the coach note counts them like any other practice.
+             ${p.Cap.their()} brothers and sisters never see them.</p>
           <div id="owList" style="margin-top:12px">${keptListHTML(own)}</div>`
         : `<p class="muted small">Nothing yet. The first page you photograph will start this list.</p>`}
       </div>`;
