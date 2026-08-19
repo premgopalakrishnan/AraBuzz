@@ -504,14 +504,36 @@
     });
   }
 
+  /* ------------------------------------------------------ spelling it out
+     Aradhana pressed "spell the word" and heard "capital N, capital E,
+     capital C…". The word was being put into capitals before being spoken,
+     and a lone capital letter is exactly what a speech engine describes
+     rather than reads — it cannot know we meant the letter and not the
+     shape of it.
+
+     Lowercasing is not the fix either: a lone "a" is read as the word "a",
+     and "i" as "I". So each letter is handed over as its NAME, spelled the
+     way it sounds, which every engine reads correctly and which is also what
+     a person actually says when spelling something aloud. */
+  const LETTER_SOUNDS = {
+    a: 'ay',  b: 'bee', c: 'see',  d: 'dee', e: 'ee',  f: 'eff',
+    g: 'jee', h: 'aitch', i: 'eye', j: 'jay', k: 'kay', l: 'ell',
+    m: 'em',  n: 'en',  o: 'oh',   p: 'pee', q: 'cue', r: 'ar',
+    s: 'ess', t: 'tee', u: 'you',  v: 'vee', w: 'double-you',
+    x: 'ex',  y: 'why', z: 'zed'
+  };
+
   function spellOut(word) {
-    const letters = String(word).toUpperCase().replace(/[^A-Z ]/g, '').split('');
+    /* A space or a hyphen is a beat, not a letter — "well-being" is spelled
+       as two words with a pause, the way anyone would say it. */
+    const chars = String(word).toLowerCase().replace(/[^a-z \-]/g, '').split('');
     let i = 0;
     (function next() {
-      if (i >= letters.length) { setTimeout(() => speak(word), 320); return; }
-      const ch = letters[i++];
-      if (ch === ' ') { setTimeout(next, 320); return; }
-      speak(ch, { rate: 0.62, onend: () => setTimeout(next, 120) });
+      if (i >= chars.length) { setTimeout(() => speak(word), 320); return; }
+      const ch = chars[i++];
+      if (ch === ' ' || ch === '-') { setTimeout(next, 320); return; }
+      const say = LETTER_SOUNDS[ch] || ch;
+      speak(say, { rate: 0.62, onend: () => setTimeout(next, 120) });
     })();
   }
 
