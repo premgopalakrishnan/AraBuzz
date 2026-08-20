@@ -300,6 +300,57 @@
   /** One line per finding. `kind` is 't' for a teacher's correction, which
    *  arrives ticked, or 's' for one AraBuzz spotted itself, which never does
    *  — an opinion has to be agreed with before a child practises it. */
+  /* ------------------------------------------------- connecting the dots --
+     The page is read COLD — the reader knows nothing about this child, on
+     purpose, because a reader told what to expect starts seeing what it
+     expects. The connecting to everything AraBuzz already knows happens
+     HERE, in plain code, the moment the reading lands — and this line under
+     each word is that connection made visible to the parent:
+
+       · the word is already in the games → its live score
+       · the mistake matches a habit the practice record already shows →
+         named, so the parent sees the worksheet CONFIRMING the app
+       · neither → honestly called new
+
+     No model is asked anything; this is arithmetic against her own record. */
+  function habitTags() {
+    const c = {}; let wrong = 0;
+    Store.recentAttempts(30).forEach(a => {
+      if (!a.ok && a.given) { wrong++; (a.tags || []).forEach(t => { c[t] = (c[t] || 0) + 1; }); }
+    });
+    return Object.keys(c).filter(t => wrong >= 5 && c[t] / wrong >= 0.2);
+  }
+
+  const TAG_WORDS = {
+    soundsRight: 'spelling it the way it sounds', doubles: 'double letters',
+    vowels: 'the middle vowel', endings: 'word endings', silent: 'silent letters',
+    order: 'letter order', missing: 'a letter dropped', extra: 'an extra letter'
+  };
+
+  function connectionNote(correct, written) {
+    try {
+      const key = String(correct || '').toLowerCase().replace(/[^a-z]/g, '');
+      if (!key) return '';
+      const hit = Object.keys(Store.db.words).find(id =>
+        String(Store.db.words[id].word).toLowerCase().replace(/[^a-z]/g, '') === key);
+      if (hit) {
+        const pr = Store.db.progress[hit];
+        if (pr && pr.seen) {
+          return `already in the games — right ${pr.right} of ${pr.seen} there`;
+        }
+        return 'already on a practice list, not met in a game yet';
+      }
+      if (written && window.Phonics) {
+        const an = Phonics.analyse(correct, written);
+        const habits = habitTags();
+        const match = (an && an.tags || []).find(t => habits.includes(t));
+        if (match) return `new word, familiar habit — ${TAG_WORDS[match] || match}, same as in the games`;
+        if (an && an.soundsRight) return 'new word, spelled exactly as it sounds';
+      }
+      return 'new — first time AraBuzz has seen this word';
+    } catch (e) { return ''; }
+  }
+
   function rowsHTML(rows, kind) {
     return `<div>${rows.map((x, i) => {
       const id = kind + i;
@@ -315,6 +366,8 @@
                    style="width:auto;display:inline-block;padding:6px 10px;font-weight:600">
             ${x.sameSound ? `<span class="pill tiny honey" style="margin-left:8px">sounds right</span>` : ''}
             ${x.confident ? '' : `<span class="pill tiny coral" style="margin-left:8px">please check — unsure</span>`}
+            ${(() => { const c = connectionNote(x.correct, x.written);
+              return c ? `<span class="faint tiny" style="display:block;margin-top:4px">${esc(c)}</span>` : ''; })()}
           </span>
         </label>`;
     }).join('')}</div>`;

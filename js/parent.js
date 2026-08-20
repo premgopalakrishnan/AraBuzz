@@ -1351,7 +1351,11 @@ Reflex = A quick automatic response"></textarea>
                : (row.range_from ? row.range_from + ' → ' + row.range_to : 'Weekly note'),
           kind: pay.kind || 'weekly',
           headline: res ? res.headline : '',
-          metrics: pay.metrics || null
+          metrics: pay.metrics || null,
+          /* Just the drill list, nothing else of the result: Her Journey
+             tracks the last note's advice against live play, and this is
+             all it needs. */
+          drill: (res && res.wordsToDrill) || null
         });
         added++;
       }
@@ -1800,6 +1804,201 @@ Reflex = A quick automatic response"></textarea>
     } catch (e) { return null; }
   }
 
+  /* ======================================================================
+     HER JOURNEY
+
+     "Is there an ongoing report the parent can check all the time — where she
+     started, where she is, what got fixed, what is still going wrong — built
+     from the analysis we have already paid for, without running a new AI
+     query?"  — Prem, and the answer is this section.
+
+     Everything here is plain arithmetic over what is already on the device:
+     the baseline from the first check, each coach note's stored numbers, the
+     live practice record (which no note has seen yet — the "now" point is
+     always newer than the newest note), the word boxes, and the words lifted
+     from photographed schoolwork. No model is called; opening it costs
+     nothing; it is current the moment it is drawn, and it updates the moment
+     new worksheet words are confirmed or a new note arrives, because those
+     land in the same stored records this reads from.  */
+
+  const J_LIVE_DAYS = 7;
+
+  function journeyData() {
+    const prof = Store.db.profile || {};
+    const P = window.U.pronouns(prof.pronoun);
+    const words = Store.db.words || {};
+    const prog = Store.db.progress || {};
+    const now = Date.now();
+
+    /* ---- the arc: baseline → every note → live now ---- */
+    const notes = (Store.db.reports || []).slice().sort((a, b) => a.ts - b.ts);
+    const notePts = notes
+      .filter(r => r.metrics && r.metrics.accuracy != null)
+      .map(r => ({ label: window.U.fmtDay(r.ts), v: Math.round(r.metrics.accuracy * 100),
+                   n: r.metrics.answers }));
+    const bl = prof.baseline || null;
+    const startPct = bl && bl.produceScore != null ? Math.round(bl.produceScore * 100)
+                   : (notePts.length ? notePts[0].v : null);
+
+    const live = Store.recentAttempts(J_LIVE_DAYS).filter(a => a.mode !== 'choice' || a.ok != null);
+    const liveAcc = live.length >= 5
+      ? Math.round(live.filter(a => a.ok).length / live.length * 100) : null;
+
+    const line = [];
+    if (bl && bl.produceScore != null) line.push({ label: 'First check', v: Math.round(bl.produceScore * 100) });
+    line.push(...notePts);
+    if (liveAcc != null) line.push({ label: 'Now', v: liveAcc, n: live.length });
+
+    /* ---- the board: fixed · still tricky · new ---- */
+    const rows = Object.keys(prog).map(id => {
+      const wd = words[id]; const pr = prog[id];
+      if (!wd || !pr || !pr.seen) return null;
+      return { id, word: wd.word, box: pr.box || 0, seen: pr.seen,
+               right: pr.right || 0, wrong: pr.wrong || 0,
+               acc: pr.right / pr.seen,
+               firstSeen: pr.firstSeen || 0, lastSeen: pr.lastSeen || 0,
+               miss: (pr.misspellings || []).slice(-2) };
+    }).filter(Boolean);
+
+    const week = now - 7 * 864e5;
+    const fixed = rows.filter(r => r.wrong > 0 && r.box >= 4)
+      .sort((a, b) => b.lastSeen - a.lastSeen);
+    const tricky = rows.filter(r => r.seen >= 3 && r.acc < 0.55 && r.box < 4)
+      .sort((a, b) => a.acc - b.acc);
+    const fresh = rows.filter(r => r.firstSeen >= week)
+      .sort((a, b) => b.firstSeen - a.firstSeen);
+
+    /* ---- school sheet vs her own written work ---- */
+    const own = Store.ownWeek();
+    const ownIds = new Set(own ? own.wordIds || [] : []);
+    const split = { school: { n: 0, seen: 0, right: 0 }, own: { n: 0, seen: 0, right: 0 } };
+    rows.forEach(r => {
+      const b = ownIds.has(r.id) ? split.own : split.school;
+      b.n++; b.seen += r.seen; b.right += r.right;
+    });
+    const ownTricky = tricky.filter(r => ownIds.has(r.id));
+
+    /* ---- the last note's advice, tracked live ---- */
+    const advised = notes.slice().reverse().find(r => r.drill && r.drill.length);
+    let advice = null;
+    if (advised) {
+      const byKey = {};
+      Object.keys(words).forEach(id => {
+        byKey[String(words[id].word).toLowerCase().replace(/[^a-z]/g, '')] = id;
+      });
+      advice = {
+        on: advised.ts,
+        words: advised.drill.slice(0, 12).map(wtext => {
+          const id = byKey[String(wtext).toLowerCase().replace(/[^a-z]/g, '')];
+          const since = id ? Store.db.attempts.filter(a => a.wordId === id && a.ts >= advised.ts) : [];
+          const okN = since.filter(a => a.ok).length;
+          return { word: wtext,
+                   tried: since.length, ok: okN,
+                   state: !id || !since.length ? 'waiting'
+                        : okN / since.length >= 0.8 ? 'landing'
+                        : okN / since.length >= 0.5 ? 'moving' : 'hard' };
+        })
+      };
+    }
+
+    /* ---- the habit, then and now ---- */
+    const tag14 = list => {
+      const c = {}; let wrong = 0;
+      list.forEach(a => { if (!a.ok && a.given) { wrong++;
+        (a.tags || []).forEach(t => { c[t] = (c[t] || 0) + 1; }); } });
+      return { c, wrong };
+    };
+    const nowT = tag14(Store.recentAttempts(14));
+    const beforeT = tag14(Store.db.attempts.filter(a =>
+      a.ts >= now - 28 * 864e5 && a.ts < now - 14 * 864e5));
+    const habits = [...new Set(Object.keys(nowT.c).concat(Object.keys(beforeT.c)))]
+      .map(t => ({ tag: t,
+        a: nowT.wrong ? Math.round((nowT.c[t] || 0) / nowT.wrong * 100) : 0,
+        b: beforeT.wrong ? Math.round((beforeT.c[t] || 0) / beforeT.wrong * 100) : null }))
+      .sort((x, y) => y.a - x.a).slice(0, 5);
+
+    return { P, name: prof.name || 'your child', line, startPct, liveAcc,
+             liveN: live.length, rows, fixed, tricky, fresh, split, ownTricky,
+             ownCount: ownIds.size, advice, habits,
+             mastered: rows.filter(r => r.box >= 5).length,
+             hasAnything: rows.length > 0 || notes.length > 0 };
+  }
+
+  function journeyHTML() {
+    const d = journeyData();
+    if (!d.hasAnything) return '';
+    const name = esc(d.name);
+    const pills = (list, tone, tip) => list.slice(0, 8).map(r =>
+      `<span class="pill ${tone} tiny" title="${esc(tip(r))}">${esc(r.word)}</span>`).join(' ') +
+      (list.length > 8 ? ` <span class="faint tiny">+${list.length - 8} more</span>` : '');
+    const AD = { landing: ['sage', 'landing'], moving: ['honey', 'getting there'],
+                 hard: ['coral', 'still hard'], waiting: ['', 'not practised yet'] };
+    const pct = split => split.seen ? Math.round(split.right / split.seen * 100) + '%' : '—';
+
+    return `<div class="card" style="margin-top:14px" id="journeyCard">
+      <div class="row between wrap" style="gap:8px">
+        <h3 style="margin:0">${name}'s journey</h3>
+        <span class="faint tiny">Made on this device from ${esc(d.P.their())} own records ·
+          always current · no AI involved</span>
+      </div>
+
+      ${window.Charts ? Charts.tiles([
+        d.startPct != null ? { value: d.startPct + '%', label: 'Where ' + d.name + ' started' } : null,
+        d.liveAcc != null ? { value: d.liveAcc + '%',
+            label: 'Right now — last ' + J_LIVE_DAYS + ' days',
+            delta: d.startPct != null ? (d.liveAcc - d.startPct) / 100 : null,
+            deltaText: d.startPct != null ? 'since the start' : '' } : null,
+        { value: String(d.rows.length), label: 'Words met' },
+        { value: String(d.mastered), label: 'Locked in' },
+        d.ownCount ? { value: String(d.ownCount), label: 'From ' + d.P.their() + ' own schoolwork' } : null
+      ].filter(Boolean)) : ''}
+
+      ${d.line.length >= 2 && window.Charts ? `<div class="viz" style="margin:12px 0 4px">
+        ${Charts.line(d.line, {
+          title: 'The whole arc, first check to today',
+          sub: 'Every note’s number, plus a live point no note has seen yet.',
+          suffix: '%', min: 0, max: 100 })}</div>` : ''}
+
+      <div class="j-board" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px;margin-top:12px">
+        <div><h4 style="margin:0 0 6px">Fixed <span class="faint tiny">was wrong, now settled</span></h4>
+          ${d.fixed.length ? pills(d.fixed, 'sage', r => 'right ' + r.right + ' of ' + r.seen)
+            : '<span class="faint small">Nothing settled yet — early days.</span>'}</div>
+        <div><h4 style="margin:0 0 6px">Still tricky</h4>
+          ${d.tricky.length ? pills(d.tricky, 'coral', r =>
+              'right ' + r.right + ' of ' + r.seen + (r.miss.length ? ' · wrote: ' + r.miss.join(', ') : ''))
+            : '<span class="faint small">Nothing stuck right now.</span>'}</div>
+        <div><h4 style="margin:0 0 6px">New this week</h4>
+          ${d.fresh.length ? pills(d.fresh, 'sky', r => 'first met ' + window.U.fmtDay(r.firstSeen))
+            : '<span class="faint small">No new words this week.</span>'}</div>
+      </div>
+
+      ${d.ownCount ? `<div style="margin-top:14px">
+        <h4 style="margin:0 0 6px">School sheet vs ${esc(d.P.their())} own writing</h4>
+        <p class="small muted" style="margin:0">On the school list ${name} is at
+           <b>${pct(d.split.school)}</b> across ${d.split.school.n} words; on words lifted from
+           ${esc(d.P.their())} own marked schoolwork, <b>${pct(d.split.own)}</b> across
+           ${d.split.own.n}.${d.ownTricky.length ? ` The schoolwork words still catching ${esc(d.P.them())}:
+           ${d.ownTricky.slice(0, 5).map(r => `<b>${esc(r.word)}</b>`).join(', ')}.` : ''}</p>
+      </div>` : ''}
+
+      ${d.advice ? `<div style="margin-top:14px">
+        <h4 style="margin:0 0 6px">The last note asked you to practise these
+          <span class="faint tiny">· tracked live since ${esc(window.U.fmtDate(d.advice.on))}</span></h4>
+        <div class="row wrap" style="gap:6px">${d.advice.words.map(x => {
+          const [tone, word] = AD[x.state];
+          return `<span class="pill ${tone} tiny" title="${x.tried
+            ? 'right ' + x.ok + ' of ' + x.tried + ' since the note' : 'not practised since the note'}">
+            ${esc(x.word)} · ${word}</span>`; }).join('')}</div>
+      </div>` : ''}
+
+      ${d.habits.length >= 2 && window.Charts ? `<div style="margin-top:14px">
+        ${Charts.compareBars(d.habits.map(h => ({ label: patternName(h.tag), a: h.a, b: h.b })), {
+          title: 'The habits behind the mistakes, this fortnight vs last',
+          sub: 'Each as a share of what went wrong in that fortnight.',
+          suffix: '%' })}</div>` : ''}
+    </div>`;
+  }
+
   function tabReport() {
     const box = $('#ptab');
     const forChildId = Store.db.activeChildId;
@@ -1850,6 +2049,8 @@ Reflex = A quick automatic response"></textarea>
            so you can open any of them again and watch the shape of their progress change from one to the next.</p>
         <div id="rStatus"></div>
       </div>
+
+      ${journeyHTML()}
 
 
       ${saved.length >= 2 ? `<div class="card" style="margin-top:14px">
@@ -2532,7 +2733,8 @@ Reflex = A quick automatic response"></textarea>
       const html = renderReport(r, payload, days, { metrics, previous });
       const rec = {
         id: Store.uid('r'), ts: Date.now(), html, range: rangeLabel(days),
-        headline: r.headline, metrics
+        headline: r.headline, metrics,
+        drill: r.wordsToDrill || null
       };
       Store.db.reports.push(rec);
       if (Store.db.reports.length > 40) Store.db.reports.shift();
