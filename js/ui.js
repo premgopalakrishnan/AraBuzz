@@ -632,7 +632,14 @@
     // options inside the game they belonged to. Mixed Buzz sits last on purpose:
     // it is everything combined, including a small crossword, so it reads as the
     // real thing to work up to.
+    /* Focus Buzz only exists when the plan has enough words to be worth a
+       round — a tile that opens onto three words feels broken, and a child
+       with nothing on the plan needs a plain week, not a special mission. */
+    const plan = Engine.focusPlan();
     const modes = [
+      ...(plan.ready ? [{ k: 'focus', ic: 'target', t: 'Focus Buzz',
+        d: 'Your own round — the words that are almost yours, picked just for you from your own sheets. It changes as you get better!',
+        ribbon: 'FOR YOU' }] : []),
       { k: 'quest', ic: 'trophy', t: 'Spell Quest', d: 'Ara gives you a clue, you type the spelling — the whole list, one at a time, until you beat it. Talk to her back; this one is better with the internet on. 📶', ribbon: 'NEW' },
       { k: 'spellbuzz', ic: 'pencil', t: 'Spell Buzz', d: 'Read the clue, spell the word. Just like the test at school.', ribbon: 'START HERE' },
       { k: 'rush', ic: 'keys', t: 'Word Rush', d: 'Typing game. Copy it, watch it vanish, then type it from memory.' },
@@ -662,7 +669,19 @@
     makeTilesDraggable($('#modes'), order => {
       Store.db.game.tileOrder = order;
       Store.save(true);
-    }, key => go('play', { mode: key }));
+    }, key => {
+      /* Focus Buzz skips the choose-your-week screen: the plan IS the
+         selection, that is its whole point. Mixed format, no mini crossword —
+         short and varied, so the same eight words never feel like lines. */
+      if (key === 'focus') {
+        const p = Engine.focusPlan();
+        if (!p.ready) { go('play', {}); return; }
+        Quiz.start({ preset: 'mixed', pool: p.pool,
+                     count: Math.min(10, p.pool.length), label: 'Focus Buzz' });
+        return;
+      }
+      go('play', { mode: key });
+    });
 
     if ($('#heroSlot')) $('#heroSlot').onclick = () => go('journey');
     if ($('#meetBtn') && meetWk) $('#meetBtn').onclick = () => startMeet(meetWk.id);

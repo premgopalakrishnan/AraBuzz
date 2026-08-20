@@ -464,10 +464,110 @@
       .map(x => x.wd);
   }
 
+  /* ======================================================================
+     THE FOCUS PLAN
+
+     AraBuzz now hears about the same child from three directions: the games
+     she plays here, the worksheets her teacher marked, and the pages she
+     filled in unmarked. This turns all of it into one small, explainable
+     answer to "what should she practise next?" — and it is deliberately NOT
+     a model call. It is arithmetic, the same arithmetic every time, so a
+     parent can ask "why is this word on the plan?" and the plan can answer
+     with a number.
+
+     How a word earns its place:
+       · she gets it wrong more than she gets it right      (the record)
+       · or it sits in a low box with real misses behind it (the boxes)
+       · or the last coach note asked for it                (the analysis)
+       · or it came off her own marked schoolwork           (the teacher)
+     Each of those is a score; the top handful are the FOCUS. Then the plan
+     looks at WHY those words go wrong — the error tags her misses carry —
+     and pulls in a few words she already owns that share the same pattern
+     but are going fine: the REINFORCEMENT, so the habit is practised from
+     its strong side too. Every word comes from her own sheets; the plan
+     never invents vocabulary.
+
+     The kids' side of this is the Focus Buzz tile; the parents' side is the
+     plan section in the journey, which also keeps the history of how the
+     plan has moved. Both read THIS function, so they can never disagree. */
+  function focusPlan() {
+    const db = S().db;
+    const words = db.words || {};
+    const prog = db.progress || {};
+    const now = Date.now();
+
+    /* the last note's drill list, if any note carried one */
+    const drillKeys = new Set();
+    (db.reports || []).slice().sort((a, b) => b.ts - a.ts).some(r => {
+      if (!r.drill || !r.drill.length) return false;
+      r.drill.forEach(t => drillKeys.add(String(t).toLowerCase().replace(/[^a-z]/g, '')));
+      return true;
+    });
+
+    const own = S().ownWeek && S().ownWeek();
+    const ownIds = new Set(own ? own.wordIds || [] : []);
+
+    /* error tags per word, from her recent wrong answers */
+    const tagsByWord = {};
+    (db.attempts || []).forEach(a => {
+      if (a.ok || !a.given || a.ts < now - 45 * 864e5) return;
+      const bag = tagsByWord[a.wordId] = tagsByWord[a.wordId] || {};
+      (a.tags || []).forEach(t => { bag[t] = (bag[t] || 0) + 1; });
+    });
+
+    const rows = Object.keys(words).map(id => {
+      const wd = words[id], pr = prog[id];
+      if (!wd) return null;
+      const seen = pr ? pr.seen || 0 : 0;
+      const right = pr ? pr.right || 0 : 0;
+      const wrong = pr ? pr.wrong || 0 : 0;
+      const acc = seen ? right / seen : null;
+      const key = String(wd.word).toLowerCase().replace(/[^a-z]/g, '');
+
+      let score = 0;
+      const why = [];
+      if (seen >= 2 && acc < 0.55) { score += (1 - acc) * 2; why.push(`right ${right} of ${seen}`); }
+      if (pr && (pr.box || 0) <= 1 && wrong > 0) { score += 1; why.push('still in the early boxes'); }
+      if (drillKeys.has(key)) { score += 1; why.push('the last note asked for it'); }
+      if (ownIds.has(id) && wrong > 0) { score += 0.75; why.push('from the marked schoolwork'); }
+      const recentMiss = (db.attempts || []).some(a =>
+        a.wordId === id && !a.ok && a.given && a.ts > now - 7 * 864e5);
+      if (recentMiss) { score += 0.5; why.push('missed this week'); }
+
+      const tags = Object.keys(tagsByWord[id] || {})
+        .sort((a, b) => tagsByWord[id][b] - tagsByWord[id][a]);
+      return { id, wd, seen, acc, box: pr ? pr.box || 0 : 0, score, why, tags };
+    }).filter(Boolean);
+
+    const focus = rows.filter(r => r.score > 0)
+      .sort((a, b) => b.score - a.score).slice(0, 8);
+
+    /* the habit behind the focus — the tags its words carry most */
+    const tagCount = {};
+    focus.forEach(r => r.tags.forEach(t => { tagCount[t] = (tagCount[t] || 0) + 1; }));
+    const topTags = Object.keys(tagCount).sort((a, b) => tagCount[b] - tagCount[a]).slice(0, 2);
+
+    /* reinforcement: her OWN words that share the habit and are going well —
+       practising the pattern from its strong side */
+    const focusIds = new Set(focus.map(r => r.id));
+    const reinforce = topTags.length ? rows.filter(r =>
+        !focusIds.has(r.id) && r.seen >= 3 && r.acc >= 0.7 &&
+        r.tags.some(t => topTags.includes(t)))
+      .sort((a, b) => b.acc - a.acc).slice(0, 4) : [];
+
+    return {
+      focus: focus.map(r => ({ id: r.id, word: r.wd.word, why: r.why.join(' · '), acc: r.acc, seen: r.seen })),
+      reinforce: reinforce.map(r => ({ id: r.id, word: r.wd.word, acc: r.acc, seen: r.seen })),
+      tags: topTags,
+      pool: focus.map(r => r.wd).concat(reinforce.map(r => r.wd)),
+      ready: focus.length >= 4
+    };
+  }
+
   w.Engine = {
     INTERVALS, MAX_BOX, ALL_MODES, PRESETS, DIFFICULTY,
     isDue, grade, mastery, accuracy, pickWords, shuffle, pick,
     nextVariant, needTopUp, chooseMode, chooseGaps,
-    buildQuestion, buildQuiz, check, record, stars, dueCount, trickyWords
+    buildQuestion, buildQuiz, check, record, stars, dueCount, trickyWords, focusPlan
   };
 })(window);

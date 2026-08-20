@@ -111,7 +111,9 @@
           ? [['about', 'sparkle', 'Start here'], ['words', 'book', 'Word lists'],
              ['settings', 'gear', 'Settings']]
           : [['about', 'sparkle', 'Start here'], ['ownwork', 'book', ownWorkLabel()],
-             ['progress', 'chart', 'Progress'], ['report', 'doc', 'Coach Report'],
+             ['progress', 'chart', 'Progress'],
+             ['report', 'doc', window.U.pronouns(Store.db.profile && Store.db.profile.pronoun)
+                .Cap.their() + ' journey'],
              ['usage', 'chart', 'Usage'], ['settings', 'gear', 'Settings']])
           .map(([k, i, t]) => `<button data-t="${k}" class="${tab === k ? 'on' : ''}">
              ${Icon.icon(i, { size: 16 })} ${t}</button>`).join('')}
@@ -1917,9 +1919,38 @@ Reflex = A quick automatic response"></textarea>
         b: beforeT.wrong ? Math.round((beforeT.c[t] || 0) / beforeT.wrong * 100) : null }))
       .sort((x, y) => y.a - x.a).slice(0, 5);
 
+    /* ---- the plan, and how it has moved ----
+       The plan itself is Engine.focusPlan() — the same call the Focus Buzz
+       tile reads, so the parent's view and the child's game can never
+       disagree. The journey's extra job is MEMORY: every time the computed
+       plan differs from the one last seen, the difference is written down —
+       which words graduated off it, which arrived — so the section does not
+       just show a plan, it documents the plan evolving, which is the part a
+       parent actually wants to watch. */
+    let plan = null, planLog = [];
+    try {
+      plan = Engine.focusPlan();
+      const prev = Store.db.plan || { keys: [], history: [] };
+      const keys = plan.focus.map(f => f.id).sort();
+      if (keys.join('|') !== (prev.keys || []).join('|')) {
+        const was = new Set(prev.keys || []);
+        const isNow = new Set(keys);
+        const graduated = (prev.keys || []).filter(id => !isNow.has(id))
+          .map(id => (words[id] || {}).word).filter(Boolean);
+        const added = keys.filter(id => !was.has(id))
+          .map(id => (words[id] || {}).word).filter(Boolean);
+        const entry = { ts: now, graduated, added };
+        Store.db.plan = { keys, ts: now,
+          history: ((prev.history || []).concat(
+            (graduated.length || added.length) ? [entry] : [])).slice(-10) };
+        Store.save(true);
+      }
+      planLog = ((Store.db.plan || {}).history || []).slice(-4).reverse();
+    } catch (e) { console.warn('plan', e); }
+
     return { P, name: prof.name || 'your child', line, startPct, liveAcc,
              liveN: live.length, rows, fixed, tricky, fresh, split, ownTricky,
-             ownCount: ownIds.size, advice, habits,
+             ownCount: ownIds.size, advice, habits, plan, planLog,
              mastered: rows.filter(r => r.box >= 5).length,
              hasAnything: rows.length > 0 || notes.length > 0 };
   }
@@ -1996,6 +2027,33 @@ Reflex = A quick automatic response"></textarea>
           title: 'The habits behind the mistakes, this fortnight vs last',
           sub: 'Each as a share of what went wrong in that fortnight.',
           suffix: '%' })}</div>` : ''}
+
+      ${d.plan && d.plan.focus.length ? `<div style="margin-top:16px;padding-top:14px;border-top:1px solid var(--line)">
+        <h4 style="margin:0 0 4px">The plan right now</h4>
+        <p class="small muted" style="margin:0 0 8px">Worked out from everything above — the games,
+           the marked worksheets, the last note — and re-worked every time ${esc(d.P.they())}
+           ${esc(d.P.s('play'))}. Every word is from ${esc(d.P.their())} own sheets.
+           ${d.plan.tags.length ? `The habit it is aimed at: <b>${d.plan.tags.map(t =>
+             esc(patternName(t).toLowerCase())).join('</b> and <b>')}</b>.` : ''}</p>
+        <div class="row wrap" style="gap:6px;margin-bottom:6px">
+          ${d.plan.focus.map(f => `<span class="pill honey tiny" title="${esc(f.why)}">${esc(f.word)}</span>`).join('')}
+        </div>
+        ${d.plan.reinforce.length ? `<p class="small muted" style="margin:0 0 6px">Practised from the
+           strong side too — same habit, words ${esc(d.P.they())} already ${esc(d.P.s('get'))} right:
+           ${d.plan.reinforce.map(r => `<b>${esc(r.word)}</b>`).join(', ')}.</p>` : ''}
+        ${d.plan.ready ? `<p class="small muted" style="margin:0">On ${esc(d.P.their())} games screen
+           this is <b>Focus Buzz</b> — it quietly reshapes itself as ${esc(d.P.they())}
+           ${esc(d.P.s('improve'))}.</p>` : `<p class="small muted" style="margin:0">A few more words and
+           this becomes a game of its own on ${esc(d.P.their())} games screen.</p>`}
+        ${d.planLog.length ? `<div style="margin-top:10px">
+          <h4 style="margin:0 0 4px">How the plan has moved</h4>
+          ${d.planLog.map(e => `<p class="small muted" style="margin:0 0 3px">
+            <span class="faint">${esc(window.U.fmtDay(e.ts))}</span> —
+            ${e.graduated.length ? `graduated: <b>${e.graduated.map(esc).join(', ')}</b>` : ''}
+            ${e.graduated.length && e.added.length ? ' · ' : ''}
+            ${e.added.length ? `new focus: <b>${e.added.map(esc).join(', ')}</b>` : ''}</p>`).join('')}
+        </div>` : ''}
+      </div>` : ''}
     </div>`;
   }
 
@@ -2035,9 +2093,11 @@ Reflex = A quick automatic response"></textarea>
     const missingOnboard = !!bl && !saved.some(r => r.kind === 'onboarding');
 
     box.innerHTML = `
+      ${journeyHTML()}
+
       <div class="card">
-        <h2>Coach Report</h2>
-        <p class="muted">A written note on how ${esc(name)} is really doing — what they're good at,
+        <h3 style="margin-top:0">The written notes</h3>
+        <p class="muted">The journey above is live arithmetic; these are the sit-down analysis — a written note on how ${esc(name)} is really doing — what they're good at,
            the exact patterns behind their mistakes with their own spellings quoted as evidence, and
            three specific things to do this week. Plain English, not teacher-speak.</p>
         <p class="muted small"><b>Notes write themselves.</b> The starting-point note arrives right
@@ -2050,7 +2110,6 @@ Reflex = A quick automatic response"></textarea>
         <div id="rStatus"></div>
       </div>
 
-      ${journeyHTML()}
 
 
       ${saved.length >= 2 ? `<div class="card" style="margin-top:14px">
