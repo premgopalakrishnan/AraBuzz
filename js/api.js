@@ -691,10 +691,12 @@ Use British English. Mix single words and short terms. Avoid words that are triv
       return { ok: false, error: 'This needs the internet. Try again when you are back online.' };
     }
     try {
-      const res = await fetch('/api/report-request', {
+      /* One endpoint for the whole note lifecycle — Vercel allows twelve
+         serverless functions on this plan, so endpoints are a budget. */
+      const res = await fetch('/api/report', {
         method: 'POST',
         headers: { 'content-type': 'application/json', authorization: 'Bearer ' + Cloud.token },
-        body: JSON.stringify({ childId, reason: reason || '' })
+        body: JSON.stringify({ action: 'request', childId, reason: reason || '' })
       });
       const j = await res.json().catch(() => ({}));
       if (res.ok) return { ok: true, id: j.id, emailed: j.emailed !== false };
@@ -712,10 +714,10 @@ Use British English. Mix single words and short terms. Avoid words that are triv
       return { ok: false, error: 'Sign in first' };
     }
     try {
-      const res = await fetch('/api/report-approve', {
+      const res = await fetch('/api/report', {
         method: 'POST',
         headers: { 'content-type': 'application/json', authorization: 'Bearer ' + Cloud.token },
-        body: JSON.stringify({ id, decision, note: note || '' })
+        body: JSON.stringify({ action: 'decide', id, decision, note: note || '' })
       });
       const j = await res.json().catch(() => ({}));
       if (res.ok) return { ok: true, status: j.status, reportId: j.reportId, reason: j.reason };
@@ -732,10 +734,10 @@ Use British English. Mix single words and short terms. Avoid words that are triv
     if (lookingOnly()) return { sent: false, reason: 'view-only' };
     if (!window.Cloud || !Cloud.signedIn() || !Cloud.token) return { sent: false };
     try {
-      const res = await fetch('/api/note-ready', {
+      const res = await fetch('/api/report', {
         method: 'POST',
         headers: { 'content-type': 'application/json', authorization: 'Bearer ' + Cloud.token },
-        body: JSON.stringify({ childId, kind: 'onboarding' })
+        body: JSON.stringify({ action: 'ready', childId, kind: 'onboarding' })
       });
       return await res.json();
     } catch (e) { return { sent: false, reason: 'offline' }; }
