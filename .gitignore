@@ -10,3 +10,6 @@ node_modules/
 Backups/
 lan.js
 .arabuzz-last-address
+
+# bridge cannot delete; things to remove by hand live here
+_to_delete/

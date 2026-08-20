@@ -186,24 +186,41 @@ export async function askClaude({ model, maxTokens, system, content, tool }) {
 }
 
 /* ------------------------------------------------------------------ email */
-/** Send one email through Resend, as AraBuzz, replying to Prem. */
-export async function sendEmail(to, subject, html) {
+/** Send one email through Resend, as AraBuzz, replying to Prem.
+ *  `opts.cc` copies somebody in — used by the on-demand report workflow, where
+ *  the point of the email is that both sides can see it was sent. */
+export const ADMIN_INBOX = 'arabuzz@cokindlelabs.com';
+
+/* When the automatic note lands. The cron is 02:30 UTC every Wednesday; an
+   email cannot know the reader's timezone, so it names the two the families
+   are actually in. Said out loud in every email that mentions Wednesday,
+   because "Wednesday morning" on its own leaves a parent wondering whether to
+   keep checking. */
+export const NOTE_TIME = 'Wednesday morning — 8:00 am in India, 10:30 am in the Philippines';
+
+export async function sendEmail(to, subject, html, opts) {
   if (!process.env.RESEND_API_KEY) {
     throw new Error('RESEND_API_KEY is not set in Vercel');
   }
+  const o = opts || {};
+  const cc = (Array.isArray(o.cc) ? o.cc : (o.cc ? [o.cc] : []))
+    .filter(Boolean)
+    .filter(a => String(a).toLowerCase() !== String(to).toLowerCase());
+  const body = {
+    from: 'AraBuzz <arabuzz@cokindlelabs.com>',
+    reply_to: o.replyTo || 'prem@cokindle.com',
+    to: [to],
+    subject,
+    html
+  };
+  if (cc.length) body.cc = cc;
   const r = await fetch('https://api.resend.com/emails', {
     method: 'POST',
     headers: {
       'content-type': 'application/json',
       authorization: `Bearer ${process.env.RESEND_API_KEY}`
     },
-    body: JSON.stringify({
-      from: 'AraBuzz <arabuzz@cokindlelabs.com>',
-      reply_to: 'prem@cokindle.com',
-      to: [to],
-      subject,
-      html
-    })
+    body: JSON.stringify(body)
   });
   if (!r.ok) throw new Error(`email failed: ${r.status} ${await r.text()}`);
   return r.json();

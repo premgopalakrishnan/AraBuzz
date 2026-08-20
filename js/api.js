@@ -665,6 +665,52 @@ Use British English. Mix single words and short terms. Avoid words that are triv
     return Date.now() - t0;
   }
 
+  /* ------------------------------------------------- notes asked for --
+     Notes publish themselves on Wednesdays. A parent who needs one sooner
+     asks here; the server records the request and puts it in front of the
+     team. Nothing is written until somebody approves it, so this returns
+     immediately and the parent hears back by email. */
+  async function requestReport(childId, reason) {
+    if (!window.Cloud || !Cloud.signedIn() || !Cloud.token) {
+      return { ok: false, error: 'You need to be signed in to ask for a note.' };
+    }
+    if (navigator.onLine === false) {
+      return { ok: false, error: 'This needs the internet. Try again when you are back online.' };
+    }
+    try {
+      const res = await fetch('/api/report-request', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json', authorization: 'Bearer ' + Cloud.token },
+        body: JSON.stringify({ childId, reason: reason || '' })
+      });
+      const j = await res.json().catch(() => ({}));
+      if (res.ok) return { ok: true, id: j.id, emailed: j.emailed !== false };
+      return { ok: false, code: j.error, error: j.message || j.error || 'That did not go through.' };
+    } catch (e) {
+      return { ok: false, error: 'That did not go through. Please try again in a moment.' };
+    }
+  }
+
+  /** The admin end: approve or decline one. Writing the note happens inside
+   *  the same call, so this can take a minute — the console says so. */
+  async function decideReportRequest(id, decision, note) {
+    if (!window.Cloud || !Cloud.signedIn() || !Cloud.token) {
+      return { ok: false, error: 'Sign in first' };
+    }
+    try {
+      const res = await fetch('/api/report-approve', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json', authorization: 'Bearer ' + Cloud.token },
+        body: JSON.stringify({ id, decision, note: note || '' })
+      });
+      const j = await res.json().catch(() => ({}));
+      if (res.ok) return { ok: true, status: j.status, reportId: j.reportId, reason: j.reason };
+      return { ok: false, error: j.error || 'That did not go through.' };
+    } catch (e) {
+      return { ok: false, error: 'That did not go through.' };
+    }
+  }
+
   /** Knock on the parent's door — but only after the note is actually filed
    *  in the account. The server checks that for itself before it sends
    *  anything, so a note that failed to save sends no email at all. */
@@ -755,5 +801,6 @@ Use British English. Mix single words and short terms. Avoid words that are triv
   }
 
   w.API = { hasKey, usingOwnKey, key, modelFor, readDeck, enrich, topUp, onboardingReport, reword,
-            memoryTricks, coachReport, topicList, test, noteReady, coachTurn, estCost, RATES };
+            memoryTricks, coachReport, topicList, test, noteReady, coachTurn,
+            requestReport, decideReportRequest, estCost, RATES };
 })(window);

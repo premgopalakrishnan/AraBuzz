@@ -35,6 +35,7 @@
   let loading = false;
   let inviteNotice = null; // the result of the last invitation, kept across repaints
   let watching = false;    // the live-refresh loop, started once
+  let pendingCount = 0;    // on-demand note requests awaiting a decision
 
   /** modal() gives back a card that already contains its own close button;
    *  everything we write goes inside the body, not over the top of it. */
@@ -109,6 +110,7 @@
 
       <div class="tabs" id="atabs" style="margin-top:16px">
         ${[['families', 'home', 'Families'], ['invite', 'mail', 'Invite'],
+           ['requests', 'doc', 'Requests' + (pendingCount ? ` (${pendingCount})` : '')],
            ['message', 'doc', 'Message'],
            ['upload', 'upload', 'Add words'], ['sheets', 'book', 'Sheets'],
            ['words', 'spell', 'Word lists'],
@@ -130,10 +132,170 @@
     $$('#atabs button').forEach(b => b.onclick = () => { tab = b.dataset.t; paint(); });
 
     ({ families: tabFamilies, invite: tabInvite, message: tabMessage,
+       requests: tabRequests,
        upload: () => hostParentTab('upload'),
        words: () => hostParentTab('words'), settings: () => hostParentTab('settings'),
        sheets: tabSheets, spend: tabSpend }[tab] || tabFamilies)();
     watch();
+    countPending();
+  }
+
+  /* ======================================================================
+     REQUESTS — coach notes parents have asked for out of turn.
+
+     Notes publish themselves on Wednesdays. A parent who needs one sooner
+     asks from their own Coach Report screen; it lands here. Nothing is
+     written until it is approved from this tab.
+
+     Approving does the whole job in one call — it emails the parent that it
+     is coming, writes the note, files it, and sends the ordinary "ready to
+     read" email. That takes a minute or so, which is why the button says so
+     rather than appearing to hang.
+     ====================================================================== */
+  const RQ_TONE = { pending: 'honey', approved: 'sage', done: 'sage',
+                    declined: '', failed: 'coral' };
+  const RQ_WORD = { pending: 'Waiting for you', approved: 'Approved — writing',
+                    done: 'Written', declined: 'Declined', failed: 'Failed' };
+
+  async function loadRequests() {
+    try {
+      const { data: rows, error } = await Cloud.from('report_requests')
+        .select('id, child_id, family_id, requested_by, requested_at, reason, status, ' +
+                'decided_at, decline_note, report_id, error')
+        .order('requested_at', { ascending: false }).limit(60);
+      if (error) throw error;
+      return rows || [];
+    } catch (e) { return null; }
+  }
+
+  async function countPending() {
+    const rows = await loadRequests();
+    if (!rows) return;
+    const n = rows.filter(r => r.status === 'pending').length;
+    if (n === pendingCount) return;
+    pendingCount = n;
+    /* Only repaint the tab bar. Repainting the whole console under someone
+       who is halfway through typing a message would be worse than a stale
+       number. */
+    const btn = $('#atabs button[data-t="requests"]');
+    if (btn) btn.innerHTML = `${Icon.icon('doc', { size: 16 })} Requests${n ? ` (${n})` : ''}`;
+  }
+
+  function lookUp(id, kind) {
+    for (const f of families()) {
+      if (kind === 'child') {
+        const k = (f.children || []).find(c => c.id === id);
+        if (k) return { name: k.name, family: f.name };
+      } else {
+        const p = (f.parents || []).find(x => x.id === id);
+        if (p) return { name: p.name, family: f.name, email: p.email || '' };
+      }
+    }
+    return null;
+  }
+
+  async function tabRequests() {
+    const box = $('#atab');
+    box.innerHTML = `<div class="card"><p class="muted"><span class="loader"></span>
+      Loading requests…</p></div>`;
+
+    const rows = await loadRequests();
+    if (tab !== 'requests') return;
+    if (!rows) {
+      box.innerHTML = `<div class="card"><h2>Requests</h2>
+        <p class="muted">Could not read the requests just now. Try Refresh.</p></div>`;
+      return;
+    }
+    pendingCount = rows.filter(r => r.status === 'pending').length;
+
+    const row = r => {
+      const kid = lookUp(r.child_id, 'child');
+      const par = lookUp(r.requested_by, 'parent');
+      const tone = RQ_TONE[r.status] || '';
+      const when = window.U.fmtDate(Date.parse(r.requested_at));
+      return `<div class="card" style="margin-top:10px" data-rq="${r.id}">
+        <div class="row between wrap" style="gap:10px">
+          <div>
+            <h3 style="margin:0">${esc(kid ? kid.name : 'A child')}
+              <span class="pill ${tone} tiny">${esc(RQ_WORD[r.status] || r.status)}</span></h3>
+            <p class="muted small" style="margin:4px 0 0">
+              Asked by ${esc(par ? par.name : 'a parent')}${par && par.family
+                ? ' · ' + esc(par.family) : ''} · ${esc(when)}</p>
+          </div>
+        </div>
+        ${r.reason ? `<p class="small" style="margin:10px 0 0;padding:10px 12px;
+          background:var(--paper-2);border-radius:10px"><i>${esc(r.reason)}</i></p>` : ''}
+        ${r.decline_note ? `<p class="small muted" style="margin:8px 0 0">
+          You said: <i>${esc(r.decline_note)}</i></p>` : ''}
+        ${r.error ? `<p class="small" style="margin:8px 0 0;color:var(--coral-deep)">
+          ${esc(r.error)}</p>` : ''}
+        ${r.status === 'pending' ? `
+          <div class="row wrap" style="gap:10px;margin-top:14px">
+            <button class="btn-primary btn-s" data-ok="${r.id}">Approve and write it</button>
+            <button class="btn-ghost btn-s" data-no="${r.id}">Decline</button>
+          </div>
+          <p class="small faint" style="margin:8px 0 0">Approving writes the note there and then —
+             it takes a minute or two. The parent is emailed twice: once now, and again when the
+             note is ready.</p>
+          <div class="rqStat"></div>` : ''}
+      </div>`;
+    };
+
+    const pending = rows.filter(r => r.status === 'pending');
+    const rest = rows.filter(r => r.status !== 'pending');
+
+    box.innerHTML = `
+      <div class="card">
+        <h2>Requests</h2>
+        <p class="muted">Coach notes parents have asked for between the Wednesday ones. Nothing is
+           written until you approve it here.</p>
+        ${pending.length ? '' : `<p class="muted small" style="margin:10px 0 0">
+          Nothing waiting. ${rest.length ? 'Everything asked for so far is below.'
+                                         : 'No parent has asked for one yet.'}</p>`}
+      </div>
+      ${pending.map(row).join('')}
+      ${rest.length ? `<h3 style="margin:22px 0 0">Already dealt with</h3>
+        ${rest.map(row).join('')}` : ''}`;
+
+    $$('[data-ok]').forEach(b => b.onclick = () => decide(b, b.dataset.ok, 'approve'));
+    $$('[data-no]').forEach(b => b.onclick = async () => {
+      const why = await window.U.promptBox('Decline this request?',
+        'Anything you write here is emailed to the parent, with you copied in. Leave it blank to say nothing.',
+        'e.g. a note went out yesterday — the next one is due Wednesday');
+      if (why === null) return;
+      decide(b, b.dataset.no, 'decline', why);
+    });
+
+    async function decide(btn, id, decision, note) {
+      const card = btn.closest('[data-rq]');
+      const stat = card ? card.querySelector('.rqStat') : null;
+      const buttons = card ? Array.from(card.querySelectorAll('[data-ok],[data-no]')) : [btn];
+      buttons.forEach(x => { x.disabled = true; });
+      btn.innerHTML = decision === 'approve'
+        ? '<span class="loader"></span> Writing the note…'
+        : '<span class="loader"></span> Declining';
+      if (stat && decision === 'approve') {
+        stat.innerHTML = `<p class="small muted" style="margin:10px 0 0">This can take a minute.
+          Please leave this open.</p>`;
+      }
+      const res = await API.decideReportRequest(id, decision, note);
+      if (res.ok) {
+        if (res.status === 'failed') {
+          toast(res.reason || 'The note could not be written.', '', 5000);
+        } else if (decision === 'approve') {
+          toast('Approved. The note is written and the parent has been emailed.', 'good', 5000);
+        } else {
+          toast('Declined. The parent has been emailed.', '', 4000);
+        }
+        pendingCount = Math.max(0, pendingCount - 1);
+        tabRequests();
+        return;
+      }
+      if (stat) stat.innerHTML = `<p class="small" style="margin:10px 0 0;color:var(--coral-deep)">
+        ${esc(res.error)}</p>`;
+      buttons.forEach(x => { x.disabled = false; });
+      btn.textContent = decision === 'approve' ? 'Try again' : 'Decline';
+    }
   }
 
   /* ======================================================================

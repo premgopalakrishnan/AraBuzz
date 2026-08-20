@@ -93,8 +93,12 @@
     const trendNote = (() => {
       const d = last.v - data[0].v;
       if (Math.abs(d) < 2) return 'Holding steady across the period.';
-      return d > 0 ? `Up ${nice(Math.abs(d))}${o.suffix} since ${data[0].label}.`
-                   : `Down ${nice(Math.abs(d))}${o.suffix} since ${data[0].label}.`;
+      /* A move from 31% to 71% is forty percentage POINTS, not forty per
+         cent — saying "up 40%" of a percentage is simply wrong, and a
+         parent reading a report about accuracy will notice. */
+      const unit = o.suffix === '%' ? ' points' : o.suffix;
+      return d > 0 ? `Up ${nice(Math.abs(d))}${unit} since ${data[0].label}.`
+                   : `Down ${nice(Math.abs(d))}${unit} since ${data[0].label}.`;
     })();
 
     return frame(W, H, `

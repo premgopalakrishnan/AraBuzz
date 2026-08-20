@@ -15,7 +15,7 @@
    own family, and stays silent if it is not there.
    ========================================================================== */
 
-import { whoIs, serviceGet, emailOf, sendEmail, emailShell, APP_URL, send } from './_lib.js';
+import { whoIs, serviceGet, emailOf, NOTE_TIME, sendEmail, emailShell, APP_URL, send } from './_lib.js';
 
 const escHtml = t => String(t == null ? '' : t)
   .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
@@ -68,9 +68,11 @@ export default async function handler(req, res) {
     <p style="margin:0 0 14px;font-size:13px;color:#4C5D5A">Tap <b>Grown-ups</b>, enter
        your PIN, and open <b>Coach Report</b>. The note never travels by email — it stays
        behind your PIN.</p>
-    <p style="margin:0;font-size:13px;color:#4C5D5A">From here, a fresh note is published
-       every <b>Wednesday morning</b> — as long as ${escHtml(kidName)} has done a couple
-       of practice rounds in AraBuzz by then.</p>`));
+    <p style="margin:0 0 14px;font-size:13px;color:#4C5D5A">From here, a fresh note is published
+       every <b>${NOTE_TIME}</b> — as long as ${escHtml(kidName)} has done a couple
+       of practice rounds in AraBuzz by then.</p>
+    <p style="margin:0;font-size:13px;color:#4C5D5A">Everything AraBuzz has used on your family is
+       always there for you to look at, under <b>Usage</b> in Grown-ups.</p>`));
 
   return send(res, 200, { sent: true });
 }

@@ -252,6 +252,8 @@
       </div>`;
 
     const cellAt = (r, c) => body.querySelector(`input[data-r="${r}"][data-c="${c}"]`);
+    const refreshMini = gridFeedback(g, (r, c) =>
+      body.querySelector(`.xw td[data-r="${r}"][data-c="${c}"]`));
     window.U.$$('.xw input', body).forEach(inp => {
       window.U.noAutoCorrect(inp);
       inp.oninput = () => {
@@ -261,6 +263,7 @@
           const n = cellAt(r, c + 1) || cellAt(r + 1, c);
           if (n) n.focus();
         }
+        refreshMini();
       };
     });
     setTimeout(() => { const f = body.querySelector('.xw input'); if (f) f.focus(); }, 120);
@@ -279,8 +282,10 @@
         const ok = got === e.letters;
         if (ok) right++;
         const wd = Store.db.words[e.id];
-        if (wd) Engine.record({ wordId: wd.id, word: wd.word, mode: 'crossword', kind: 'type', answer: wd.word },
-          got.trim(), ok, ok, 0, s.id);
+        if (wd && countsAsAttempt(wd.word, got.trim(), ok)) {
+          Engine.record({ wordId: wd.id, word: wd.word, mode: 'crossword', kind: 'type', answer: wd.word },
+            got.trim(), ok, ok, 0, s.id);
+        }
       });
       const all = right === g.entries.length;
       const pts = right * 9;
@@ -854,6 +859,106 @@
   /* ====================================================================== */
   let xw = null;
 
+  /* ------------------------------------------------------- grid feedback --
+     Sitting with Aradhana it was obvious that the crossword told her nothing
+     where she was looking. She would finish a word, the clue underneath the
+     grid would go green and get a line through it, and the squares her eyes
+     were actually on would sit there unchanged. So she kept checking the
+     clue list to find out whether she had got it — which is exactly the
+     break in flow the game is supposed to avoid.
+
+     This paints the answer into the squares:
+
+       right          the whole word turns green and stays green, the letters
+                      pop out one after another, and a small burst of specks
+                      goes off over that word. Half a second, local to the
+                      word, nothing covering the screen.
+
+       finished, not right
+                      the squares go a soft red. Quietly — no sound, no
+                      movement. And only once every square of that word has
+                      a letter in it, so she is never told she is wrong
+                      halfway through writing.
+
+       still writing  nothing at all.
+
+     Where an across and a down cross, green wins: a letter that is doing its
+     job in one word should not be painted as a mistake because the other
+     word through it is not finished yet.
+
+     Shared by the full crossword and the bonus grid inside Mixed Buzz. */
+  function gridFeedback(grid, tdAt) {
+    const celebrated = new Set();
+
+    function cellsOf(e) {
+      const out = [];
+      for (let i = 0; i < e.letters.length; i++) {
+        const rr = e.row + (e.dir === 'down' ? i : 0);
+        const cc = e.col + (e.dir === 'across' ? i : 0);
+        out.push(tdAt(rr, cc));
+      }
+      return out;
+    }
+
+    function celebrate(cells) {
+      const boxes = [];
+      cells.forEach((td, i) => {
+        if (!td) return;
+        td.classList.remove('pop');
+        void td.offsetWidth;                       // restart the animation
+        td.style.animationDelay = (i * 45) + 'ms';
+        const inp = td.querySelector('input');
+        if (inp) inp.style.animationDelay = (i * 45) + 'ms';
+        td.classList.add('pop');
+        boxes.push(td.getBoundingClientRect());
+        setTimeout(() => {
+          td.classList.remove('pop');
+          td.style.animationDelay = '';
+          if (inp) inp.style.animationDelay = '';
+        }, 900 + i * 45);
+      });
+      if (!boxes.length) return;
+      const left = Math.min.apply(null, boxes.map(b => b.left));
+      const top = Math.min.apply(null, boxes.map(b => b.top));
+      const right = Math.max.apply(null, boxes.map(b => b.right));
+      const bottom = Math.max.apply(null, boxes.map(b => b.bottom));
+      window.U.sparkle({ left, top, width: right - left, height: bottom - top },
+                       6 + boxes.length * 2);
+      window.U.beep('good');
+    }
+
+    return function refresh() {
+      const green = new Set(), red = new Set(), fresh = [];
+
+      grid.entries.forEach(e => {
+        const key = e.id + '|' + e.dir;
+        const cells = cellsOf(e);
+        let got = '', filled = 0;
+        cells.forEach(td => {
+          const inp = td && td.querySelector('input');
+          const v = (inp && inp.value) ? inp.value.toUpperCase() : '';
+          if (v) filled++;
+          got += v || ' ';
+        });
+        if (got === e.letters) {
+          cells.forEach(td => { if (td) green.add(td); });
+          if (!celebrated.has(key)) { celebrated.add(key); fresh.push(cells); }
+        } else {
+          celebrated.delete(key);                  // she changed it — it may win again
+          if (filled === e.letters.length) cells.forEach(td => { if (td) red.add(td); });
+        }
+      });
+
+      grid.entries.forEach(e => cellsOf(e).forEach(td => {
+        if (!td) return;
+        td.classList.toggle('won', green.has(td));
+        td.classList.toggle('softno', !green.has(td) && red.has(td));
+      }));
+
+      fresh.forEach(celebrate);
+    };
+  }
+
   function startCrossword(pool) {
     const entries = pool
       .filter(wd => Puzzles.strip(wd.word).length >= 3)
@@ -964,6 +1069,9 @@
       return out;
     }
 
+    const refreshGrid = gridFeedback(g, (r, c) =>
+      document.querySelector(`.xw td[data-r="${r}"][data-c="${c}"]`));
+
     function markSolved() {
       g.entries.forEach(e => {
         const got = readEntry(e);
@@ -971,6 +1079,7 @@
         if (got === e.letters) { xw.solved.add(e.id + e.dir); if (li) li.classList.add('solved'); }
         else { xw.solved.delete(e.id + e.dir); if (li) li.classList.remove('solved'); }
       });
+      refreshGrid();
     }
 
     $('#checkBtn').onclick = () => {
@@ -985,8 +1094,9 @@
           const inp = cellAt(rr, cc);
           if (!td || !inp || !inp.value) continue;
           td.classList.remove('ok', 'no');
-          if (inp.value.toUpperCase() === e.letters[i]) td.classList.add('ok');
-          else td.classList.add('no');
+          /* Only the letters that are wrong need calling out here — the ones
+             that are right are already green from the live paint. */
+          if (inp.value.toUpperCase() !== e.letters[i]) td.classList.add('no');
         }
         if (got === e.letters) right++; else if (got.trim()) wrong++;
       });
@@ -1020,7 +1130,7 @@
       const ok = readEntry(e) === e.letters;
       if (ok) correct++;
       else if (wd) misses.push({ wordId: wd.id, word: wd.word, given: got, analysis: got ? Phonics.analyse(wd.word, got) : null, mode: 'crossword' });
-      if (wd) {
+      if (wd && countsAsAttempt(wd.word, got, ok)) {
         Engine.record({ wordId: wd.id, word: wd.word, mode: 'crossword', kind: 'type', answer: wd.word },
           got || '', ok, ok && xw.checked === 0, Date.now() - xw.started, 'xw');
       }
@@ -1277,11 +1387,14 @@
     if (isRecall) {
       rush.recalls++;
       if (ok) rush.recallOk++;
-      // Only the from-memory round goes into her records — copying is not a test.
-      Engine.record(
-        { wordId: item.wd.id, word: item.wd.word, mode: 'rush', kind: 'type', answer: item.wd.word },
-        rush.typed, ok, ok, 0, rush.sessionId
-      );
+      // Only the from-memory round goes into her records — copying is not a test,
+      // and neither is a hand resting on the keyboard while the timer runs out.
+      if (countsAsAttempt(item.wd.word, rush.typed, ok)) {
+        Engine.record(
+          { wordId: item.wd.id, word: item.wd.word, mode: 'rush', kind: 'type', answer: item.wd.word },
+          rush.typed, ok, ok, 0, rush.sessionId
+        );
+      }
     }
 
     if (ok) {
@@ -1516,6 +1629,60 @@
                         levelUp: after > before, level: after, res });
   }
 
+
+  /* ======================================================================
+     WHAT COUNTS AS AN ATTEMPT
+
+     Aradhana's record held answers she never gave. Against "Interdependence"
+     it had stored "U", "A  E" and "I T   EN  N E" — snapshots of a half-filled
+     crossword grid, saved as if she had spelled the word that way. Word Rush
+     had "jjjjjjjjj" and "fttttttttt", a timer running out with a hand on the
+     keyboard. Thirty-one of her recorded misses were not attempts at all,
+     against thirty that were.
+
+     That is not a cosmetic problem. Those rows drive the Leitner boxes, her
+     accuracy, the share of errors that "sound right", and the evidence quoted
+     back at a parent in every automatic note. "Lifestyle" sat in box zero
+     partly because of them, and the app was quietly reporting a 94% speller
+     as a 49% one.
+
+     A right answer is always an attempt. A wrong one has to look like a
+     child trying.
+     ====================================================================== */
+  function countsAsAttempt(word, given, ok) {
+    if (ok) return true;                       // getting it right always counts
+    const raw = String(given == null ? '' : given);
+    const g = raw.replace(/\s+/g, '');
+    if (!g) return false;                      // nothing typed at all
+
+    /* A grid with holes in it. The crossword fills unknown squares with
+       spaces, so "A  E" and "I T   EN  N E" are pictures of the grid, not
+       spellings. TWO or more spaces in a row is the tell — a single space is
+       a child writing "well bying", which is a real attempt at a real word
+       and must survive. */
+    if (/\S\s{2,}\S/.test(raw.trim())) return false;
+
+    /* A fragment. Fewer than half the letters is somebody who stopped, not
+       somebody who spelled it wrongly. */
+    const letters = String(word || '').replace(/[^a-z]/gi, '').length;
+    if (letters && g.length < Math.max(3, letters * 0.5)) return false;
+
+    /* One key held down, or a short run repeated to fill the box —
+       "jjjjjjjjj", "fttttttttt", "idkidkidkidk", "lololololo". */
+    if (/^(.)\1+$/i.test(g)) return false;
+    if (/(.)\1{4,}/i.test(g)) return false;
+    if (/(.{2,4})\1{2,}/i.test(g)) return false;
+
+    /* A long answer built from almost no letters is a keyboard, not a word. */
+    if (g.length >= 8 && new Set(g.toLowerCase()).size <= 3) return false;
+
+    /* The alphabet, or a walk along the keyboard. */
+    const low = g.toLowerCase();
+    if ('abcdefghijklmnopqrstuvwxyz'.includes(low) && low.length > 4) return false;
+    if (/(qwerty|asdf|zxcv|hjkl)/.test(low)) return false;
+
+    return true;
+  }
 
   /* ======================================================================
      SPELL QUEST — the one Aradhana asked for.

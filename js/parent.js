@@ -147,25 +147,177 @@
     const el = $('#syncPill');
     if (!el) { clearInterval(syncPillTimer); syncPillTimer = null; return; }
     const st = (window.Sync && Sync.status) ? Sync.status() : null;
+    const open = ` role="button" tabindex="0" style="cursor:pointer"`;
     if (!st || !st.live) { el.innerHTML = ''; }
     else if (st.pending > 0 && !st.online) {
-      el.innerHTML = `<span class="pill honey" title="This device is offline. Everything is safe here and will go up on its own the moment you are back online.">
+      el.innerHTML = `<span class="pill honey"${open} title="This device is offline. Everything is safe here and will go up on its own the moment you are back online. Tap to see what is waiting.">
         ${window.U.plural(st.pending, 'change')} waiting — no internet</span>`;
     }
     else if (st.pending > 0 && st.failing) {
-      el.innerHTML = `<span class="pill honey" title="${esc(st.error || 'The account did not answer')} — this device keeps trying on its own.">
+      el.innerHTML = `<span class="pill honey"${open} title="${esc(st.error || 'The account did not answer')} — this device keeps trying on its own. Tap to see what is waiting.">
         ${window.U.plural(st.pending, 'change')} waiting — retrying</span>`;
     }
     else if (st.pending > 0) {
-      el.innerHTML = `<span class="pill honey" title="Still on this device — don't close the browser until this clears">
+      el.innerHTML = `<span class="pill honey"${open} title="Still on this device. Tap to see what is waiting and send it now.">
         ${window.U.plural(st.pending, 'change')} waiting to sync</span>`;
     } else {
-      el.innerHTML = `<span class="pill sage" title="Everything is saved in your family account"> All synced</span>`;
+      el.innerHTML = `<span class="pill sage"${open} title="Everything is saved in your family account. Tap to check."> All synced</span>`;
+    }
+    const pill = el.firstElementChild;
+    if (pill) {
+      pill.onclick = syncPanel;
+      pill.onkeydown = e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); syncPanel(); } };
     }
     if (!syncPillTimer) syncPillTimer = setInterval(() => {
       if (!$('#syncPill')) { clearInterval(syncPillTimer); syncPillTimer = null; return; }
       paintSyncPill();
     }, 8000);
+  }
+
+  /* --------------------------------------------------------- sync panel --
+     "For me the second report of Aradhana is still not showing up on my
+     laptop. These kinds of gaps cannot happen — the kid's iPad cannot show
+     one set of data and the laptop be missing it."
+
+     He is right, and the real repair for that was in sync.js: notes now move
+     both ways on every sync, for every child, instead of only when somebody
+     opened the Coach Report tab. This panel exists for the times something
+     still does not agree. It answers three questions a parent can act on —
+     what is on this device that the account has not got, when the two last
+     spoke, and is anything stuck — and gives them one button.
+
+     It deliberately does NOT list four hundred individual answers. Nobody
+     wants to read those, and a list that long reads as "something is badly
+     wrong" when the honest answer is usually "she has been playing and the
+     wifi dropped for a minute". Counts and plain nouns instead. */
+  function syncPanel() {
+    const S = window.Sync;
+    if (!S || !S.details) return;
+
+    const m = modal(`<div id="syncPanelBody"></div>`);
+    let timer = null;
+
+    function line(st) {
+      if (!st.live) return ['sage', 'This device is on its own',
+        'Nothing is being sent anywhere, because this device is not signed in to a family account. Everything is saved here.'];
+      if (st.blocked.length) return ['coral', 'Something is stuck',
+        'A few items were refused by your account and are being kept to one side rather than retried for ever. Everything else is going up normally.'];
+      if (!st.online) return ['honey', 'No internet on this device',
+        'Everything is safe here. It goes up on its own the moment you are back online — you do not have to keep this page open.'];
+      if (st.waiting && st.failing) return ['honey', 'Your account is not answering',
+        'This device keeps trying by itself. Nothing has been lost.'];
+      if (st.waiting) return ['honey', 'Still on its way up',
+        'These are on this device and not yet in your account. They normally clear within a few seconds.'];
+      return ['sage', 'Everything is in your account',
+        'This device and your account agree. Anything written on another device is already here too.'];
+    }
+
+    const when = ms => {
+      if (!ms) return 'not yet';
+      const mins = Math.round((Date.now() - ms) / 60000);
+      if (mins < 1) return 'just now';
+      if (mins < 60) return window.U.plural(mins, 'minute') + ' ago';
+      const hrs = Math.round(mins / 60);
+      if (hrs < 24) return window.U.plural(hrs, 'hour') + ' ago';
+      return window.U.plural(Math.round(hrs / 24), 'day') + ' ago';
+    };
+
+    function paintPanel(busy) {
+      const box = $('#syncPanelBody');
+      if (!box) { if (timer) clearInterval(timer); return; }
+      const st = S.details();
+      const [tone, head, sub] = line(st);
+      box.innerHTML = `
+        <h2 style="margin-top:0">Sync</h2>
+        <div class="feedback ${tone === 'sage' ? 'good' : tone === 'coral' ? 'bad' : ''}"
+             style="margin-bottom:14px">
+          <b>${esc(head)}</b>
+          <p class="small" style="margin:6px 0 0">${esc(sub)}</p>
+        </div>
+
+        ${st.items.length ? `
+          <h3 style="margin:0 0 6px">Waiting on this device</h3>
+          <table class="data" style="width:100%"><tbody>
+            ${st.items.map(x => `<tr>
+              <td style="white-space:nowrap"><b>${esc(window.U.plural(x.n, x.noun))}</b></td>
+              <td class="small muted">${esc(x.why)}</td></tr>`).join('')}
+          </tbody></table>` : `
+          <p class="muted small" style="margin:0 0 12px">Nothing is waiting.</p>`}
+
+        ${st.blocked.length ? `
+          <h3 style="margin:16px 0 6px">Set aside</h3>
+          <p class="small muted" style="margin:0 0 8px">Your account refused these, so they are held here
+            instead of being retried for ever — usually an answer about a word that has since been
+            removed from a list. They do not hold anything else up, and nothing else is affected.</p>
+          <table class="data" style="width:100%"><tbody>
+            ${st.blocked.slice(0, 8).map(b => `<tr>
+              <td class="small" style="white-space:nowrap">${esc(b.table || 'item')}</td>
+              <td class="small muted">${esc(String(b.reason || b.error || '').slice(0, 90))}</td></tr>`).join('')}
+          </tbody></table>
+          ${st.blocked.length > 8 ? `<p class="small muted">…and ${st.blocked.length - 8} more.</p>` : ''}
+          <button class="btn-quiet btn-s" id="syncForget" style="margin-top:8px">Forget these</button>` : ''}
+
+        <h3 style="margin:18px 0 6px">Coach notes on this device</h3>
+        <div id="syncNotes"><p class="small muted">Checking…</p></div>
+
+        <h3 style="margin:18px 0 6px">Last spoke to your account</h3>
+        <table class="data" style="width:100%"><tbody>
+          <tr><td class="small">Sent up</td><td class="small muted">${esc(when(st.lastPush))}</td></tr>
+          <tr><td class="small">Brought down</td><td class="small muted">${esc(when(st.lastPull))}</td></tr>
+        </tbody></table>
+        ${st.error ? `<p class="small" style="margin:10px 0 0;color:var(--clay)">Last message from your
+          account: ${esc(st.error)}</p>` : ''}
+
+        <div class="row wrap" style="gap:10px;margin-top:20px">
+          <button class="btn-primary" id="syncGo" ${busy ? 'disabled' : ''}>
+            ${busy ? 'Syncing…' : 'Sync everything now'}</button>
+          <button class="btn-ghost btn-s" id="syncClose">Close</button>
+        </div>
+        <p class="small muted" style="margin:12px 0 0">This runs on its own every few minutes and
+          whenever anything changes. The button is here for when you would rather not wait — it
+          sends everything up and brings down anything written on another device, including coach
+          notes.</p>`;
+
+      /* Filled in asynchronously so the rest of the panel is never held up by
+         a network call, and quietly skipped if the panel closes first. */
+      noteAudit().then(rows => {
+        const holder = $('#syncNotes');
+        if (!holder) return;
+        if (!rows || !rows.length) { holder.innerHTML =
+          `<p class="small muted">Notes are kept on this device only.</p>`; return; }
+        holder.innerHTML = `<table class="data" style="width:100%"><tbody>
+          ${rows.map(r => {
+            if (r.offline) return `<tr><td class="small">${esc(r.name || 'A child')}</td>
+              <td class="small muted">on this device only</td></tr>`;
+            const same = r.cloud != null && r.cloud === r.local;
+            return `<tr><td class="small">${esc(r.name || 'A child')}</td>
+              <td class="small ${same ? 'muted' : ''}"
+                  ${same ? '' : 'style="color:var(--clay)"'}>
+                ${r.local} here · ${r.cloud == null ? '?' : r.cloud} in your account${
+                  same ? '' : ' — press Sync everything now'}</td></tr>`;
+          }).join('')}
+        </tbody></table>`;
+      }).catch(() => {});
+
+      const go = $('#syncGo');
+      if (go) go.onclick = async () => {
+        paintPanel(true);
+        try { await S.syncNow(); }
+        catch (e) { console.warn('manual sync', e); }
+        paintPanel(false);
+        paintSyncPill();
+        if (tab === 'report') tabReport();
+      };
+      const cl = $('#syncClose'); if (cl) cl.onclick = () => m.close('ok');
+      const fg = $('#syncForget');
+      if (fg) fg.onclick = () => { S.clearBlocked(); paintPanel(false); };
+    }
+
+    paintPanel(false);
+    /* Repaint while it is open so a parent watching the count go down sees it
+       go down. paintPanel() clears its own timer the moment the panel is no
+       longer on screen, whichever way it was closed. */
+    timer = setInterval(() => paintPanel(false), 5000);
   }
 
   /** The admin console calls this to host a grown-ups tab inside its own
@@ -1117,14 +1269,28 @@ Reflex = A quick automatic response"></textarea>
   /** Notes written elsewhere — the weekly cron, or another device — live in
    *  the account. Fold them into the local archive so this tab shows one
    *  truthful list wherever the parent happens to open it. */
-  async function mergeCloudReports() {
+  async function mergeCloudReports(forChild) {
     if (!window.Cloud || !Cloud.signedIn() || !window.Sync) return false;
-    const childId = Store.db.activeChildId;
+    const childId = forChild || Store.db.activeChildId;
     if (!Sync.isDbId(childId)) return false;
     try {
+      /* Two steps on purpose. This now runs on every sync, for every child,
+         and a note carries several kilobytes of HTML — fetching all forty of
+         them every five minutes to discover that nothing changed would be a
+         waste of a family's data allowance. So: ask for the ids first, which
+         costs almost nothing, and only fetch the notes this device has never
+         seen. */
+      const bagNow = Store.db.activeChildId === childId
+        ? Store.db : (Store.db.children || []).find(c => c.id === childId);
+      const known = new Set(((bagNow && bagNow.reports) || []).map(r => r.cloudId).filter(Boolean));
+      const idsRes = await Cloud.from('reports')
+        .select('id').eq('child_id', childId).order('ts', { ascending: false }).limit(40);
+      if (idsRes.error || !idsRes.data) return false;
+      const want = idsRes.data.map(r => r.id).filter(id => !known.has(id));
+      if (!want.length) return false;
       const { data, error } = await Cloud.from('reports')
         .select('id, ts, payload, html, range_from, range_to')
-        .eq('child_id', childId).order('ts', { ascending: false }).limit(40);
+        .in('id', want).order('ts', { ascending: false });
       if (error || !data) return false;
       /* The family may have switched profiles while this was fetching. File
          everything under the child it was FETCHED FOR — live fields if they
@@ -1149,6 +1315,20 @@ Reflex = A quick automatic response"></textarea>
           id: Store.uid('r'), cloudId: row.id,
           ts: Date.parse(row.ts) || Date.now(),
           html,
+          /* The note is kept as text AND as the numbers it was drawn from.
+
+             The text alone was not enough. Chart colours are chosen at the
+             moment a note is drawn, from whichever theme the device happened
+             to be in — so a note merged on a dark screen and opened later on
+             a light one had pale grey labels on white paper. Exactly the
+             "two greys on top of each other" Prem photographed once already.
+
+             Keeping the ingredients means the note is redrawn each time it
+             is opened, in the theme it is being read in. It also means every
+             improvement to how notes look reaches the notes already filed,
+             instead of only the next one. */
+          result: (row.html ? null : res) || null,
+          pay: row.html ? null : (pay || null),
           range: pay.kind === 'onboarding' ? 'Starting point'
                : (row.range_from ? row.range_from + ' → ' + row.range_to : 'Weekly note'),
           kind: pay.kind || 'weekly',
@@ -1178,14 +1358,18 @@ Reflex = A quick automatic response"></textarea>
         }) + ' IST';
       } catch (e) { return new Date(ts).toLocaleString(); }
     };
+    /* Theme variables, not fixed colours: this note is redrawn in whatever
+       theme it is opened in, and a parchment-coloured track on a dark page
+       is the same mistake as pale grey text on white paper. */
     const bar = (correct, total) => {
       const pct = total ? Math.round(correct / total * 100) : 0;
-      return `<div style="background:#F0E9DC;border-radius:99px;height:10px;min-width:90px;overflow:hidden">
-        <div style="width:${pct}%;height:100%;background:${pct >= 70 ? '#6B9080' : pct >= 40 ? '#E8A33D' : '#E07A5F'}"></div></div>`;
+      const fill = pct >= 70 ? 'var(--jade)' : pct >= 40 ? 'var(--gold)' : 'var(--clay)';
+      return `<div style="background:var(--line);border-radius:99px;height:10px;min-width:90px;overflow:hidden">
+        <div style="width:${pct}%;height:100%;background:${fill}"></div></div>`;
     };
     const sess = (ev.sessions || []).slice().sort((a, b) => Date.parse(a.ts) - Date.parse(b.ts));
     return `
-      <h2>The week in numbers</h2>
+      <h2>The numbers behind this note</h2>
       <p class="viz-sub" style="margin:0 0 10px">Everything below is counted straight from
          ${esc(name)}'s recorded answers — this note is written from these facts and no others.</p>
       ${window.Charts ? Charts.tiles([
@@ -1212,31 +1396,256 @@ Reflex = A quick automatic response"></textarea>
          A round's score counts only real test questions — copying practice never inflates it.</p>` : ''}`;
   }
 
+  /* ---------------------------------------------------------- the note ----
+     Prem read the first two notes and said the plain thing: "it is not that
+     detailed". Fair. A note that only describes the fortnight it was written
+     in is a snapshot, and a parent does not need a snapshot — they need to
+     know whether anything moved, what the advice they were given last time
+     actually achieved, and where the marked schoolwork disagrees with the
+     app.
+
+     So the note is longer now, and every long part is a comparison:
+
+       Where things stand        the direction of travel, with the numbers
+       What has been fixed       named, with evidence
+       What is still hard        named, with something different to try
+       Since the last note       accuracy then vs now, word by word
+       From their schoolwork     what the photographed pages show
+       How they practise         which games, how often, spread or crammed
+       Mistakes, then and now    each pattern counted in both periods
+       The numbers behind it     the receipts, unchanged
+
+     The charts are drawn from the same numbers the note was written from, so
+     a parent can check any sentence in it against a picture. Older notes,
+     written before any of this existed, simply do not render the new
+     sections — nothing has to be rewritten.  */
+
+  const MODE_NAMES = {
+    type: 'Typing it out', listen: 'Listen & Spell', choose: 'Spot the right one',
+    meaning: 'Word meanings', crossword: 'Crossword', rush: 'Word Rush',
+    quest: 'Spell Quest', jumble: 'Unjumble', search: 'Word Search', mini: 'Bonus grid'
+  };
+  const modeName = m => MODE_NAMES[m] || (String(m || 'Practice').charAt(0).toUpperCase() + String(m || '').slice(1));
+
+  const PATTERN_NAMES = {
+    soundsRight: 'Spelled the way it sounds', doubles: 'Double letters',
+    vowels: 'Wrong vowel in the middle', endings: 'Word endings',
+    silent: 'Silent letters', order: 'Letters in the wrong order',
+    missing: 'A letter left out', extra: 'An extra letter', capital: 'Capital letters'
+  };
+  const patternName = t => PATTERN_NAMES[t] ||
+    String(t || '').replace(/([a-z])([A-Z])/g, '$1 $2').replace(/^./, c => c.toUpperCase());
+
+  /** The arc across every note so far — the one picture that cannot be got
+   *  from a single note, and the reason a third note is worth more than the
+   *  first two put together. */
+  function trendHTML(pay, name) {
+    if (!window.Charts) return '';
+    const hist = (pay && pay.history || []).filter(h => h.metrics && h.metrics.accuracy != null);
+    const nowM = pay && pay.metrics;
+    const points = hist.map(h => ({
+      label: window.U.fmtDay ? window.U.fmtDay(Date.parse(h.on)) : String(h.on).slice(5),
+      v: Math.round(h.metrics.accuracy * 100),
+      n: h.metrics.answers
+    }));
+    if (nowM && nowM.accuracy != null) {
+      points.push({ label: 'This note', v: Math.round(nowM.accuracy * 100), n: nowM.answers });
+    }
+    if (points.length < 2) return '';
+    return `<div class="viz" style="margin:14px 0 18px">${Charts.line(points, {
+      title: 'How ' + name + ' has been doing, note by note',
+      sub: 'Share of answers correct in the period each note covered.',
+      suffix: '%', min: 0, max: 100
+    })}</div>`;
+  }
+
+  /** Did last time's advice work? Word by word, then versus now. */
+  function sinceLastHTML(pay, name, P) {
+    const rows = (pay && pay.sinceLast || []).filter(x => x && x.word);
+    if (!rows.length) return '';
+    const TONE = {
+      'looks fixed': ['sage', 'Looks fixed'],
+      'clearly better': ['sage', 'Clearly better'],
+      'about the same': ['', 'About the same'],
+      'still hard': ['coral', 'Still hard'],
+      'gone backwards': ['coral', 'Gone backwards'],
+      'not practised since': ['', 'Not practised since']
+    };
+    const bars = window.Charts ? rows
+      .filter(x => x.accuracyNow != null && x.accuracyBefore != null)
+      .map(x => ({ label: x.word, a: Math.round(x.accuracyNow * 100), b: Math.round(x.accuracyBefore * 100) })) : [];
+    return `
+      <h2>Did last time's advice work?</h2>
+      <p class="viz-sub" style="margin:0 0 10px">These are the words the previous note asked you to
+         practise with ${esc(name)}. This is what happened to them.</p>
+      ${bars.length >= 2 ? `<div class="viz" style="margin:0 0 16px">${Charts.compareBars(bars, {
+        title: 'Right first time, before and after',
+        aLabel: 'Now', bLabel: 'Last note', suffix: '%'
+      })}</div>` : ''}
+      <table>
+        <thead><tr><th>Word</th><th style="width:26%">Where it is now</th>
+          <th>What ${esc(P.they())} ${esc(P.s('write'))}</th></tr></thead>
+        <tbody>${rows.map(x => {
+          const [tone, label] = TONE[x.verdict] || ['', x.verdict || ''];
+          const pct = v => v == null ? null : Math.round(v * 100) + '%';
+          const a = pct(x.accuracyBefore), b = pct(x.accuracyNow);
+          return `<tr>
+            <td><b>${esc(x.word)}</b></td>
+            <td><span class="pill ${tone} tiny">${esc(label)}</span>${
+              a && b ? `<div class="faint tiny" style="margin-top:4px;white-space:nowrap">${a} → ${b}</div>`
+                     : (b ? `<div class="faint tiny" style="margin-top:4px">${b} right</div>` : '')}</td>
+            <td class="small">${(x.recentSpellings || []).length
+              ? (x.recentSpellings || []).slice(0, 4).map(sp => `<i>${esc(sp)}</i>`).join(' · ')
+              : '<span class="faint">nothing wrong recently</span>'}</td>
+          </tr>`; }).join('')}</tbody>
+      </table>`;
+  }
+
+  /** Each kind of mistake, counted in this period and the one before it.
+   *  "Still doing it" and "stopped doing it" become facts. */
+  function patternTrendHTML(pay) {
+    const rows = (pay && pay.patternTrend || []).filter(x => x && (x.now || x.before));
+    if (rows.length < 2 || !window.Charts) return '';
+    const bars = rows.slice(0, 6).map(x => ({
+      label: patternName(x.tag),
+      a: Math.round((x.nowRate != null ? x.nowRate : 0) * 100),
+      b: Math.round((x.beforeRate != null ? x.beforeRate : 0) * 100)
+    }));
+    return `
+      <h2>Mistakes, then and now</h2>
+      <p class="viz-sub" style="margin:0 0 10px">Each kind of mistake as a share of everything that went
+         wrong — this period against the same length of time before it. Shares, not counts, so a
+         fortnight with more practice in it does not look worse than one with less.</p>
+      <div class="viz" style="margin:0 0 8px">${Charts.compareBars(bars, {
+        title: 'Share of her mistakes', aLabel: 'This period', bLabel: 'Before', suffix: '%'
+      })}</div>`;
+  }
+
+  /** Which games, and how often. A child who is fine in one game and not in
+   *  another usually has a speed problem, not a spelling problem. */
+  function practiceHTML(pay, name, P) {
+    if (!window.Charts) return '';
+    const byMode = (pay && pay.byMode || []).filter(m => m && m.answers >= 3);
+    const daily = (pay && pay.daily || []);
+    if (!byMode.length && daily.length < 2) return '';
+    const days = daily.map(d => ({
+      label: window.U.fmtDay ? window.U.fmtDay(Date.parse(d.day)) : String(d.day).slice(5),
+      n: d.answers
+    }));
+    return `
+      ${byMode.length ? `<div class="viz" style="margin:12px 0 14px">${Charts.compareBars(
+        byMode.map(m => ({ label: modeName(m.mode), a: Math.round(m.accuracy * 100) })), {
+        title: 'How ' + name + ' does in each game',
+        sub: 'Share of answers correct. Only games with at least three answers are shown.',
+        suffix: '%'
+      })}</div>` : ''}
+      ${days.length >= 2 ? `<div class="viz" style="margin:0 0 14px">${Charts.activity(days, {
+        title: 'When ' + name + ' practised', sub: 'Answers given each day in this period.'
+      })}</div>` : ''}`;
+  }
+
+  /** Words lifted off photographs of real, marked schoolwork. The outside
+   *  evidence — what the teacher actually saw, as opposed to what the app
+   *  set her. Where the two disagree is the most useful line in any note. */
+  function ownWorkNoteHTML(pay, name, P) {
+    const rows = (pay && pay.ownWork || []).filter(x => x && x.word);
+    if (!rows.length) return '';
+    return `
+      <table>
+        <thead><tr><th>From ${esc(P.their())} schoolwork</th><th style="width:16%">Right</th>
+          <th>What ${esc(P.they())} wrote</th></tr></thead>
+        <tbody>${rows.slice(0, 20).map(x => `<tr>
+          <td><b>${esc(x.word)}</b></td>
+          <td>${x.tries ? Math.round((x.accuracy || 0) * 100) + '%' : '—'}
+              <span class="faint tiny">of ${x.tries || 0}</span></td>
+          <td class="small">${(x.spellings || []).slice(0, 4).map(sp => `<i>${esc(sp)}</i>`).join(' · ')
+            || '<span class="faint">—</span>'}</td></tr>`).join('')}</tbody>
+      </table>
+      <p class="viz-note">These came from photographs of ${esc(name)}'s own marked work, not from the
+         school's published list. The photographs themselves were never kept.</p>`;
+  }
+
   function renderCloudNote(r, pay, row, kidName) {
-    r = fixShape(r, ['strengths', 'patterns', 'thisWeek', 'wordsToDrill']);
+    r = fixShape(r, ['strengths', 'patterns', 'thisWeek', 'wordsToDrill', 'fixed', 'stillHard']);
     const name = kidName || (Store.db.profile ? Store.db.profile.name : '');
+    const onRequest = !!(pay && (pay.onRequest || pay.kind === 'on-request'));
+    /* AraBuzz was written for one girl and said "she" everywhere. Four of the
+       nine children are boys. Every heading below asks the pronoun helper
+       rather than assuming. */
+    const P = window.U.pronouns(pay && pay.pronoun ? pay.pronoun : undefined);
+    const paras = t => String(t || '').split(/\n{2,}|\n/).filter(Boolean)
+      .map(x => `<p>${esc(x)}</p>`).join('');
+
+    const TREND_WORD = {
+      up: ['sage', 'Moving in the right direction'],
+      down: ['coral', 'Slipped since the last note'],
+      flat: ['', 'Holding steady'],
+      mixed: ['honey', 'Better in some places, not in others'],
+      first: ['', 'The starting point']
+    };
+    const tr = r.trend && r.trend.direction ? (TREND_WORD[r.trend.direction] || ['', '']) : null;
+
     const inner = `
       <div class="card report">
         <style>${window.Charts ? Charts.CSS : ''}</style>
-        <div class="kicker">AraBuzz · Weekly note · ${esc(window.U.fmtDate(Date.parse(row.ts)))}</div>
-        <h1>${esc(name)}'s week</h1>
+        <div class="kicker">AraBuzz · ${onRequest ? 'Coach note' : 'Weekly note'} ·
+          ${esc(window.U.fmtDate(Date.parse(row.ts)))}</div>
+        <h1>${esc(name)}${onRequest ? ' — where ' + esc(P.they()) + ' ' + esc(P.is()) + ' now' : "'s week"}</h1>
         <blockquote><b>${esc(r.headline || '')}</b></blockquote>
-        ${String(r.whereTheyAre || '').split(/\n{2,}|\n/).filter(Boolean).map(t => `<p>${esc(t)}</p>`).join('')}
+
+        ${tr ? `<div class="feedback ${tr[0] === 'sage' ? 'good' : tr[0] === 'coral' ? 'bad' : ''}"
+             style="margin:0 0 16px">
+          <b>${esc(tr[1])}</b>
+          <p class="small" style="margin:6px 0 0">${esc(r.trend.evidence || '')}</p></div>` : ''}
+
+        ${trendHTML(pay, name)}
+        ${paras(r.whereTheyAre)}
+
+        ${(r.fixed || []).filter(x => x && x.thing).length ? `
+        <h2>What has been fixed</h2>
+        <ul>${r.fixed.filter(x => x && x.thing).map(x =>
+          `<li><b>${esc(x.thing)}</b> — ${esc(x.evidence || '')}</li>`).join('')}</ul>` : ''}
+
+        ${(r.stillHard || []).filter(x => x && x.thing).length ? `
+        <h2>What is still hard</h2>
+        <ul>${r.stillHard.filter(x => x && x.thing).map(x =>
+          `<li><b>${esc(x.thing)}</b> — ${esc(x.evidence || '')}
+             ${x.whatToTry ? `<br><span class="small">Worth trying: ${esc(x.whatToTry)}</span>` : ''}</li>`).join('')}</ul>` : ''}
+
+        ${sinceLastHTML(pay, name, P)}
+
+        ${r.fromSchoolwork ? `<h2>From ${esc(P.their())} own schoolwork</h2>
+          ${paras(r.fromSchoolwork)}${ownWorkNoteHTML(pay, name, P)}` : ownWorkNoteHTML(pay, name, P)}
+
+        ${r.howTheyPractise ? `<h2>How ${esc(P.they())} ${esc(P.s('practise'))}</h2>
+          ${paras(r.howTheyPractise)}` : ''}
+        ${practiceHTML(pay, name, P)}
+
         ${evidenceHTML(pay && pay.evidence, name)}
+
         ${(r.strengths || []).filter(x => x && (x.title || x.detail)).length ? `
         <h2>Going well</h2>
         <ul>${r.strengths.filter(x => x && (x.title || x.detail)).map(x =>
           `<li><b>${esc(x.title || '')}</b>${x.title && x.detail ? ' — ' : ''}${esc(x.detail || '')}</li>`).join('')}</ul>` : ''}
+
         ${(r.patterns || []).length ? `<h2>Patterns worth knowing</h2>
-        <ul>${r.patterns.map(x => `<li><b>${esc(x.pattern)}</b> — ${esc(x.meaning)}${x.example ? ` <span class="muted small">(${esc(x.example)})</span>` : ''}</li>`).join('')}</ul>` : ''}
+        <ul>${r.patterns.map(x => `<li><b>${esc(x.pattern)}</b> — ${esc(x.meaning)}${
+          x.example ? ` <span class="muted small">(${esc(x.example)})</span>` : ''}${
+          x.movement ? `<br><span class="small">${esc(x.movement)}</span>` : ''}</li>`).join('')}</ul>` : ''}
+        ${patternTrendHTML(pay)}
+
         ${(r.thisWeek || []).filter(x => x && x.action).length ? `
         <h2>This week, if you have ten minutes</h2>
-        <ol>${r.thisWeek.filter(x => x && x.action).map(x => `<li><b>${esc(x.action)}</b>${x.why ? ' — ' + esc(x.why) : ''}${x.minutes ? ` <span class="pill tiny">${x.minutes} min</span>` : ''}</li>`).join('')}</ol>` : ''}
+        <ol>${r.thisWeek.filter(x => x && x.action).map(x => `<li><b>${esc(x.action)}</b>${
+          x.why ? ' — ' + esc(x.why) : ''}${
+          x.minutes ? ` <span class="pill tiny">${x.minutes} min</span>` : ''}</li>`).join('')}</ol>` : ''}
+
         ${(r.wordsToDrill || []).length ? `<h2>Words to practise before the next test</h2>
         <p>${r.wordsToDrill.map(wd => `<span class="pill honey">${esc(wd)}</span>`).join(' ')}</p>` : ''}
+
         ${r.sinceLastReport ? `<h2>Since the last note</h2><p>${esc(r.sinceLastReport)}</p>` : ''}
         <p>${esc(r.motivation || '')}</p>
-        ${r.sayToThem ? `<blockquote>Something worth saying:<br><b>“${esc(r.sayToThem)}”</b></blockquote>` : ''}
+        ${r.sayToThem ? `<blockquote>Something worth saying:<br><b>&ldquo;${esc(r.sayToThem)}&rdquo;</b></blockquote>` : ''}
       </div>`;
     /* A fragment, not a document. wrapReportHTML() belongs to the export
        path alone — see noteFragment() above for what wrapping here cost. */
@@ -1258,6 +1667,30 @@ Reflex = A quick automatic response"></textarea>
 
      Notes are now stored as a fragment. This function repairs the ones that
      were already saved the old way, so nothing has to be written again. */
+  /** The note as it should look RIGHT NOW.
+
+      If the ingredients were kept, it is drawn again from them — so the
+      colours match the theme it is being read in, and any improvement to
+      how notes look reaches every note already filed. If not (an older
+      record, or one written on this device), the stored text is used.
+
+      Either way the stored text is refreshed, so exporting or printing gets
+      the same note that is on the screen. */
+  function noteHTML(rec) {
+    if (!rec) return '';
+    if (rec.result) {
+      try {
+        const name = (Store.db.profile && Store.db.profile.name) || '';
+        const fresh = renderCloudNote(rec.result, rec.pay || {}, { ts: rec.ts }, name);
+        if (fresh && fresh.length > 200) {
+          if (fresh !== rec.html) { rec.html = fresh; Store.save(true); }
+          return fresh;
+        }
+      } catch (e) { console.warn('note redraw', e); }
+    }
+    return noteFragment(rec.html);
+  }
+
   function noteFragment(html) {
     const s = String(html || '');
     if (!/<!DOCTYPE|<html[\s>]/i.test(s)) return s;      // already a fragment
@@ -1424,6 +1857,22 @@ Reflex = A quick automatic response"></textarea>
         <div id="rStatus"></div>
       </div>
 
+      <div class="card" style="margin-top:14px" id="askCard">
+        <h3>Need a note before Wednesday?</h3>
+        <p class="muted small">Notes arrive on their own every Wednesday morning. The next one is
+           due <b>${esc(nextNote().words)}</b>${nextNote().soon
+             ? ` — that is ${esc(nextNote().away)} away` : ''}.</p>
+        <p class="muted small">If you would still like to know where ${esc(name)} is before then —
+           a test coming up, a parents' evening, something you have noticed at the kitchen table —
+           you can ask for one. It goes to the team to approve rather than being written on the
+           spot. When you ask, a note goes to <b>arabuzz@cokindlelabs.com</b> with you copied in, so
+           you can see exactly what was sent. You will get an email when it is approved, and another
+           the moment the note itself is ready to read.</p>
+        <p class="muted small">Everything AraBuzz has used on your family is always there for you to
+           look at, under <b>Usage</b> in Grown-ups.</p>
+        <div id="askBody"></div>
+      </div>
+
       ${saved.length >= 2 ? `<div class="card" style="margin-top:14px">
         <h3>Progress across the notes</h3>
         <p class="small muted">Every note so far, in order.</p>
@@ -1440,10 +1889,12 @@ Reflex = A quick automatic response"></textarea>
       <div id="reportOut"></div>`;
 
     if ($('#genBtn')) $('#genBtn').onclick = generateReport;
+    paintAskPanel(forChildId, name);
     window.U.$$('[data-open]').forEach(b => b.onclick = () => {
       const r = Store.db.reports.find(x => x.id === b.dataset.open);
       if (!r) return;
       const out = $('#reportOut');
+      const body = noteHTML(r);
       out.innerHTML = `<div class="card" style="margin-top:14px">
           ${reportToolbar(r.range || 'Note')}
           ${wrongPronouns(r) ? `<div class="feedback" style="margin:10px 0 0">
@@ -1454,7 +1905,7 @@ Reflex = A quick automatic response"></textarea>
             <button class="btn-ghost btn-s" id="fixWords" style="margin-top:8px">Correct the wording</button>
             <div id="fixStat"></div>
           </div>` : ''}
-        </div>${noteFragment(r.html)}`;
+        </div>${body}`;
       wireReport(out);
 
       const fw = $('#fixWords');
@@ -1479,6 +1930,192 @@ Reflex = A quick automatic response"></textarea>
       if (!yes) return;
       Store.db.reports = Store.db.reports.filter(x => x.id !== b.dataset.rdel);
       Store.save(true); UI.checkpointVault(); paint();
+    });
+  }
+
+  /* ------------------------------------------------- asking for a note ----
+     A parent asks; an admin approves; the note is written on the server and
+     the ordinary "your note is ready" email arrives. Three emails, all with
+     both sides copied in, so nobody has to wonder what happened to a request.
+
+     This panel only ever shows ONE thing: the form, or the state of the
+     request they already have. A pending request must not sit next to a
+     button that would make another one. */
+  /* When the next automatic note is due.
+
+     The Wednesday cron runs at 02:30 UTC. Rather than naming a country's
+     clock, this works the moment out in UTC and lets the device print it in
+     whatever timezone the parent is actually in — so a family in Davao and a
+     family in Chennai each read their own morning, and neither has to do the
+     arithmetic.
+
+     It is said out loud because Prem asked for it, and because it is the
+     honest first answer to "can I have a note now?": quite often the one that
+     is coming anyway is only a day away, and knowing that is worth more than
+     a button. */
+  const NOTE_CRON = { day: 3, hourUTC: 2, minUTC: 30 };   // Wednesday 02:30 UTC
+
+  function nextNoteDate(from) {
+    const now = from ? new Date(from) : new Date();
+    const d = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate(),
+                                NOTE_CRON.hourUTC, NOTE_CRON.minUTC, 0, 0));
+    let guard = 0;
+    while ((d.getUTCDay() !== NOTE_CRON.day || d.getTime() <= now.getTime()) && guard++ < 14) {
+      d.setUTCDate(d.getUTCDate() + 1);
+    }
+    return d;
+  }
+
+  function nextNote(from) {
+    const d = nextNoteDate(from);
+    const hours = (d.getTime() - (from ? new Date(from).getTime() : Date.now())) / 36e5;
+    let words;
+    try {
+      words = d.toLocaleString(undefined, {
+        weekday: 'long', day: 'numeric', month: 'long', hour: 'numeric', minute: '2-digit'
+      });
+    } catch (e) { words = 'Wednesday morning'; }
+    const away = hours < 24 ? window.U.plural(Math.max(1, Math.round(hours)), 'hour')
+                            : window.U.plural(Math.round(hours / 24), 'day');
+    return { at: d, hours, away, words, soon: hours <= 72 };
+  }
+
+  const RQ_STATE = {
+    pending:  ['honey', 'Waiting to be approved',
+      'The team has your request. You will get an email as soon as it is looked at.'],
+    approved: ['sage', 'Approved — the note is being written',
+      'This usually takes a minute or two. We will email you the moment it is ready.'],
+    done:     ['sage', 'Written',
+      'The note is in the list above.'],
+    declined: ['', 'Not written this time',
+      'The next automatic note still comes on Wednesday morning, and you are welcome to ask again.'],
+    failed:   ['coral', 'Something went wrong',
+      'We can see what happened and will sort it out. Nothing has been lost, and the Wednesday note is unaffected.']
+  };
+
+  async function latestRequest(childId) {
+    if (!window.Cloud || !Cloud.signedIn() || !window.Sync || !Sync.isDbId(childId)) return null;
+    try {
+      const { data, error } = await Cloud.from('report_requests')
+        .select('id, status, requested_at, decided_at, reason, decline_note')
+        .eq('child_id', childId).order('requested_at', { ascending: false }).limit(1);
+      if (error || !data || !data.length) return null;
+      return data[0];
+    } catch (e) { return null; }
+  }
+
+  /* ------------------------------------------------------- notes: audit ----
+     "These kinds of gaps cannot happen — the kid's iPad cannot show one set of
+     data and the laptop be missing it."
+
+     The repair is in sync.js. This is the check that proves it, and the thing
+     that makes any future gap visible instead of invisible: for each child,
+     how many notes the account holds, and how many this device has. If those
+     two numbers ever disagree again, a parent sees it rather than wondering.
+
+     Ids only — it costs almost nothing to ask. */
+  async function noteAudit() {
+    if (!window.Cloud || !Cloud.signedIn() || !window.Sync) return null;
+    const me = Cloud.whoAmI();
+    if (!me || !me.children) return null;
+    const out = [];
+    for (const kid of me.children) {
+      if (!Sync.isDbId(kid.id)) {
+        out.push({ id: kid.id, name: kid.name, cloud: null, local: null, offline: true });
+        continue;
+      }
+      let cloud = null;
+      try {
+        const { data, error } = await Cloud.from('reports')
+          .select('id').eq('child_id', kid.id).limit(60);
+        if (!error && data) cloud = data.length;
+      } catch (e) {}
+      const bag = Store.db.activeChildId === kid.id
+        ? Store.db : (Store.db.children || []).find(c => c.id === kid.id);
+      const local = bag ? (bag.reports || []).length : 0;
+      out.push({ id: kid.id, name: kid.name, cloud, local });
+    }
+    return out;
+  }
+
+  function paintAskPanel(childId, name) {
+    const box = $('#askBody');
+    if (!box) return;
+
+    if (!window.Cloud || !Cloud.signedIn()) {
+      box.innerHTML = `<p class="small muted">This needs your family account. Sign in on this device
+        and the option appears here.</p>`;
+      return;
+    }
+
+    const form = () => {
+      box.innerHTML = `
+        <label class="lbl" for="rqWhy" style="display:block;margin-top:4px">Anything you would like
+          the note to look at? <span class="faint">(optional)</span></label>
+        <textarea id="rqWhy" rows="2" maxlength="500" style="width:100%"
+          placeholder="e.g. she has a spelling test on Friday and I want to know which words to sit with"></textarea>
+        <div class="row wrap" style="gap:10px;margin-top:10px">
+          <button class="btn-primary" id="rqGo">Ask for a note on ${esc(name)}</button>
+        </div>
+        <div id="rqStat"></div>`;
+      $('#rqGo').onclick = async () => {
+        const btn = $('#rqGo');
+        /* The most useful thing we can say before spending anybody's time is
+           that the automatic one is nearly here. Asked once, only when it is
+           genuinely close, and "ask anyway" is the first button — this is a
+           heads-up, not an obstacle. */
+        const nx = nextNote();
+        if (nx.soon) {
+          const go = await confirmBox(
+            `${esc(name)}'s next note is due ${esc(nx.words)}`,
+            `That is ${esc(nx.away)} away, and it arrives on its own with nothing for you to do. ` +
+            `Would you still like one now?`,
+            'Ask for one now', 'Wait for Wednesday');
+          if (!go) return;
+        }
+        btn.disabled = true;
+        btn.innerHTML = '<span class="loader"></span> Sending';
+        const why = ($('#rqWhy').value || '').trim();
+        const res = await API.requestReport(childId, why);
+        if (res.ok) {
+          toast('Asked. We have emailed the team and copied you in.', 'good', 4000);
+          paintAskPanel(childId, name);
+          return;
+        }
+        if (res.code === 'already-pending') { paintAskPanel(childId, name); return; }
+        $('#rqStat').innerHTML = `<p class="small" style="margin:10px 0 0;color:var(--coral-deep)">
+          ${esc(res.error)}</p>`;
+        btn.disabled = false;
+        btn.textContent = 'Try again';
+      };
+    };
+
+    box.innerHTML = `<p class="small muted"><span class="loader"></span> Checking…</p>`;
+    latestRequest(childId).then(rq => {
+      if (!$('#askBody') || Store.db.activeChildId !== childId) return;
+      /* Only a live request stands in the way of asking again. One that was
+         written, declined or failed is history — show it, then offer the
+         form underneath. */
+      const live = rq && (rq.status === 'pending' || rq.status === 'approved');
+      const past = rq && !live;
+      const [tone, head, sub] = rq ? (RQ_STATE[rq.status] || ['', rq.status, '']) : [];
+
+      if (!rq) { form(); return; }
+
+      const when = rq.decided_at || rq.requested_at;
+      const stamp = window.U.fmtDate ? window.U.fmtDate(Date.parse(when)) : '';
+      box.innerHTML = `
+        <div class="feedback ${tone === 'sage' ? 'good' : tone === 'coral' ? 'bad' : ''}">
+          <b>${esc(head)}</b>
+          <p class="small" style="margin:6px 0 0">${esc(sub)}</p>
+          ${rq.decline_note ? `<p class="small" style="margin:8px 0 0"><i>${esc(rq.decline_note)}</i></p>` : ''}
+          <p class="small faint" style="margin:8px 0 0">Asked ${esc(stamp)}${
+            rq.reason ? ' · “' + esc(rq.reason) + '”' : ''}</p>
+        </div>
+        ${past ? `<button class="btn-ghost btn-s" id="rqAgain" style="margin-top:14px">
+          Ask for another</button>` : ''}`;
+      const again = $('#rqAgain');
+      if (again) again.onclick = () => form();
     });
   }
 
@@ -3006,5 +3643,7 @@ ${disclaimerHTML()}</body></html>`;
     UI.startFresh();
   }
 
-  w.Parent = { paint, openUpload, hostTab, buildReportPayload, renderReport, wrapReportHTML, generateOnboardingReport };
+  w.Parent = { paint, openUpload, hostTab, buildReportPayload, renderReport, wrapReportHTML,
+               generateOnboardingReport, pushAnyStrandedReports, mergeCloudReports,
+               noteAudit };
 })(window);

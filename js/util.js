@@ -128,7 +128,11 @@
     while (modalStack.length) modalStack[modalStack.length - 1].close('force');
   }
 
-  function confirmBox(title, body, okLabel) {
+  /** `noLabel` is optional. Most of the time "Cancel" is right; sometimes the
+   *  quiet option is a real choice with a name of its own — "Wait for
+   *  Wednesday" tells a parent what happens if they do nothing, which
+   *  "Cancel" does not. */
+  function confirmBox(title, body, okLabel, noLabel) {
     return new Promise(res => {
       let done = false;
       const finish = v => { if (done) return; done = true; res(v); };
@@ -136,7 +140,7 @@
         <h2>${esc(title)}</h2>
         <p class="muted">${body}</p>
         <div class="row center wrap" style="margin-top:18px">
-          <button class="btn-ghost" data-no>Cancel</button>
+          <button class="btn-ghost" data-no>${esc(noLabel || 'Cancel')}</button>
           <button class="btn-primary" data-primary data-yes>${esc(okLabel || 'Yes')}</button>
         </div>
         <p class="tiny faint center-text" style="margin:12px 0 0">Esc to cancel · Enter to confirm</p>`,
@@ -201,6 +205,79 @@
       if (frames < 190) requestAnimationFrame(tick);
       else { ctx.clearRect(0, 0, innerWidth, innerHeight); cv.remove(); }
     })();
+  }
+
+  /* --------------------------------------------------------------- sparkle
+     A small burst of specks over one spot on the screen.
+
+     This is deliberately NOT confetti(). Confetti falls across the whole
+     window for three seconds and is right for finishing a session. A child
+     solving a crossword gets one of these every time a word comes out, six
+     or eight times in a couple of minutes — so it has to be quick, local,
+     and impossible to read through. It never covers the grid for longer
+     than about half a second and it never takes the focus off the input.
+
+     `box` is a DOMRect (or anything with left/top/width/height in viewport
+     coordinates). Several bursts can overlap; they share one canvas and one
+     animation frame loop, which tears itself down when the last speck dies. */
+  const SPARK_COLS = ['#B8862F', '#D8A44E', '#2F6B58', '#47876F', '#F3C171'];
+  let sparks = [], sparkRAF = 0;
+
+  function reduceMotion() {
+    try { return !!(window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches); }
+    catch (e) { return false; }
+  }
+
+  function sparkle(box, n) {
+    if (!box || !box.width || reduceMotion()) return;
+    const count = Math.max(4, Math.min(30, n || 14));
+    for (let i = 0; i < count; i++) {
+      const a = Math.random() * Math.PI * 2;
+      const sp = 1.5 + Math.random() * 3.2;
+      sparks.push({
+        x: box.left + Math.random() * box.width,
+        y: box.top + Math.random() * box.height,
+        vx: Math.cos(a) * sp,
+        vy: Math.sin(a) * sp - 1.5,
+        r: 2.2 + Math.random() * 3.4,
+        rot: Math.random() * 6.3,
+        vr: -0.2 + Math.random() * 0.4,
+        life: 1,
+        c: SPARK_COLS[Math.floor(Math.random() * SPARK_COLS.length)]
+      });
+    }
+    if (!sparkRAF) sparkRAF = requestAnimationFrame(sparkTick);
+  }
+
+  function sparkTick() {
+    let cv = $('#sparkle');
+    if (!cv) {
+      cv = el('canvas', { id: 'sparkle' });
+      document.body.appendChild(cv);
+    }
+    const dpr = window.devicePixelRatio || 1;
+    if (cv.width !== Math.round(innerWidth * dpr)) {
+      cv.width = innerWidth * dpr; cv.height = innerHeight * dpr;
+      cv.style.width = innerWidth + 'px'; cv.style.height = innerHeight + 'px';
+    }
+    const ctx = cv.getContext('2d');
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    ctx.clearRect(0, 0, innerWidth, innerHeight);
+    sparks = sparks.filter(s => s.life > 0);
+    sparks.forEach(s => {
+      s.x += s.vx; s.y += s.vy; s.vy += 0.16; s.vx *= 0.985;
+      s.rot += s.vr; s.life -= 0.032;
+      ctx.save();
+      ctx.globalAlpha = Math.max(0, s.life);
+      ctx.translate(s.x, s.y); ctx.rotate(s.rot);
+      ctx.fillStyle = s.c;
+      ctx.fillRect(-s.r / 2, -s.r / 2, s.r, s.r * 0.7);
+      ctx.restore();
+    });
+    if (sparks.length) { sparkRAF = requestAnimationFrame(sparkTick); return; }
+    sparkRAF = 0;
+    ctx.clearRect(0, 0, innerWidth, innerHeight);
+    cv.remove();
   }
 
   function floatPoints(text, x, y) {
@@ -841,7 +918,7 @@
   }
 
   w.U = {
-    $, $$, el, esc, toast, modal, closeAllModals, confirmBox, promptBox, confetti, floatPoints,
+    $, $$, el, esc, toast, modal, closeAllModals, confirmBox, promptBox, confetti, sparkle, reduceMotion, floatPoints,
     beep, speak, speakAuto, autoVoiceOn, setAutoVoice, speakWordThen, spellOut,
     loadVoices, bestVoice, voiceList, voiceGrade,
     noveltyCount, variantCount, onVoices, appleTouch,

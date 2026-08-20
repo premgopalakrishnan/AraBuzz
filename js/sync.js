@@ -112,6 +112,69 @@
     };
   }
 
+  /* ------------------------------------------------------- what is waiting
+     status() answers "is anything waiting?" with a number. That number is
+     what the pill shows, and it was not enough: a parent who sees "38 changes
+     waiting" has no idea what 38 of anything means, whether it matters, or
+     whether there is anything they can do about it.
+
+     This answers the same question in nouns. It also names the two states
+     that look identical from outside and are not — waiting for the internet,
+     and refused by the account — because only one of them is going to clear
+     on its own. */
+  const KINDS = {
+    attempt: ['answer', 'Words she typed, right and wrong.'],
+    session: ['practice round', 'The score at the end of each game.']
+  };
+
+  function details() {
+    const counts = {};
+    outbox.forEach(o => { counts[o.t] = (counts[o.t] || 0) + 1; });
+    const items = [];
+    Object.keys(KINDS).forEach(k => {
+      if (counts[k]) items.push({ key: k, n: counts[k], noun: KINDS[k][0], why: KINDS[k][1] });
+    });
+    Object.keys(counts).forEach(k => {
+      if (!KINDS[k]) items.push({ key: k, n: counts[k], noun: 'change', why: '' });
+    });
+    if (dirtyProg.size) items.push({ key: 'progress', n: dirtyProg.size, noun: 'word',
+      why: 'Which practice box each word has moved into.' });
+    if (dirtyGame.size) items.push({ key: 'game', n: dirtyGame.size, noun: 'scoreboard',
+      why: 'Points, level and the daily streak.' });
+
+    /* Coach notes are not in the outbox — they are written straight into the
+       account when they are made, and only end up here if that write failed
+       or happened offline. They are the one thing a parent actually reads,
+       so they are counted separately and named. */
+    let notes = 0;
+    try {
+      const db = S().db;
+      const bags = [db].concat(db.children || []);
+      bags.forEach(b => (b.reports || []).forEach(r => { if (!r.cloudId) notes++; }));
+    } catch (e) {}
+    if (notes) items.push({ key: 'report', n: notes, noun: 'coach note',
+      why: 'Written on this device and not yet in your account.' });
+
+    return Object.assign(status(), {
+      items,
+      waiting: items.reduce((n, x) => n + x.n, 0),
+      blocked: blocked.slice(),
+      paused: paused
+    });
+  }
+
+  /** Everything, both ways, right now — and tell the caller how it went.
+   *  Clears the back-off first: a parent pressing a button is a better
+   *  reason to try than a timer, even if the last four attempts failed. */
+  async function syncNow() {
+    fails = 0;
+    state.error = null;
+    announce();
+    await flush(true);
+    await pull({ deep: true });
+    return details();
+  }
+
   /* ------------------------------------------------------------------- ids */
   function uuid() {
     if (w.crypto && w.crypto.randomUUID) return w.crypto.randomUUID();
@@ -788,6 +851,39 @@
       }
 
       S().save(true);
+
+      /* A note written on this device belongs in the account too. This used
+         to happen only when a parent opened the Coach Report, which meant a
+         note could sit on one laptop for days while the other showed fewer.
+         Now every sync sweeps them up, so the devices agree without anybody
+         being told to go and look at something. */
+      /* Notes move BOTH ways here, for EVERY child, on every sync.
+
+         The gap Prem hit was this: her iPad showed two coach notes and his
+         laptop showed one. Neither device was wrong. The Wednesday note is
+         written by the server as structured data with no HTML — each device
+         renders it into a readable note itself when it merges — and the merge
+         only ever ran inside the Coach Report tab, for whichever child
+         happened to be open, silently doing nothing if anything about that
+         moment was not right. So a note could be in the account and invisible
+         on a device that had simply never opened the right tab.
+
+         Pushing without pulling made it worse: this loop used to send notes
+         up and never bring any down. Both directions now run here, for all
+         her children, whether or not anybody opens anything. */
+      if (w.Parent) {
+        for (const kid of (me.children || [])) {
+          if (Parent.pushAnyStrandedReports) {
+            try { await Parent.pushAnyStrandedReports(kid.id); }
+            catch (e) { console.warn('[sync] note up', e); }
+          }
+          if (Parent.mergeCloudReports) {
+            try { await Parent.mergeCloudReports(kid.id); }
+            catch (e) { console.warn('[sync] note down', e); }
+          }
+        }
+      }
+
       state.lastPull = Date.now();
       mark({ lastPull: state.lastPull });
       if (w.UI && UI.refreshAfterSync) UI.refreshAfterSync();
@@ -896,7 +992,7 @@
   loadBlocked();
 
   w.Sync = {
-    start, pull, flush, status, onChange, pause, resume,
+    start, pull, flush, status, details, syncNow, onChange, pause, resume,
     get blockedRows() { return blocked.slice(); },
     clearBlocked() { blocked = []; saveBlocked(); announce(); },
     noteAttempt, noteSession, noteProgress, noteGame,

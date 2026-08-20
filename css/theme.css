@@ -45,6 +45,11 @@
   --indigo:     #2C4A6B;
   --indigo-soft:#E4EBF2;
 
+  /* Crossword squares — see the dark block below for why these are their own
+     variables rather than the -soft tints. */
+  --xw-won-bg: #DCEBE2;
+  --xw-no-bg:  #F7E2DA;
+
   --plum:       #6B5570;
   --plum-soft:  #EEE8F0;
 
@@ -93,6 +98,13 @@
   --clay: #D08165; --clay-soft: #33221C;
   --indigo: #6E9BC4; --indigo-soft: #1B2733;
   --plum: #A38FA9; --plum-soft: #272130;
+
+  /* Crossword squares. The soft tints above are right for a whole panel of
+     colour and far too quiet for a single 38px square on a dark card, where
+     they disappear into the background. These are the same hues, lifted
+     until a child glancing at the grid can see which word came out. */
+  --xw-won-bg: #22493C;
+  --xw-no-bg:  #452720;
 
   --lift: inset 0 1px 0 rgba(255,255,255,.07);
   --sh-1: 0 1px 2px rgba(0,0,0,.3), 0 2px 8px rgba(0,0,0,.22);
@@ -550,6 +562,35 @@ label { font-size: .82rem; font-weight: 500; color: var(--ink-soft); display: bl
 .xw td.cell.no input { color: var(--clay); }
 .xw td .num { position: absolute; top: 1px; left: 3px; font-size: .55rem; font-weight: 600;
   color: var(--ink-faint); pointer-events: none; }
+
+/* Live feedback inside the grid itself.
+   Until now the only thing that changed when a word came out right was the
+   clue underneath, which is not where a child is looking. These two states
+   answer in the squares she is actually typing in:
+     .won     — the whole word is right. Green, and it stays green.
+     .softno  — the word is finished and it is not right yet. Quiet. It appears
+                only once every square of that word has a letter in it, so it
+                never scolds her mid-word.
+   Where an across and a down cross, green always wins. */
+.xw td.cell.softno { background: var(--xw-no-bg); border-color: var(--clay-lift); }
+.xw td.cell.softno input { color: var(--clay); }
+.xw td.cell.won { background: var(--xw-won-bg); border-color: var(--jade); }
+.xw td.cell.won input { color: var(--jade); font-weight: 700; }
+.xw td.cell.won.hl { background: var(--xw-won-bg); }
+.xw td.cell.pop { animation: xwGlow .62s ease-out both; }
+.xw td.cell.pop input { animation: xwPop .46s ease-out both; }
+@keyframes xwGlow {
+  0%   { box-shadow: 0 0 0 0 rgba(47,107,88,.55); }
+  100% { box-shadow: 0 0 0 9px rgba(47,107,88,0); }
+}
+@keyframes xwPop {
+  0%   { transform: scale(1); }
+  45%  { transform: scale(1.24); }
+  100% { transform: scale(1); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .xw td.cell.pop, .xw td.cell.pop input { animation: none; }
+}
 @media (max-width: 620px) { .xw td { width: 30px; height: 30px; } .xw td.cell input { font-size: .95rem; } }
 
 .clues { display: grid; grid-template-columns: 1fr 1fr; gap: 26px; margin-top: 26px; }
@@ -699,6 +740,7 @@ table.data tr:last-child td { border-bottom: none; }
 .loading-box { display: grid; place-items: center; gap: 15px; padding: 44px 20px; text-align: center; }
 
 #confetti { position: fixed; inset: 0; pointer-events: none; z-index: 150; }
+#sparkle  { position: fixed; inset: 0; pointer-events: none; z-index: 140; }
 
 /* ==========================================================================
    Bottom navigation
