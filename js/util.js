@@ -481,9 +481,74 @@
     if (!on && 'speechSynthesis' in window) { try { speechSynthesis.cancel(); } catch (e) {} }
   }
 
+  /* ------------------------------------------------- letters, said aloud --
+     "Capital L, capital I, capital F."
+
+     spellOut() was fixed for this once, but the bug was never really in
+     spellOut — it is in what a speech engine does with a lone capital letter
+     ANYWHERE. It cannot know we meant the letter and not the shape of it, so
+     it announces the shape. And letters turn up in plenty of lines that never
+     go near spellOut:
+
+       "You have got L-I-F — that start is right."
+       "It starts with L."
+       "Just the last four letters: e-n-c-e."
+
+     …plus anything Ara says back, because a model asked about spelling will
+     quote letters however it likes.
+
+     So the repair belongs at the one door every spoken string goes through,
+     not at each place a string is built. The screen keeps its capitals,
+     because L-I-F is exactly right to look at; only the voice is changed.
+
+     Three rules, deliberately conservative:
+       · a run of two or more single letters joined by hyphens or spaces
+         ("L-I-F", "e n c e") becomes their names, comma-separated
+       · a lone capital after a cue — "starts with L", "the letter N" —
+         becomes its name
+       · any other lone capital that cannot be an English word becomes its
+         name; "I" and "A" are left alone, because "I think you can" must not
+         turn into "eye think you can" */
+  function letterName(ch) {
+    const n = LETTER_SOUNDS[String(ch).toLowerCase()];
+    return n || ch;
+  }
+
+  function sayable(text) {
+    let out = String(text == null ? '' : text);
+
+    // 1a · hyphenated runs, any case: L-I-F, e-n-c-e
+    out = out.replace(/\b[A-Za-z](?:-[A-Za-z])+\b/g, m =>
+      m.split('-').map(letterName).join(', '));
+
+    /* 1b · space-separated runs. Stricter: all capitals, three or more. A
+       looser rule here would turn ordinary prose like "is a b or a d" into
+       letter names, and prose is far more common than spelled-out words. */
+    out = out.replace(/\b[A-Z](?: [A-Z]){2,}\b/g, m =>
+      m.split(' ').map(letterName).join(', '));
+
+    /* A letter touching a hyphen belongs to a word — T-shirt, x-ray, U-turn —
+       and must be left exactly as it is. Both remaining rules check for that. */
+    const FREE = "[^\\w'’-]";
+
+    // 2 · after a cue word: "starts with L", "the letter N"
+    out = out.replace(
+      new RegExp('\\b(with|letter|letters|is|says|write|writes|add|adds)\\s+([A-Za-z])(?=$|' + FREE + ')', 'g'),
+      (m, cue, ch) => cue + ' ' + letterName(ch));
+
+    // 3 · any remaining lone capital that cannot be an English word
+    out = out.replace(
+      new RegExp('(^|' + FREE + ')([B-HJ-Z])(?=$|' + FREE + ')', 'g'),
+      (m, pre, ch) => pre + letterName(ch));
+
+    return out;
+  }
+
   function speak(text, opts) {
     const o = opts || {};
-    const full = String(text || '').trim();
+    /* `raw` is for spellOut, which has already turned each letter into its
+       name and must not have that work undone. */
+    const full = (o.raw ? String(text || '') : sayable(text)).trim();
     if (!full) return;
     deviceSpeak(full, o);
   }
@@ -610,7 +675,7 @@
       const ch = chars[i++];
       if (ch === ' ' || ch === '-') { setTimeout(next, 320); return; }
       const say = LETTER_SOUNDS[ch] || ch;
-      speak(say, { rate: 0.62, onend: () => setTimeout(next, 120) });
+      speak(say, { rate: 0.62, raw: true, onend: () => setTimeout(next, 120) });
     })();
   }
 
@@ -919,7 +984,7 @@
 
   w.U = {
     $, $$, el, esc, toast, modal, closeAllModals, confirmBox, promptBox, confetti, sparkle, reduceMotion, floatPoints,
-    beep, speak, speakAuto, autoVoiceOn, setAutoVoice, speakWordThen, spellOut,
+    beep, speak, sayable, speakAuto, autoVoiceOn, setAutoVoice, speakWordThen, spellOut,
     loadVoices, bestVoice, voiceList, voiceGrade,
     noveltyCount, variantCount, onVoices, appleTouch,
     speedBtn, sayMeaningBtn,
