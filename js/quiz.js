@@ -928,7 +928,13 @@
     }
 
     return function refresh() {
-      const green = new Set(), red = new Set(), fresh = [];
+      /* Three states, not two. Prem watched the whole word go one flat red
+         and asked the obvious question: which letter was the mistake? So a
+         finished-but-wrong word now answers it — the letters that are right
+         keep the soft wash, and only the letters that are actually wrong get
+         the stronger mark. She fixes the marked ones instead of retyping the
+         word and guessing. */
+      const green = new Set(), red = new Set(), miss = new Set(), fresh = [];
 
       grid.entries.forEach(e => {
         const key = e.id + '|' + e.dir;
@@ -945,14 +951,24 @@
           if (!celebrated.has(key)) { celebrated.add(key); fresh.push(cells); }
         } else {
           celebrated.delete(key);                  // she changed it — it may win again
-          if (filled === e.letters.length) cells.forEach(td => { if (td) red.add(td); });
+          if (filled === e.letters.length) {
+            cells.forEach((td, i) => {
+              if (!td) return;
+              red.add(td);
+              if (got[i] !== e.letters[i]) miss.add(td);
+            });
+          }
         }
       });
 
       grid.entries.forEach(e => cellsOf(e).forEach(td => {
         if (!td) return;
-        td.classList.toggle('won', green.has(td));
-        td.classList.toggle('softno', !green.has(td) && red.has(td));
+        const isGreen = green.has(td);
+        td.classList.toggle('won', isGreen);
+        td.classList.toggle('softno', !isGreen && red.has(td));
+        /* A crossing letter that is doing its job in a solved word is never
+           marked as anyone's mistake. */
+        td.classList.toggle('miss', !isGreen && miss.has(td));
       }));
 
       fresh.forEach(celebrate);

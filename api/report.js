@@ -242,18 +242,35 @@ async function doDecide(req, res, me) {
         }
         return send(res, 200, { status: 'failed', reason: 'not enough practice recorded' });
       }
-      const out = await writeNote(wide, { onRequest: true, detail: 'on-demand, approved' });
-      await patch({ status: 'done', report_id: out.id });
-      await tellTheParents(kid, { onRequest: true });
-      return send(res, 200, { status: 'done', reportId: out.id });
+      return await finishNote(wide);
     }
 
-    const out = await writeNote(g, { onRequest: true, detail: 'on-demand, approved' });
-    await patch({ status: 'done', report_id: out.id });
-    await tellTheParents(kid, { onRequest: true });
-    return send(res, 200, { status: 'done', reportId: out.id });
+    return await finishNote(g);
+
+    /* The note and the announcement are two different promises, and only the
+       first one decides the request's fate. The independent review caught
+       what the old shape did: writeNote succeeded, the "it is ready" email
+       threw, the catch below marked the request FAILED and told the parent
+       nothing had been produced — about a note that was sitting in their
+       account, finished. A request whose note exists is DONE; an email that
+       did not send is a footnote on it, never a failure of it. */
+    async function finishNote(data) {
+      const out = await writeNote(data, { onRequest: true, detail: 'on-demand, approved' });
+      await patch({ status: 'done', report_id: out.id });
+      let announced = true;
+      try { await tellTheParents(kid, { onRequest: true }); }
+      catch (e) {
+        announced = false;
+        console.warn('note written, announcement failed', e.message);
+        try { await patch({ error: 'note written; the ready email did not send: ' +
+                                    String(e.message || e).slice(0, 200) }); } catch (_) {}
+      }
+      return send(res, 200, { status: 'done', reportId: out.id, announced });
+    }
 
   } catch (e) {
+    /* Only reachable when NO note was written — gather or writeNote threw.
+       Everything after the note exists handles its own errors above. */
     await patch({ status: 'failed', error: String(e.message || e).slice(0, 400) });
     if (parentEmail) {
       try {

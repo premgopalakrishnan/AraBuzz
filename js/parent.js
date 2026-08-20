@@ -384,7 +384,7 @@
            learning. A page of ${esc(name)}'s own writing tells you what <b>${esc(name)}</b> is
            actually getting wrong — and those are usually different words entirely. A real example
            from one workbook: <i>spayder, dayd, haul, moching, smol, asced</i>. Not one of them was
-           ever on a spelling sheet, and every one is the same child spelling what she hears.</p>
+           ever on a spelling sheet, and every one is the same child spelling what they hear.</p>
         <p class="muted small">Photograph any page ${esc(name)} has written. If a teacher has marked
            it, AraBuzz reads their corrections. If nobody has marked it, AraBuzz reads it through and
            says which words <i>it</i> thinks are wrong — shown separately, because that is its opinion
@@ -447,7 +447,7 @@
           ['What happens to a photo of my child\'s schoolwork?',
            'It is read, and then it is gone. When you photograph a page under <b>Her own work</b>, the picture is shrunk on your own device, sent to the AI service to be read, and never stored — not by AraBuzz, not in the account, not anywhere. If a teacher has marked the page, what comes back is their corrections. If nobody has marked it, AraBuzz says which words <b>it</b> thinks are misspelled — listed separately and left unticked, because that is its opinion and not a teacher\'s mark. Either way <b>you</b> tick what is worth practising before a single word is added. Approved words belong to that child alone: no other family sees them, and neither does a brother or sister on your own account. The whole thing is optional.'],
           ['Do they need the internet?',
-           'Mostly no, with one exception worth knowing. The device needs to connect once to download the latest words and questions — after that, Spell Buzz, Word Rush, Listen &amp; Spell, Word Meanings, the crossword and the word search all run on the device itself, on a plane or in the car with the wifi off. <b>The exception is Spell Quest.</b> That is the game where your child can chat with Ara — Ara answers the letters she actually typed, and she can stop and ask a question in her own words — and that conversation is written in the moment by an AI engine (Anthropic\'s Claude Haiku), which needs a connection. It is not a general chatbot and cannot become one: Ara may only discuss this word, its letters, what it means <b>using your school\'s own definition</b>, and the game — the conversation stays inside the sheet your child chose. Attempts to talk her out of that are turned back, and the chatting is capped per word so it cannot replace the practice. Played offline, Spell Quest still works and every answer still counts; Ara simply falls back to the app\'s own shorter hints. Anything played offline is saved on the device and syncs to your family account the next time it connects. One honest caution: until that sync happens, the new answers exist only on that device — if the browser data is cleared before it reconnects, they are lost. The sync tracker at the top of this screen tells you whether anything is still waiting.'],
+           'Mostly no, with one exception worth knowing. The device needs to connect once to download the latest words and questions — after that, Spell Buzz, Word Rush, Listen &amp; Spell, Word Meanings, the crossword and the word search all run on the device itself, on a plane or in the car with the wifi off. <b>The exception is Spell Quest.</b> That is the game where your child can chat with Ara — Ara answers the letters your child actually typed, and they can stop and ask a question in their own words — and that conversation is written in the moment by an AI engine (Anthropic\'s Claude Haiku), which needs a connection. It is not a general chatbot and cannot become one: Ara may only discuss this word, its letters, what it means <b>using your school\'s own definition</b>, and the game — the conversation stays inside the sheet your child chose. Attempts to talk her out of that are turned back, and the chatting is capped per word so it cannot replace the practice. Played offline, Spell Quest still works and every answer still counts; Ara simply falls back to the app\'s own shorter hints. Anything played offline is saved on the device and syncs to your family account the next time it connects. One honest caution: until that sync happens, the new answers exist only on that device — if the browser data is cleared before it reconnects, they are lost. The sync tracker at the top of this screen tells you whether anything is still waiting.'],
           ['Where does the data go?',
            'It stays on the device and in your own private family account — which is what lets progress follow your kid onto any device they sign in on. It is never sold, never shared, and never used to train anything. You can download a copy or delete everything, any time, from Settings.'],
           ['Will they just memorise the quiz?',
@@ -936,7 +936,7 @@ Reflex = A quick automatic response"></textarea>
           </div>
         </div>
         <table class="data" style="margin-top:12px">
-          <thead><tr><th>Word</th><th>Meaning</th><th style="width:120px">How she's doing</th></tr></thead>
+          <thead><tr><th>Word</th><th>Meaning</th><th style="width:120px">How it's going</th></tr></thead>
           <tbody>${words.map(wd => {
             const pr = Store.db.progress[wd.id] || {};
             const a = pr.seen ? pr.right / pr.seen : null;
@@ -1535,7 +1535,7 @@ Reflex = A quick automatic response"></textarea>
          wrong — this period against the same length of time before it. Shares, not counts, so a
          fortnight with more practice in it does not look worse than one with less.</p>
       <div class="viz" style="margin:0 0 8px">${Charts.compareBars(bars, {
-        title: 'Share of her mistakes', aLabel: 'This period', bLabel: 'Before', suffix: '%'
+        title: 'Share of the mistakes', aLabel: 'This period', bLabel: 'Before', suffix: '%'
       })}</div>`;
   }
 
@@ -1851,6 +1851,21 @@ Reflex = A quick automatic response"></textarea>
         <div id="rStatus"></div>
       </div>
 
+
+      ${saved.length >= 2 ? `<div class="card" style="margin-top:14px">
+        <h3>Progress across the notes</h3>
+        <p class="small muted">Every note so far, in order.</p>
+        <div style="margin-top:12px">${reportTrendChart(saved)}</div>
+      </div>` : ''}
+
+      ${saved.length ? `<div class="card" style="margin-top:14px">
+        <h3>All notes <span class="pill tiny">${saved.length}</span></h3>
+        <div id="archive" style="margin-top:10px">
+          ${saved.map((r, i) => archiveRow(r, saved[i + 1])).join('')}
+        </div>
+      </div>` : ''}
+
+
       <div class="card" style="margin-top:14px" id="askCard">
         <h3>Need a note before Wednesday?</h3>
         <p class="muted small">Notes arrive on their own every Wednesday morning. The next one is
@@ -1866,19 +1881,6 @@ Reflex = A quick automatic response"></textarea>
            look at, under <b>Usage</b> in Grown-ups.</p>
         <div id="askBody"></div>
       </div>
-
-      ${saved.length >= 2 ? `<div class="card" style="margin-top:14px">
-        <h3>Progress across the notes</h3>
-        <p class="small muted">Every note so far, in order.</p>
-        <div style="margin-top:12px">${reportTrendChart(saved)}</div>
-      </div>` : ''}
-
-      ${saved.length ? `<div class="card" style="margin-top:14px">
-        <h3>All notes <span class="pill tiny">${saved.length}</span></h3>
-        <div id="archive" style="margin-top:10px">
-          ${saved.map((r, i) => archiveRow(r, saved[i + 1])).join('')}
-        </div>
-      </div>` : ''}
 
       <div id="reportOut"></div>`;
 

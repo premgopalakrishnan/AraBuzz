@@ -411,6 +411,67 @@ export const REPORT_TOOL = {
   }
 };
 
+/* ------------------------------------------------------------- the gate --
+   The prompt asks the model nicely; this makes sure. Every note passes
+   through here before it is stored, because "the prompt says so" is a hope,
+   not a guarantee, and a parent reads these.
+
+   Two kinds of repair, both deliberately small:
+
+   · the four words we never use about a child are swapped for the phrasing
+     the prompt itself prescribes ("weak" → "not yet strong", and so on) —
+     replaced rather than refused, because a whole note is not worth losing
+     over one word, and the replacement is what the model was asked to say
+     in the first place;
+
+   · money does not exist in a note. A sentence mentioning cost, tokens,
+     payment or price is removed outright — there is no safe rewording of a
+     sentence that should never have been written.
+
+   Everything scrubbed is reported back to the caller so it lands in the
+   usage detail — a note that needed scrubbing is a prompt that needs
+   reading. */
+const GENTLER = [
+  [/\bweakest\b/gi, 'least settled'],
+  [/\bweaker\b/gi, 'less settled'],
+  [/\bweak\b/gi, 'not yet strong'],
+  [/\bweakness(es)?\b/gi, 'thing$1 still growing'],
+  [/\bpoorly\b/gi, 'not yet confidently'],
+  [/\bpoor\b/gi, 'still growing'],
+  [/\bfalling behind\b/gi, 'not there yet'],
+  [/\bbehind (her|his|their) (class|peers|classmates|grade|year)\b/gi, 'still catching up with $2 words'],
+  [/\bstruggling\b/gi, 'finding it tricky'],
+  [/\bstruggles? with\b/gi, 'finds it tricky with'],
+  [/\bfailure\b/gi, 'stumble'],
+  [/\bfailing\b/gi, 'not yet landing']
+];
+const MONEY = /\b(cost|costs|costly|token|tokens|price|prices|pricing|paid|payment|subscription|dollar|rupee|peso|₹|\$\d)\b/i;
+
+export function scrubResult(node, log) {
+  log = log || [];
+  if (typeof node === 'string') {
+    let out = node;
+    for (const [re, sub] of GENTLER) {
+      if (re.test(out)) { log.push(String(re)); out = out.replace(re, sub); }
+      re.lastIndex = 0;
+    }
+    if (MONEY.test(out)) {
+      log.push('money');
+      out = out.split(/(?<=[.!?])\s+/).filter(sent => !MONEY.test(sent)).join(' ').trim();
+    }
+    return { value: out, log };
+  }
+  if (Array.isArray(node)) {
+    return { value: node.map(x => scrubResult(x, log).value), log };
+  }
+  if (node && typeof node === 'object') {
+    const out = {};
+    for (const k of Object.keys(node)) out[k] = scrubResult(node[k], log).value;
+    return { value: out, log };
+  }
+  return { value: node, log };
+}
+
 /* ---------------------------------------------------------------- write -- */
 
 /**
@@ -423,12 +484,18 @@ export async function writeNote(g, opts) {
   const payload = buildPayload(g);
   const kid = g.kid;
 
-  const { result, usage } = await askClaude({
+  const asked = await askClaude({
     model: MODEL, maxTokens: 14000,
     system: reportSystem(kid, o),
     content: [{ type: 'text', text: JSON.stringify(payload, null, 2) }],
     tool: REPORT_TOOL
   });
+  const usage = asked.usage;
+  const scrubbed = scrubResult(asked.result);
+  const result = scrubbed.value;
+  if (scrubbed.log.length) {
+    console.warn('note needed scrubbing:', scrubbed.log.join(', '));
+  }
 
   const rows = await serviceWrite('reports', {
     child_id: kid.id,
@@ -478,7 +545,8 @@ export async function writeNote(g, opts) {
       p_kind: 'coach-report', p_model: MODEL,
       p_in_tok: usage.inTok, p_out_tok: usage.outTok, p_cost: usage.est,
       p_scope: 'individual', p_child_id: kid.id, p_deck_id: null,
-      p_detail: o.detail || 'weekly cron'
+      p_detail: (o.detail || 'weekly cron') +
+                (scrubbed.log.length ? ' · scrubbed: ' + scrubbed.log.length : '')
     });
   } catch (e) { console.warn('usage not recorded', e.message); }
 

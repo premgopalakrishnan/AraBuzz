@@ -117,10 +117,11 @@
     const db = Store.db;
     const rows = (own.wordIds || []).map(id => db.words[id]).filter(Boolean);
     if (!rows.length) return '<p class="muted small">Nothing yet.</p>';
+    const pr = window.U.pronouns(Store.db.profile && Store.db.profile.pronoun);
     return `<div class="row wrap" style="gap:8px">
       ${rows.map(x => {
         const wrote = (x.extras && x.extras.written) || '';
-        return `<span class="pill" title="${wrote ? esc('she wrote: ' + wrote) : ''}">
+        return `<span class="pill" title="${wrote ? esc(pr.they() + ' wrote: ' + wrote) : ''}">
           <b>${esc(x.word)}</b>${wrote ? ` <span class="faint">· ${esc(wrote)}</span>` : ''}
           <button class="linky" data-owdel="${esc(x.id)}" title="Remove this word"
             style="margin-left:6px">×</button></span>`;
@@ -356,7 +357,7 @@
       found = null;
       paint();
       toast(added
-        ? `${window.U.plural(added, 'word')} added — ${added === 1 ? 'it is' : 'they are'} in her games from now on.`
+        ? `${window.U.plural(added, 'word')} added — ${added === 1 ? 'it is' : 'they are'} in ${window.U.pronouns(Store.db.profile && Store.db.profile.pronoun).their()} games from now on.`
         : 'Those words were already there.', 'good', 4200);
     } catch (e) {
       $('#owSaveStat').innerHTML = `<div class="feedback bad"><b>Could not add them.</b>
@@ -375,7 +376,7 @@
   async function ownDeck() {
     const childId = Store.db.activeChildId;
     if (!window.Cloud || !Cloud.signedIn() || !window.Sync || !Sync.isDbId(childId)) {
-      throw new Error('Sign in on this device first — her own words are kept in the family account.');
+      throw new Error('Sign in on this device first — these words are kept in the family account.');
     }
     const { data: has, error: e0 } = await Cloud.from('decks')
       .select('id').eq('child_id', childId).limit(1);
@@ -386,7 +387,7 @@
     const { data, error } = await Cloud.from('decks').insert({
       child_id: childId,
       title: `${name}'s own work`,
-      topic: 'From her marked schoolwork',
+      topic: 'From marked schoolwork',
       status: 'published',
       audience: 'family',
       source_name: 'Marked schoolwork'

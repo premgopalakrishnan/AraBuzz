@@ -39,6 +39,7 @@
   --jade-soft:  #E4EEE8;
 
   --clay:       #B05C42;
+  --clay-deep:  #8F452F;
   --clay-lift:  #C97457;
   --clay-soft:  #F7E7E0;
 
@@ -109,7 +110,7 @@
 
   --gold: #D6A44C; --gold-lift: #E8BC6E; --gold-deep: #B8862F; --gold-soft: #33291A;
   --jade: #5EA184; --jade-soft: #1C2E28;
-  --clay: #D08165; --clay-soft: #33221C;
+  --clay: #D08165; --clay-deep: #E09A82; --clay-soft: #33221C;
   --indigo: #6E9BC4; --indigo-soft: #1B2733;
   --plum: #A38FA9; --plum-soft: #272130;
 
@@ -598,6 +599,13 @@ label { font-size: .82rem; font-weight: 500; color: var(--ink-soft); display: bl
    Where an across and a down cross, green always wins. */
 .xw td.cell.softno { background: var(--xw-no-bg); border-color: var(--clay-lift); }
 .xw td.cell.softno input { color: var(--clay); }
+/* Within a finished-but-wrong word: the soft wash covers the whole word, and
+   only the letters that are actually wrong carry the mark — a heavier letter
+   on a dotted baseline, so the mistake is findable without being shouted at,
+   and never by colour alone. */
+.xw td.cell.miss { border-color: var(--clay); border-width: 2px; }
+.xw td.cell.miss input { color: var(--clay-deep, #8F452F); font-weight: 800;
+  text-decoration: underline dotted; text-underline-offset: 3px; }
 .xw td.cell.won { background: var(--xw-won-bg); border-color: var(--jade); }
 .xw td.cell.won input { color: var(--jade); font-weight: 700; }
 .xw td.cell.won.hl { background: var(--xw-won-bg); }
