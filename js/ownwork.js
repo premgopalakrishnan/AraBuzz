@@ -76,10 +76,10 @@
     box.innerHTML = `
       <div class="card">
         <h2>${esc(name)}&rsquo;s own work</h2>
-        <p class="muted">The weekly sheet tells you what the class is learning. A page her
+        <p class="muted">The weekly sheet tells you what the class is learning. A page ${esc(p.their())}
            teacher has marked tells you what <b>${esc(name)}</b> is actually getting wrong — and
            those are usually different words entirely.</p>
-        <p class="muted small">Photograph any page of her writing — a workbook, a worksheet, a test
+        <p class="muted small">Photograph any pages of ${esc(p.their())} writing — a workbook, a worksheet, a test
            that has come back. If a teacher has marked it, AraBuzz reads their corrections. If nobody
            has marked it, AraBuzz reads it through and says which words it thinks are misspelled,
            clearly labelled as its own opinion rather than a teacher's. Either way
@@ -90,8 +90,8 @@
           <label class="btn-primary" for="owShot" style="cursor:pointer">
             ${Icon.icon('sparkle', { size: 16 })} Take a photo</label>
           <input type="file" id="owShot" accept="image/*" capture="environment" style="display:none">
-          <label class="btn-ghost" for="owFile" style="cursor:pointer">Choose a picture</label>
-          <input type="file" id="owFile" accept="image/*" style="display:none">
+          <label class="btn-ghost" for="owFile" style="cursor:pointer">Choose pictures</label>
+          <input type="file" id="owFile" accept="image/*" multiple style="display:none">
         </div>
         <p class="hint" style="margin-top:10px">One page at a time. Lay it flat, get the whole page
            in the frame, and let the light fall on it rather than your shadow.</p>
@@ -129,37 +129,92 @@
   }
 
   function wire() {
-    const go = async (file) => {
-      if (!file || busy) return;
+    /* A workbook is pages, not a page. The picker accepts several at once and
+       they are read one after another — not in parallel, because each read is
+       real work at the far end and a parent photographing a whole workbook
+       should not fire eight of them in the same second. Everything found
+       lands in ONE review list, so the parent ticks through a single sitting
+       of results rather than eight little ones. */
+    async function readOne(file) {
+      if (window.ViewAs && ViewAs.lookingOnly && ViewAs.lookingOnly()) {
+        throw new Error('You are looking at this family, not acting for them. ' +
+                        'Turn on "Act as this parent" first.');
+      }
+      const shrunk = await shrink(file);
+      const res = await fetch('/api/read-work', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json', authorization: 'Bearer ' + Cloud.token },
+        body: JSON.stringify({
+          image: shrunk.b64, mediaType: shrunk.media,
+          childId: Store.db.activeChildId
+        })
+      });
+      const j = await res.json();
+      if (!res.ok) throw new Error(j.error || 'The page could not be read.');
+      j.preview = shrunk.preview;
+      return j;
+    }
+
+    /* Several pages become one result. Words are deduplicated on the correct
+       spelling, keeping the first reading of each — the second photograph of
+       the same worksheet should not double anything. */
+    function combine(pages) {
+      const seen = new Set();
+      const take = list => (list || []).filter(x => {
+        const key = String((x && (x.correct || x.written)) || '').toLowerCase().trim();
+        if (!key || seen.has(key)) return false;
+        seen.add(key);
+        return true;
+      });
+      const good = pages.filter(pg => pg.readable !== false);
+      return {
+        readable: good.length > 0,
+        marked: good.some(pg => pg.marked !== false),
+        spellings: [].concat(...good.map(pg => take(pg.spellings))),
+        spotted: [].concat(...good.map(pg => take(pg.spotted))),
+        other: [].concat(...good.map(pg => pg.other || [])),
+        note: good.length ? '' : (pages[0] && pages[0].note) || '',
+        pages: pages.length,
+        unreadable: pages.length - good.length,
+        preview: (good[0] || pages[0] || {}).preview || null
+      };
+    }
+
+    const go = async (files) => {
+      const list = Array.from(files || []).filter(Boolean);
+      if (!list.length || busy) return;
       busy = true;
       const st = $('#owStatus');
-      st.innerHTML = `<div class="loading-box"><span class="loader"></span>
-        <p class="muted small" style="margin:0">Reading the page…</p></div>`;
+      const results = [];
+      const failures = [];
       try {
-        const shrunk = await shrink(file);
-        const res = await fetch('/api/read-work', {
-          method: 'POST',
-          headers: { 'content-type': 'application/json', authorization: 'Bearer ' + Cloud.token },
-          body: JSON.stringify({
-            image: shrunk.b64, mediaType: shrunk.media,
-            childId: Store.db.activeChildId
-          })
-        });
-        const j = await res.json();
-        if (!res.ok) throw new Error(j.error || 'The page could not be read.');
-        st.innerHTML = '';
-        found = j;
-        found.preview = shrunk.preview;
+        for (let i = 0; i < list.length; i++) {
+          st.innerHTML = `<div class="loading-box"><span class="loader"></span>
+            <p class="muted small" style="margin:0">Reading ${list.length > 1
+              ? `page ${i + 1} of ${list.length}` : 'the page'}…${results.length
+              ? ` <span class="faint">(${results.reduce((n, pg) =>
+                  n + ((pg.spellings || []).length + (pg.spotted || []).length), 0)} words so far)</span>` : ''}</p></div>`;
+          try { results.push(await readOne(list[i])); }
+          catch (e) { failures.push(e.message || String(e)); }
+        }
+        if (!results.length) throw new Error(failures[0] || 'The pages could not be read.');
+        st.innerHTML = failures.length
+          ? `<div class="feedback" style="margin-bottom:10px"><b>${failures.length === 1
+              ? 'One page could not be read' : failures.length + ' pages could not be read'}.</b>
+             <p class="small" style="margin:6px 0 0">Everything readable is below — the rest can be
+             photographed again whenever suits.</p></div>`
+          : '';
+        found = list.length > 1 ? combine(results) : results[0];
         paintFound();
       } catch (e) {
-        st.innerHTML = `<div class="feedback bad"><b>Could not read that page.</b>
+        st.innerHTML = `<div class="feedback bad"><b>Could not read ${list.length > 1 ? 'those pages' : 'that page'}.</b>
           <p class="small" style="margin:6px 0 0">${esc(e.message || e)}</p></div>`;
       } finally { busy = false; }
     };
 
     ['owShot', 'owFile'].forEach(id => {
       const el = $('#' + id);
-      if (el) el.onchange = () => { const f = el.files && el.files[0]; el.value = ''; go(f); };
+      if (el) el.onchange = () => { const fs = Array.from(el.files || []); el.value = ''; go(fs); };
     });
 
     w.U.$$('[data-owdel]').forEach(b => b.onclick = async () => {

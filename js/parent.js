@@ -1274,23 +1274,15 @@ Reflex = A quick automatic response"></textarea>
     const childId = forChild || Store.db.activeChildId;
     if (!Sync.isDbId(childId)) return false;
     try {
-      /* Two steps on purpose. This now runs on every sync, for every child,
-         and a note carries several kilobytes of HTML — fetching all forty of
-         them every five minutes to discover that nothing changed would be a
-         waste of a family's data allowance. So: ask for the ids first, which
-         costs almost nothing, and only fetch the notes this device has never
-         seen. */
-      const bagNow = Store.db.activeChildId === childId
-        ? Store.db : (Store.db.children || []).find(c => c.id === childId);
-      const known = new Set(((bagNow && bagNow.reports) || []).map(r => r.cloudId).filter(Boolean));
-      const idsRes = await Cloud.from('reports')
-        .select('id').eq('child_id', childId).order('ts', { ascending: false }).limit(40);
-      if (idsRes.error || !idsRes.data) return false;
-      const want = idsRes.data.map(r => r.id).filter(id => !known.has(id));
-      if (!want.length) return false;
+      /* Every note, in full, every time. Cheap at this scale — a family has a
+         handful of notes — and it is what lets the account CORRECT a device:
+         Prem's laptop and her iPad were showing two different versions of the
+         same note, because each device kept whatever it had first drawn. The
+         copy in the account is the only truth; a local copy that disagrees
+         with it is replaced, never kept. */
       const { data, error } = await Cloud.from('reports')
         .select('id, ts, payload, html, range_from, range_to')
-        .in('id', want).order('ts', { ascending: false });
+        .eq('child_id', childId).order('ts', { ascending: false }).limit(40);
       if (error || !data) return false;
       /* The family may have switched profiles while this was fetching. File
          everything under the child it was FETCHED FOR — live fields if they
@@ -1302,33 +1294,59 @@ Reflex = A quick automatic response"></textarea>
       if (!bag) return false;
       bag.reports = bag.reports || [];
       let added = 0;
-      data.forEach(row => {
-        if (bag.reports.some(r => r.cloudId === row.id)) return;
+      /* A note is written ONCE and every device shows the same stored copy.
+
+         The first design had each device draw the note from its stored
+         ingredients, so it could match the reader's theme — and Prem
+         immediately saw the cost: the same note looked different on her iPad
+         and his laptop, which is exactly the kind of thing that makes a
+         parent stop trusting what they read. Charts now carry theme
+         variables instead of baked colours (charts.js), so one stored
+         drawing is right everywhere, and drawing per device buys nothing.
+
+         So: a note that arrives without HTML — the Wednesday cron writes
+         data, not drawings — is drawn here, once, and FILED BACK into the
+         account, guarded so the first device to finish wins and every other
+         device takes the winner's copy. */
+      for (const row of data) {
         const pay = row.payload || {};
         const res = pay.result || null;
+        const already = bag.reports.find(r => r.cloudId === row.id);
+
+        if (already) {
+          /* The account may hold a better copy than this device — a note
+             re-filed, corrected, or first drawn elsewhere. The account wins. */
+          const cloudHtml = noteFragment(row.html);
+          if (cloudHtml && already.html !== cloudHtml) {
+            already.html = cloudHtml;
+            delete already.result; delete already.pay;   // the old redraw fields
+            added++;
+          }
+          continue;
+        }
+
         const kidName = stillActive
           ? (Store.db.profile && Store.db.profile.name)
           : (bag.profile && bag.profile.name);
-        const html = noteFragment(row.html) || (res ? renderCloudNote(res, pay, row, kidName) : null);
-        if (!html) return;
+        let html = noteFragment(row.html);
+        if (!html && res) {
+          html = renderCloudNote(res, pay, row, kidName);
+          if (html) {
+            try {
+              /* File the drawing. `.is('html', null)` is the whole race: if
+                 another device drew it first, this writes nothing, and the
+                 next merge replaces our copy with the winner's. */
+              const up = await Cloud.from('reports').update({ html })
+                .eq('id', row.id).is('html', null).select('html');
+              if (up && up.data && up.data[0] && up.data[0].html) html = noteFragment(up.data[0].html);
+            } catch (e) { console.warn('note not filed', e); }
+          }
+        }
+        if (!html) continue;
         bag.reports.push({
           id: Store.uid('r'), cloudId: row.id,
           ts: Date.parse(row.ts) || Date.now(),
           html,
-          /* The note is kept as text AND as the numbers it was drawn from.
-
-             The text alone was not enough. Chart colours are chosen at the
-             moment a note is drawn, from whichever theme the device happened
-             to be in — so a note merged on a dark screen and opened later on
-             a light one had pale grey labels on white paper. Exactly the
-             "two greys on top of each other" Prem photographed once already.
-
-             Keeping the ingredients means the note is redrawn each time it
-             is opened, in the theme it is being read in. It also means every
-             improvement to how notes look reaches the notes already filed,
-             instead of only the next one. */
-          result: (row.html ? null : res) || null,
-          pay: row.html ? null : (pay || null),
           range: pay.kind === 'onboarding' ? 'Starting point'
                : (row.range_from ? row.range_from + ' → ' + row.range_to : 'Weekly note'),
           kind: pay.kind || 'weekly',
@@ -1336,7 +1354,7 @@ Reflex = A quick automatic response"></textarea>
           metrics: pay.metrics || null
         });
         added++;
-      });
+      }
       if (added) Store.save(true);
       return added > 0 && stillActive;
     } catch (e) { return false; }
@@ -1667,30 +1685,6 @@ Reflex = A quick automatic response"></textarea>
 
      Notes are now stored as a fragment. This function repairs the ones that
      were already saved the old way, so nothing has to be written again. */
-  /** The note as it should look RIGHT NOW.
-
-      If the ingredients were kept, it is drawn again from them — so the
-      colours match the theme it is being read in, and any improvement to
-      how notes look reaches every note already filed. If not (an older
-      record, or one written on this device), the stored text is used.
-
-      Either way the stored text is refreshed, so exporting or printing gets
-      the same note that is on the screen. */
-  function noteHTML(rec) {
-    if (!rec) return '';
-    if (rec.result) {
-      try {
-        const name = (Store.db.profile && Store.db.profile.name) || '';
-        const fresh = renderCloudNote(rec.result, rec.pay || {}, { ts: rec.ts }, name);
-        if (fresh && fresh.length > 200) {
-          if (fresh !== rec.html) { rec.html = fresh; Store.save(true); }
-          return fresh;
-        }
-      } catch (e) { console.warn('note redraw', e); }
-    }
-    return noteFragment(rec.html);
-  }
-
   function noteFragment(html) {
     const s = String(html || '');
     if (!/<!DOCTYPE|<html[\s>]/i.test(s)) return s;      // already a fragment
@@ -1894,7 +1888,10 @@ Reflex = A quick automatic response"></textarea>
       const r = Store.db.reports.find(x => x.id === b.dataset.open);
       if (!r) return;
       const out = $('#reportOut');
-      const body = noteHTML(r);
+      /* The stored copy, exactly as every other device shows it. Never
+         redrawn per device — Prem's words: write it once and push it to all
+         devices; a report that shifts between screens loses a parent's trust. */
+      const body = noteFragment(r.html);
       out.innerHTML = `<div class="card" style="margin-top:14px">
           ${reportToolbar(r.range || 'Note')}
           ${wrongPronouns(r) ? `<div class="feedback" style="margin:10px 0 0">
@@ -2053,7 +2050,7 @@ Reflex = A quick automatic response"></textarea>
         <label class="lbl" for="rqWhy" style="display:block;margin-top:4px">Anything you would like
           the note to look at? <span class="faint">(optional)</span></label>
         <textarea id="rqWhy" rows="2" maxlength="500" style="width:100%"
-          placeholder="e.g. she has a spelling test on Friday and I want to know which words to sit with"></textarea>
+          placeholder="e.g. there is a spelling test on Friday and I want to know which words to sit with"></textarea>
         <div class="row wrap" style="gap:10px;margin-top:10px">
           <button class="btn-primary" id="rqGo">Ask for a note on ${esc(name)}</button>
         </div>

@@ -50,6 +50,20 @@
   --xw-won-bg: #DCEBE2;
   --xw-no-bg:  #F7E2DA;
 
+  /* Chart colours. Charts are drawn once and STORED, so the drawing carries
+     var() references instead of values and each theme resolves them at
+     reading time. Checked pairs: series vs surface, series vs each other,
+     text vs surface — both modes. */
+  --viz-s1:   #0E7FB5;
+  --viz-s2:   #C9832A;
+  --viz-ink:  #22333B;
+  --viz-mute: #8697A0;
+  --viz-grid: #E5DDD1;
+  --viz-surf: #FFFFFF;
+  --viz-good: #4E7264;
+  --viz-warn: #C9832A;
+  --viz-bad:  #C25F45;
+
   --plum:       #6B5570;
   --plum-soft:  #EEE8F0;
 
@@ -105,6 +119,16 @@
      until a child glancing at the grid can see which word came out. */
   --xw-won-bg: #22493C;
   --xw-no-bg:  #452720;
+
+  --viz-s1:   #3A9AC9;
+  --viz-s2:   #C07E26;
+  --viz-ink:  #F1EDE4;
+  --viz-mute: #8C9C97;
+  --viz-grid: #33463F;
+  --viz-surf: #22322F;
+  --viz-good: #7FB79F;
+  --viz-warn: #D9A247;
+  --viz-bad:  #E08A70;
 
   --lift: inset 0 1px 0 rgba(255,255,255,.07);
   --sh-1: 0 1px 2px rgba(0,0,0,.3), 0 2px 8px rgba(0,0,0,.22);

@@ -18,15 +18,31 @@
   const esc = s => String(s == null ? '' : s)
     .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 
-  function dark() {
-    return document.documentElement.getAttribute('data-theme') === 'dark';
-  }
+  /* Colours are THEME VARIABLES, not values, and this is load-bearing.
 
-  const P = () => dark()
-    ? { s1: '#3A9AC9', s2: '#C07E26', ink: '#F1EDE4', mute: '#8C9C97', grid: '#33463F', surf: '#22322F',
-        good: '#7FB79F', warn: '#D9A247', bad: '#E08A70' }
-    : { s1: '#0E7FB5', s2: '#C9832A', ink: '#22333B', mute: '#8697A0', grid: '#E5DDD1', surf: '#FFFFFF',
-        good: '#4E7264', warn: '#C9832A', bad: '#C25F45' };
+     A chart used to be painted in whichever theme the device was in at the
+     moment it was drawn, and the drawing was then stored as text. Prem opened
+     the same note on two machines and saw two different documents — dark-theme
+     greys on white paper on one of them. Notes are now drawn ONCE and stored
+     (see parent.js), so the drawing itself has to be right in both themes:
+     every colour is a var() the page resolves at the moment of reading, with
+     the light value as the fallback for exports and PDFs, which are always on
+     white. The values live in theme.css beside every other theme token.
+
+     One catch, easy to trip on later: var() does not work in SVG PRESENTATION
+     ATTRIBUTES (fill="var(…)" is silently invalid) — only in CSS. So every
+     colour below is applied with style="fill:…", never fill="…". */
+  const P = () => ({
+    s1:   'var(--viz-s1, #0E7FB5)',
+    s2:   'var(--viz-s2, #C9832A)',
+    ink:  'var(--viz-ink, #22333B)',
+    mute: 'var(--viz-mute, #8697A0)',
+    grid: 'var(--viz-grid, #E5DDD1)',
+    surf: 'var(--viz-surf, #FFFFFF)',
+    good: 'var(--viz-good, #4E7264)',
+    warn: 'var(--viz-warn, #C9832A)',
+    bad:  'var(--viz-bad, #C25F45)'
+  });
 
   const uid = () => 'c' + Math.random().toString(36).slice(2, 8);
   const nice = n => (Math.round(n * 10) / 10);
@@ -70,25 +86,25 @@
 
     const ticks = [min, min + (max - min) / 2, max];
     const grid = ticks.map(t =>
-      `<line x1="${padL}" x2="${W - padR}" y1="${y(t)}" y2="${y(t)}" stroke="${c.grid}" stroke-width="1"/>
-       <text x="${padL - 8}" y="${y(t) + 4}" text-anchor="end" font-size="11" fill="${c.mute}">${nice(t)}${o.suffix}</text>`).join('');
+      `<line x1="${padL}" x2="${W - padR}" y1="${y(t)}" y2="${y(t)}" style="stroke:${c.grid}" stroke-width="1"/>
+       <text x="${padL - 8}" y="${y(t) + 4}" text-anchor="end" font-size="11" style="fill:${c.mute}">${nice(t)}${o.suffix}</text>`).join('');
 
     const path = data.map((d, i) => `${i ? 'L' : 'M'}${x(i)},${y(d.v)}`).join(' ');
     const area = `${path} L${x(data.length - 1)},${H - padB} L${x(0)},${H - padB} Z`;
 
     const dots = data.map((d, i) =>
-      `<circle cx="${x(i)}" cy="${y(d.v)}" r="5" fill="${c.surf}" stroke="${c.s1}" stroke-width="2.5">
+      `<circle cx="${x(i)}" cy="${y(d.v)}" r="5" style="fill:${c.surf};stroke:${c.s1}" stroke-width="2.5">
          <title>${esc(d.label)}: ${nice(d.v)}${o.suffix}${d.n ? ` (${d.n} answers)` : ''}</title>
        </circle>`).join('');
 
     const labels = data.map((d, i) => {
       const show = data.length <= 7 || i === 0 || i === data.length - 1 || i % Math.ceil(data.length / 5) === 0;
-      return show ? `<text x="${x(i)}" y="${H - padB + 17}" text-anchor="middle" font-size="10.5" fill="${c.mute}">${esc(d.label)}</text>` : '';
+      return show ? `<text x="${x(i)}" y="${H - padB + 17}" text-anchor="middle" font-size="10.5" style="fill:${c.mute}">${esc(d.label)}</text>` : '';
     }).join('');
 
     const last = data[data.length - 1];
     const endLabel = `<text x="${x(data.length - 1) + 11}" y="${y(last.v) + 4}" font-size="13"
-        font-weight="600" fill="${c.ink}">${nice(last.v)}${o.suffix}</text>`;
+        font-weight="600" style="fill:${c.ink}">${nice(last.v)}${o.suffix}</text>`;
 
     const trendNote = (() => {
       const d = last.v - data[0].v;
@@ -103,12 +119,12 @@
 
     return frame(W, H, `
       <defs><linearGradient id="${id}" x1="0" y1="0" x2="0" y2="1">
-        <stop offset="0%" stop-color="${c.s1}" stop-opacity=".22"/>
-        <stop offset="100%" stop-color="${c.s1}" stop-opacity="0"/>
+        <stop offset="0%" style="stop-color:${c.s1}" stop-opacity=".22"/>
+        <stop offset="100%" style="stop-color:${c.s1}" stop-opacity="0"/>
       </linearGradient></defs>
       ${grid}
       <path d="${area}" fill="url(#${id})"/>
-      <path d="${path}" fill="none" stroke="${c.s1}" stroke-width="2"
+      <path d="${path}" fill="none" style="stroke:${c.s1}" stroke-width="2"
             stroke-linecap="round" stroke-linejoin="round"/>
       ${dots}${labels}${endLabel}`,
       { title: o.title, sub: o.sub, note: o.note || trendNote, alt: o.title });
@@ -135,12 +151,12 @@
       const yA = top + (hasB ? 4 : 8);
       const yB = top + 4 + 12 + 2;                       // 2px surface gap between bars
       const bar = (yy, val, col) => `
-        <rect x="${padL}" y="${yy}" width="${wOf(val)}" height="${barH}" rx="4" fill="${col}"/>
+        <rect x="${padL}" y="${yy}" width="${wOf(val)}" height="${barH}" rx="4" style="fill:${col}"/>
         <text x="${padL + wOf(val) + 7}" y="${yy + barH - 1.5}" font-size="11.5"
-              fill="${c.ink}" font-weight="600">${nice(val)}${o.suffix}</text>`;
+              style="fill:${c.ink}" font-weight="600">${nice(val)}${o.suffix}</text>`;
       return `
         <text x="${padL - 12}" y="${top + (hasB ? 20 : 21)}" text-anchor="end" font-size="12.5"
-              fill="${c.ink}">${esc(r.label)}</text>
+              style="fill:${c.ink}">${esc(r.label)}</text>
         ${bar(yA, r.a, c.s1)}
         ${hasB ? bar(yB, r.b, c.s2) : ''}`;
     }).join('');
@@ -172,15 +188,15 @@
     const last = data[data.length - 1];
     return frame(W, H, `
       <defs><linearGradient id="${id}" x1="0" y1="0" x2="0" y2="1">
-        <stop offset="0%" stop-color="${c.s1}" stop-opacity=".26"/>
-        <stop offset="100%" stop-color="${c.s1}" stop-opacity="0"/></linearGradient></defs>
-      <line x1="${padL}" x2="${W - padR}" y1="${y(0)}" y2="${y(0)}" stroke="${c.grid}" stroke-width="1"/>
+        <stop offset="0%" style="stop-color:${c.s1}" stop-opacity=".26"/>
+        <stop offset="100%" style="stop-color:${c.s1}" stop-opacity="0"/></linearGradient></defs>
+      <line x1="${padL}" x2="${W - padR}" y1="${y(0)}" y2="${y(0)}" style="stroke:${c.grid}" stroke-width="1"/>
       <path d="${path} L${x(data.length - 1)},${y(0)} L${x(0)},${y(0)} Z" fill="url(#${id})"/>
-      <path d="${path}" fill="none" stroke="${c.s1}" stroke-width="2" stroke-linejoin="round"/>
-      <circle cx="${x(data.length - 1)}" cy="${y(last.v)}" r="5" fill="${c.surf}" stroke="${c.s1}" stroke-width="2.5"/>
-      <text x="${x(data.length - 1) + 11}" y="${y(last.v) + 4}" font-size="13" font-weight="600" fill="${c.ink}">${last.v}</text>
+      <path d="${path}" fill="none" style="stroke:${c.s1}" stroke-width="2" stroke-linejoin="round"/>
+      <circle cx="${x(data.length - 1)}" cy="${y(last.v)}" r="5" style="fill:${c.surf};stroke:${c.s1}" stroke-width="2.5"/>
+      <text x="${x(data.length - 1) + 11}" y="${y(last.v) + 4}" font-size="13" font-weight="600" style="fill:${c.ink}">${last.v}</text>
       ${data.map((d, i) => (i === 0 || i === data.length - 1 || i % Math.ceil(data.length / 5) === 0)
-        ? `<text x="${x(i)}" y="${H - padB + 17}" text-anchor="middle" font-size="10.5" fill="${c.mute}">${esc(d.label)}</text>` : '').join('')}`,
+        ? `<text x="${x(i)}" y="${H - padB + 17}" text-anchor="middle" font-size="10.5" style="fill:${c.mute}">${esc(d.label)}</text>` : '').join('')}`,
       { title: o.title, sub: o.sub, note: o.note, alt: o.title });
   }
 
@@ -202,13 +218,13 @@
       const h = d.n ? Math.max(4, (H - padT - padB) * (d.n / max)) : 3;
       const x = i * (bw + gap);
       return `<rect x="${x}" y="${H - padB - h}" width="${bw}" height="${h}" rx="${Math.min(3, bw / 2)}"
-                fill="${d.n ? c.s1 : c.grid}"><title>${esc(d.label)}: ${d.n} answers</title></rect>`;
+                style="fill:${d.n ? c.s1 : c.grid}"><title>${esc(d.label)}: ${d.n} answers</title></rect>`;
     }).join('');
 
     const first = days[0], last = days[days.length - 1];
     return frame(W, H, `${bars}
-      <text x="0" y="${H - 4}" font-size="10.5" fill="${c.mute}">${esc(first.label)}</text>
-      <text x="${W}" y="${H - 4}" font-size="10.5" fill="${c.mute}" text-anchor="end">${esc(last.label)}</text>`,
+      <text x="0" y="${H - 4}" font-size="10.5" style="fill:${c.mute}">${esc(first.label)}</text>
+      <text x="${W}" y="${H - 4}" font-size="10.5" style="fill:${c.mute}" text-anchor="end">${esc(last.label)}</text>`,
       { title: o.title, sub: o.sub, alt: o.title,
         note: o.note || `Practised on ${active} of the last ${days.length} days.` });
   }

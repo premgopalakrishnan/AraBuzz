@@ -120,11 +120,23 @@
     return block.input;
   }
 
+  /* Look-only means look-only on the server too. The Proxy in cloud.js stops
+     table writes, but these functions reach the database through our own api/
+     endpoints with a real admin token — the review caught that an admin who
+     was only viewing a family could still raise a genuine report request in
+     their name. Every endpoint that changes anything checks here first. */
+  function lookingOnly() {
+    return !!(window.ViewAs && ViewAs.lookingOnly && ViewAs.lookingOnly());
+  }
+  const VIEW_ONLY_MSG = 'You are looking at this family, not acting for them. ' +
+                        'Turn on "Act as this parent" first.';
+
   /** The call as it normally happens: through /api/ai on our own server. */
   async function serverCall(kind, { system, content, tool, maxTokens, model }) {
     if (!window.Cloud || !Cloud.signedIn() || !Cloud.token) {
       throw new Error('Please sign in first.');
     }
+    if (lookingOnly()) throw new Error(VIEW_ONLY_MSG);
     const childId = (window.Sync && Sync.isDbId(Store.db.activeChildId))
       ? Store.db.activeChildId : null;
 
@@ -671,6 +683,7 @@ Use British English. Mix single words and short terms. Avoid words that are triv
      team. Nothing is written until somebody approves it, so this returns
      immediately and the parent hears back by email. */
   async function requestReport(childId, reason) {
+    if (lookingOnly()) return { ok: false, error: VIEW_ONLY_MSG };
     if (!window.Cloud || !Cloud.signedIn() || !Cloud.token) {
       return { ok: false, error: 'You need to be signed in to ask for a note.' };
     }
@@ -694,6 +707,7 @@ Use British English. Mix single words and short terms. Avoid words that are triv
   /** The admin end: approve or decline one. Writing the note happens inside
    *  the same call, so this can take a minute — the console says so. */
   async function decideReportRequest(id, decision, note) {
+    if (lookingOnly()) return { ok: false, error: VIEW_ONLY_MSG };
     if (!window.Cloud || !Cloud.signedIn() || !Cloud.token) {
       return { ok: false, error: 'Sign in first' };
     }
@@ -715,6 +729,7 @@ Use British English. Mix single words and short terms. Avoid words that are triv
    *  in the account. The server checks that for itself before it sends
    *  anything, so a note that failed to save sends no email at all. */
   async function noteReady(childId) {
+    if (lookingOnly()) return { sent: false, reason: 'view-only' };
     if (!window.Cloud || !Cloud.signedIn() || !Cloud.token) return { sent: false };
     try {
       const res = await fetch('/api/note-ready', {
@@ -733,6 +748,7 @@ Use British English. Mix single words and short terms. Avoid words that are triv
    *  Resolves to `{ line, offTopic }`, where offTopic means she asked about
    *  something outside this week's words and was turned back. */
   async function coachTurn(payload, ms) {
+    if (lookingOnly()) return null;
     if (!window.Cloud || !Cloud.signedIn() || !Cloud.token) return null;
     if (navigator.onLine === false) return null;
     const ctl = ('AbortController' in window) ? new AbortController() : null;

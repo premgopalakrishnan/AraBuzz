@@ -79,8 +79,22 @@
     if (w.ViewAs && ViewAs.lookingOnly && ViewAs.lookingOnly()) return readOnlyTable(table);
     return c.from(table);
   }
+  /* Database functions an admin who is only LOOKING may still call — the
+     ones that read. Everything else is refused, same as a table write. The
+     independent review caught this: the Proxy stopped table writes but an
+     rpc could still change things under a family being viewed. */
+  const LOOK_OK_RPC = new Set(['check_pin', 'has_consented', 'is_admin',
+                               'my_family_id', 'deck_visible', 'admin_overview']);
+
   function rpc(name, params) {
     const c = client(); if (!c) throw new Error('offline');
+    if (w.ViewAs && ViewAs.lookingOnly && ViewAs.lookingOnly() && !LOOK_OK_RPC.has(name)) {
+      return Promise.resolve({
+        data: null,
+        error: { message: 'You are looking at this family, not acting for them. ' +
+                          'Turn on "Act as this parent" first.', code: 'VIEW_ONLY' }
+      });
+    }
     return c.rpc(name, params);
   }
   function myFamilyId() { return me && me.parent ? me.parent.family_id : null; }
