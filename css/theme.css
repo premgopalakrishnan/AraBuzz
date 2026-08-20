@@ -48,8 +48,9 @@
 
   /* Crossword squares — see the dark block below for why these are their own
      variables rather than the -soft tints. */
-  --xw-won-bg: #DCEBE2;
-  --xw-no-bg:  #F7E2DA;
+  --xw-won-bg:  #DCEBE2;
+  --xw-no-bg:   #F7E2DA;
+  --xw-miss-bg: #FFE3A8;
 
   /* Chart colours. Charts are drawn once and STORED, so the drawing carries
      var() references instead of values and each theme resolves them at
@@ -118,8 +119,9 @@
      colour and far too quiet for a single 38px square on a dark card, where
      they disappear into the background. These are the same hues, lifted
      until a child glancing at the grid can see which word came out. */
-  --xw-won-bg: #22493C;
-  --xw-no-bg:  #452720;
+  --xw-won-bg:  #22493C;
+  --xw-no-bg:   #452720;
+  --xw-miss-bg: #5C4712;
 
   --viz-s1:   #3A9AC9;
   --viz-s2:   #C07E26;
@@ -577,11 +579,21 @@ label { font-size: .82rem; font-weight: 500; color: var(--ink-soft); display: bl
 .xw td.blank { background: transparent; }
 .xw td.cell { background: var(--card); border: 1px solid var(--line); border-radius: 5px; box-shadow: var(--sh-1); }
 .xw td.cell input {
-  width: 100%; height: 100%; border: none; background: transparent; text-align: center;
+  /* !important is earned here: the app-wide input rule above carries four
+     :not() clauses, each of which counts as a class, so it out-specifies this
+     selector and painted every grid square --card — which is why the green,
+     red and amber cell fills only ever showed as a rim around the corners on
+     a light screen. The square's colour belongs to the td; the input over it
+     must always be glass. */
+  width: 100%; height: 100%; border: none; background: transparent !important;
+  text-align: center;
   font-size: 1.15rem; font-weight: 400; text-transform: uppercase; padding: 0 !important;
   font-family: var(--font-body); color: var(--ink); border-radius: 5px;
 }
-.xw td.cell input:focus { background: var(--gold-soft); box-shadow: none; outline: none; }
+.xw td.cell input:focus { background: var(--gold-soft) !important; box-shadow: none; outline: none; }
+.xw td.cell.won input:focus, .xw td.cell.softno input:focus, .xw td.cell.miss input:focus {
+  background: transparent !important;   /* the cell already says everything */
+}
 .xw td.cell.hl { background: var(--indigo-soft); }
 .xw td.cell.ok input { color: var(--jade); }
 .xw td.cell.no input { color: var(--clay); }
@@ -597,15 +609,17 @@ label { font-size: .82rem; font-weight: 500; color: var(--ink-soft); display: bl
                 only once every square of that word has a letter in it, so it
                 never scolds her mid-word.
    Where an across and a down cross, green always wins. */
-.xw td.cell.softno { background: var(--xw-no-bg); border-color: var(--clay-lift); }
-.xw td.cell.softno input { color: var(--clay); }
-/* Within a finished-but-wrong word: the soft wash covers the whole word, and
-   only the letters that are actually wrong carry the mark — a heavier letter
-   on a dotted baseline, so the mistake is findable without being shouted at,
-   and never by colour alone. */
-.xw td.cell.miss { border-color: var(--clay); border-width: 2px; }
-.xw td.cell.miss input { color: var(--clay-deep, #8F452F); font-weight: 800;
+/* A finished-but-wrong word, Prem's design after watching it used: every cell
+   of the word gets an amber BORDER — "this word is not right yet" — and only
+   the cells whose letter is actually wrong get the amber FILL, a heavier
+   letter and a dotted underline. The right letters stay visually at rest, so
+   the child's eye lands on exactly the squares to fix, and the mistake is
+   never marked by colour alone. */
+.xw td.cell.softno { border-color: var(--gold); border-width: 1.5px; }
+.xw td.cell.miss { background: var(--xw-miss-bg); border-color: var(--gold); border-width: 2px; }
+.xw td.cell.miss input { color: var(--gold-deep); font-weight: 800;
   text-decoration: underline dotted; text-underline-offset: 3px; }
+[data-theme="dark"] .xw td.cell.miss input { color: var(--gold-lift); }
 .xw td.cell.won { background: var(--xw-won-bg); border-color: var(--jade); }
 .xw td.cell.won input { color: var(--jade); font-weight: 700; }
 .xw td.cell.won.hl { background: var(--xw-won-bg); }
@@ -1286,11 +1300,20 @@ body.viewing-as { padding-bottom: 64px; }
 /* --- her hand on the volume ---------------------------------------------
    Inside the game, not buried in a grown-up's settings. A nine-year-old who
    wants quiet should not have to ask anyone for it. */
+/* Aradhana could not find this when it was a bare 34px icon — a button whose
+   whole job is "make Ara stop talking" has to be findable by an annoyed
+   nine-year-old mid-game. So it says what it does, in words, and changes its
+   words with its state: "Quiet, Ara" while she is speaking, "Ara is quiet"
+   once she is not. */
 .q-mute {
-  display: inline-grid; place-items: center; width: 34px; height: 30px;
-  border-radius: 999px; border: 1px solid var(--line); cursor: pointer;
+  display: inline-flex; align-items: center; gap: 6px; height: 30px;
+  padding: 0 12px 0 10px; font-size: .8rem; font-weight: 600;
+  font-family: var(--font-body);
+  border-radius: 999px; border: 1.5px solid var(--gold); cursor: pointer;
   background: var(--gold-soft); color: var(--gold-deep);
   transition: background .15s, color .15s, border-color .15s;
 }
-.q-mute.off { background: var(--paper-2); color: var(--ink-faint); }
+.q-mute .q-mute-w { white-space: nowrap; }
+.q-mute.off { background: var(--paper-2); color: var(--ink-faint); border-color: var(--line);
+  border-style: dashed; }
 .q-mute:hover { border-color: var(--gold); }

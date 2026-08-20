@@ -2299,8 +2299,9 @@
         <button class="btn-quiet btn-s" id="quit">← Stop</button>
         <div class="row" style="gap:6px">
           <button class="q-mute${window.U.autoVoiceOn() ? '' : ' off'}" id="qMute"
-            title="${window.U.autoVoiceOn() ? 'Ara reads things out — tap to make it quiet' : 'Quiet — tap if you want Ara to read things out'}"
-            aria-label="Voice on or off">${Icon.icon(window.U.autoVoiceOn() ? 'speaker' : 'mute', { size: 16 })}</button>
+            title="${window.U.autoVoiceOn() ? 'Ara reads things out — tap to make her quiet' : 'Ara is quiet — tap if you want her to read things out'}"
+            aria-label="Voice on or off">${Icon.icon(window.U.autoVoiceOn() ? 'speaker' : 'mute', { size: 15 })}
+            <span class="q-mute-w">${window.U.autoVoiceOn() ? 'Quiet, Ara' : 'Ara is quiet'}</span></button>
           <span class="pill honey">${Icon.icon('star', { size: 14 })} <b>${quest.correct}</b>/${total}</span>
           ${quest.points ? `<span class="pill sky">+${quest.points}</span>` : ''}
         </div>
