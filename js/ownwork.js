@@ -468,7 +468,10 @@
         deck_id: deckId,
         sort: (existing || []).length + i,
         word: p.correct,
-        word_key: key,
+        /* word_key is NOT sent: the database generates it from `word` itself
+           (a GENERATED column refuses any value from outside — this exact
+           insert failed on a real worksheet until the line came out). The
+           local `key` above is still used for de-duplicating this batch. */
         /* Her own attempt is the most useful thing on the page: it is what
            the games quote back to her, and what the coach note reasons from. */
         extras: {
